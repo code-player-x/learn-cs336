@@ -402,3 +402,40 @@ m = TinyLinear(4, 2)
 # sum(...) 把所有参数的个数加起来
 print("参数个数:", sum(p.numel() for p in m.parameters()))
 # 输出: 参数个数: 8
+
+
+import torch
+from einops import rearrange,repeat
+
+B,T,HD =2,64,128
+H,D=8,16
+assert H*D==HD
+x= torch.randn(B,T,H*D)
+
+#命名维度：论文里常见的（B，T，H，D）拆分
+x_heads = rearrange(x,"b t (h d)->b h t d",h=H,d=D)
+print(x_heads.shape)
+
+y=torch.randn(3,1)
+y_rep=repeat(y,"a b->a (repeat b)",repeat=4)
+print(y_rep.shape)
+
+def param_memory_gb(num_params:int,bytes_per_param:int =4)->float:
+    """"仅权重占用 不含优化器状态与激活"""
+    return num_params*bytes_per_param/(1024**3)
+
+def matmul_flops_2mnk(m:int,n:int,k:int)->int:
+    return 2*m*n*k
+
+n=1_000_000_000
+print(f"1B 参数 FP32 权重约 {param_memory_gb(n, 4):.2f} GB")
+print(f"1B 参数 BF16 权重约 {param_memory_gb(n, 2):.2f} GB")
+
+M,N,K =4096,4096,4096
+print("4096^3 matmul FLOPs (2MNK):", matmul_flops_2mnk(M, N, K))
+
+# GPT-3 175B 参数
+gpt3_params = 175_000_000_000
+print(f"\nGPT-3 (175B 参数):")
+print(f"  FP32 权重显存: {param_memory_gb(gpt3_params, 4):.2f} GB")
+print(f"  BF16 权重显存: {param_memory_gb(gpt3_params, 2):.2f} GB")
