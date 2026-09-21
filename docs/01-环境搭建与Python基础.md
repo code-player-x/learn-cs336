@@ -688,22 +688,39 @@ print("参数个数:", sum(p.numel() for p in m.parameters()))
 import torch
 from einops import rearrange, repeat
 
-B, T, HD = 2, 64, 128
-H, D = 8, 16
-assert H * D == HD
+# 定义张量的维度大小
+B, T, HD = 2, 64, 128   # batch size=2, 序列长度=64, 隐藏维度=128
+H, D = 8, 16            # 注意力头数=8, 每个头的维度=16
+assert H * D == HD      # 校验：多头拼接后的总维度必须等于隐藏维度
+
+# 构造一个形状为 (B, T, H*D) 的随机张量，模拟 Transformer 中的隐藏状态
 x = torch.randn(B, T, H * D)
 
 # 命名维度：论文里常见的 (B, T, H, D) 拆分
+# 将最后一维 (H*D) 拆分为 (H, D)，即把隐藏维度拆成多个注意力头
+# 结果形状: (B, H, T, D)，方便后续按头做注意力计算
 x_heads = rearrange(x, "b t (h d) -> b h t d", h=H, d=D)
-print(x_heads.shape)
+print(x_heads.shape)    # torch.Size([2, 8, 64, 16])
 
+# 构造一个形状为 (3, 1) 的随机张量
 y = torch.randn(3, 1)
+
+# 沿第二维（b 维度）复制 repeat=4 次
+# "a b -> a (repeat b)" 表示保持 a 维不变，把 b 维扩展为 repeat 份并拼接到一起
+# 结果形状: (3, 1*4) = (3, 4)
 y_rep = repeat(y, "a b -> a (repeat b)", repeat=4)
-print(y_rep.shape)
+print(y_rep.shape)      # torch.Size([3, 4])
+
+#rearrange 的拆维："b t (h d) -> b h t d" 中括号 (h d) 表示把最后一维按 h 和 d 两个因子拆开，h=H, d=D 明确指定各因子大小；输出顺序 b h t d 把 h 提到了 t 前面。
+
+#repeat 的复制："a b -> a (repeat b)" 中的 repeat 是一个新的轴名（不是关键字，只是约定俗成的名字），右侧 (repeat b) 表示把 b 维复制 repeat 份后与 b 拼在一起。等价于 y.unsqueeze(1).expand(-1, 4, -1).reshape(3, 4)。
+
+#两种操作的本质区别：rearrange 只做形状变换（view/permute），不复制数据；repeat 会真正复制数据，因此内存占用会随 repeat 倍数增长。
+
 
 ```
 
-```
+```python
 # 导入 PyTorch 核心库
 import torch
 # 从 einops 导入张量操作工具
@@ -826,7 +843,7 @@ M, N, K = 4096, 4096, 4096
 print("4096^3 matmul FLOPs (2MNK):", matmul_flops_2mnk(M, N, K))
 ```
 
-```
+```python
 # ============================================================================
 # 模型参数显存与计算量估算工具
 # ============================================================================
@@ -948,33 +965,39 @@ print(f"  BF16 权重显存: {param_memory_gb(gpt3_params, 2):.2f} GB")
 import torch
 import torch.nn as nn
 
+# 自动选择运行设备：有 GPU 就用 GPU，否则用 CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class MyLinear(nn.Module):
+    """手写线性层：y = x @ W^T + b"""
+
     def __init__(self, in_f: int, out_f: int):
         super().__init__()
+        # 权重 (out_f, in_f)，用小幅随机值初始化
         self.weight = nn.Parameter(torch.randn(out_f, in_f, device=device) * 0.01)
+        # 偏置 (out_f,)，初始化为 0
         self.bias = nn.Parameter(torch.zeros(out_f, device=device))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # (..., in_f) @ (in_f, out_f) + (out_f,) -> (..., out_f)
         return x @ self.weight.T + self.bias
 
 
-torch.manual_seed(0)
-model = MyLinear(5, 3).to(device)
-opt = torch.optim.SGD(model.parameters(), lr=0.1)
+torch.manual_seed(0)                       # 固定随机种子，保证结果可复现
+model = MyLinear(5, 3).to(device)          # 输入维度 5，输出维度 3
+opt = torch.optim.SGD(model.parameters(), lr=0.1)  # 随机梯度下降优化器
 
-x = torch.randn(4, 5, device=device)
-target = torch.randn(4, 3, device=device)
+x = torch.randn(4, 5, device=device)       # 4 个样本，每个 5 维
+target = torch.randn(4, 3, device=device)  # 回归目标
 
 for step in range(3):
-    opt.zero_grad(set_to_none=True)  # 或 zero_grad()
-    pred = model(x)
-    loss = (pred - target).pow(2).mean()
-    loss.backward()
-    opt.step()
-    print(step, loss.item())
+    opt.zero_grad(set_to_none=True)        # 清空上一步的梯度（set_to_none 更省内存）
+    pred = model(x)                        # 前向传播
+    loss = (pred - target).pow(2).mean()   # MSE 损失
+    loss.backward()                        # 反向传播，计算梯度
+    opt.step()                             # 更新参数
+    print(step, loss.item())               # 打印当前步的损失
 ```
 
 ---
@@ -1000,7 +1023,42 @@ for step in range(3):
 
 2. **梯度**：`w = torch.tensor(2.0, requires_grad=True)`，`y = w ** 3`，一次 `backward()` 后 `w.grad` 是多少？若再调用一次 `y.backward()` 且未 `zero_grad`，梯度会怎样？
 
+   ```python
+   w = torch.tensor(2.0, requires_grad=True)
+   y = w ** 3
+   y.backward()
+   
+   #dy/dw = 3 * w² = 3 * 4 = 12
+   
+   #w.grad = tensor(12.)
+   
+   #若再调用一次 y.backward() 且未 zero_grad：
+   
+   #PyTorch 默认累加梯度，不会覆盖。
+   
+   #第二次又加 12 → w.grad = tensor(24.)
+   
+   #注意：若 y 已被释放（默认 backward() 后计算图释放），第二次调用 y.backward() 会报错 RuntimeError: Trying to backward through the graph a second time，除非在第一次时指定 retain_graph=True。在能执行的前提下，梯度是累加的。
+   ```
+
+   
+
 3. **Parameter**：模块内有 `self.buf = torch.ones(3)` 与 `self.w = nn.Parameter(torch.ones(3))`。`list(model.parameters())` 长度？`buf` 会被默认优化器更新吗？
+
+   ```python
+   self.buf = torch.ones(3)                        # 普通张量，不是 Parameter
+   self.w   = nn.Parameter(torch.ones(3))          # 注册为参数
+   
+   list(model.parameters()) 长度 = 1（只有 self.w）
+   
+   #buf 不会被默认优化器更新。它不在 model.parameters() 里。
+   
+   #若想被保存进 state_dict 但不训练，应注册为 buffer：self.register_buffer("buf", torch.ones(3))
+   
+   #若想被训练，应改为 nn.Parameter。
+   ```
+
+   
 
 4. **einops**：`x` 形状 `(2, 64, 768)`，12 个头、每头 64 维，写出 `rearrange` 得到 `(2, 12, 64, 64)`。
 

@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from sympy.codegen import Print
 
 # # 打印版本，确认与项目要求一致
 # print("torch version:", torch.__version__)
@@ -13,25 +14,31 @@ import numpy as np
 # print("MPS available:", torch.backends.mps.is_available())
 #
 #
-# # 从 Python 列表创建；默认在 CPU，dtype 常为 float32
+# 从 Python 列表创建；默认在 CPU，dtype 常为 float32
 # x = torch.tensor([1.0, 2.0, 3.0])
 # print(x.shape, x.dtype, x.device)
-#
+
 #
 #
 # B,T,D = 2,8,16 # 批大小、序列长度、隐藏维度
 # a = torch.zeros(B,T,D) #全 0 张量,形状 (2,8,16)
+# print(a.shape)
+# print(a)
 # b = torch.randn(B,T,D) # 标准正态分布随机张量
-#
+# print(b.shape)
+# print(b)
+# #
 # # 根据环境选择设备（面试常写成一个函数）
 # def pick_device() -> torch.device:
 #     if torch.cuda.is_available(): # 有GPU走这条 → cuda
+#         print("CUDA available:", torch.cuda.is_available())
+#         print("GPU name:", torch.cuda.get_device_name(0))
 #         return torch.device("cuda")
 #     if torch.backends.mps.is_available(): # 苹果 Mac 走这条(你用不到)
 #         return torch.device("mps")
 #     else:
 #         return torch.device("cpu")  # 兜底
-#
+
 # device = pick_device()
 #
 # #这段代码创建了一个全1矩阵，并直接把它放到你事先定义好的设备（CPU或GPU）上，
@@ -39,26 +46,26 @@ import numpy as np
 # c = torch.ones(3, 4, device=device, dtype=torch.float32)
 # print(c.device)
 #
-# x_gpu = x.to(device).to(torch.float64)
+# x_gpu = c.to(device).to(torch.float64)
 # print(x_gpu.device)  # cuda:0
 # print(x_gpu.dtype)   # torch.float64
-
+#
 # 随机 numpy 数组，显式 float32 与 torch 常见训练精度一致
 arr = np.random.randn(4,8).astype(np.float32)
 
-# # from_numpy：与 arr 共享底层内存，改一方可能影响另一方
-# x = torch.from_numpy(arr)
-# print(x[0,0])
-# arr[0,0]=999.0
-# print(x[0,0]) # 可能也是 999.0，演示共享内存
-#
-# # 需要独立副本时用 torch.tensor 或 clone
-# y = torch.tensor(arr)
-# print(y[0,0])
-# arr[0,0]=888.0
-#
-# # 不受后续 arr 修改影响（取决于是否仍共享，tensor(arr) 一般为拷贝）
-# print(y[0,0]) # 888.0
+# from_numpy：与 arr 共享底层内存，改一方可能影响另一方
+x = torch.from_numpy(arr)
+print(x[0,0])
+arr[0,0]=999.0
+print(x[0,0]) # 可能也是 999.0，演示共享内存
+
+# 需要独立副本时用 torch.tensor 或 clone
+y = torch.tensor(arr)
+print(y[0,0])
+arr[0,0]=888.0
+
+# 不受后续 arr 修改影响（取决于是否仍共享，tensor(arr) 一般为拷贝）
+print(y[0,0]) #  999.0
 
 from typing import Tuple
 import torch
