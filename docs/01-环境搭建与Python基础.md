@@ -1295,6 +1295,97 @@ x = torch.randn(1000, 1000, device=device)
 
 频繁在 CPU/GPU 间拷贝会成为瓶颈；训练时应尽量 **batch 化传输**，配合 `pin_memory=True`（CUDA）等。
 
+这两个问题都跟 **CPU↔GPU 数据传输是瓶颈** 这个核心事实有关。下面分开讲。
+
+**一、为什么训练时要尽量 batch 化输入？**
+
+**1.传输开销是"固定成本"，不是"按数据量线性增长"**
+
+一次 CPU→GPU 拷贝（`cudaMemcpy`）本身有固定的启动开销（kernel launch、同步、DMA 建立等），大概在微秒量级。如果你把 1000 个样本一个一个传：
+
+```python
+# 坏做法：1000 次小拷贝
+for i in range(1000):
+    x = data[i].to(device)   # 每次都触发一次传输
+    y = model(x)
+```
+
+那么你要付 **1000 次固定开销**，而每次只搬一点点数据，带宽根本跑不满。
+
+如果一次传 1000 个：
+
+```python
+# 好做法：1 次大拷贝
+x = data[:1000].to(device)   # 一次传输，摊薄了固定开销
+```
+
+固定开销只付一次，而且大块连续内存能用满 PCIe 带宽。**同样数据量，传输次数越少越接近带宽上限。**
+
+**2.让 GPU 保持"吃饱"状态**
+
+GPU 计算极快，但一旦要等数据从 CPU 过来就会空闲（starvation）。batch 化让每次搬运的数据量足够大，GPU 一次能算很久，计算/传输的重叠效率更高。这也是为什么用 `DataLoader` + 多 worker 预取（`num_workers>0`）能进一步掩盖传输延迟。
+
+**3.和 GPU 的并行度匹配**
+
+GPU 擅长的是大矩阵并行运算。batch 太小（比如 1），kernel 利用率低、launch 开销占比高，既浪费算力也放大传输开销。
+
+> 一句话总结：**传输的固定开销要靠"批量"来摊薄，GPU 的空闲要靠"批量"来填满。**
+
+**二、`pin_memory=True` 是什么？**
+
+**1.背景：CUDA 的"页锁定内存"（pinned / page-locked memory）**
+
+普通 CPU 内存（pageable memory）可能被操作系统换页（swap）到磁盘。GPU 的 DMA 引擎不能安全地直接读取这种"可能被移动"的内存，所以： 
+
+- **pageable memory → GPU**：CUDA 驱动得先偷偷在后台把数据拷到一块临时的 pinned 缓冲区，再从那里 DMA 到 GPU。等于**多了一次内存拷贝**。
+- **pinned memory → GPU**：DMA 可以直接读，**不需要中转**，速度快很多。
+
+```
+pageable:  CPU内存 --(CPU拷贝)--> 临时pinned缓冲 --(DMA)--> GPU   ← 两次搬运
+pinned:    CPU内存 ---------------------------(DMA)--> GPU   ← 一次搬运
+```
+
+**2. `pin_memory=True` 在 DataLoader 里做什么**
+
+```python
+loader = DataLoader(dataset, batch_size=64, num_workers=4, pin_memory=True)
+```
+
+开启后，DataLoader 会把取出的 batch 放进 **pinned memory**。这样当你执行 `.to(device)` / `.cuda()` 时，拷贝是**异步且更快**的，尤其配合：
+
+```python
+x = x.to(device, non_blocking=True)
+```
+
+`non_blocking=True` 让拷贝和 GPU 计算重叠，进一步隐藏传输时间。
+
+**3. 注意事项**
+
+- 只有**要用 GPU 时**才设 `pin_memory=True`；纯 CPU 训练设了没意义甚至有害。
+- pinned memory 是**稀缺资源**，分配/释放比普通内存贵，不能滥用。
+- 它主要加速的是 **Host→Device** 方向（训练输入）；Device→Host（比如取 loss）也受益但通常不是瓶颈。
+- 配合 `num_workers>0` 效果最好，否则 pin 操作在主的进程里可能反而拖慢。
+
+三、**两者怎么配合**
+
+```python
+loader = DataLoader(
+    dataset,
+    batch_size=256,          # ① batch 化，摊薄传输固定开销、喂饱 GPU
+    shuffle=True,
+    num_workers=4,           # 多进程预取，掩盖传输延迟
+    pin_memory=True,         # ② 放进页锁定内存，让 H2D 拷贝更快
+    persistent_workers=True,
+)
+
+for x, y in loader:
+    x = x.to(device, non_blocking=True)   # ③ 异步传输，和计算重叠
+    y = y.to(device, non_blocking=True)
+    ...
+```
+
+① 解决"传多少次"的问题，②③ 解决"每次传多快、能不能和计算重叠"的问题。二者目标一致：**别让 CPU↔GPU 的搬运拖住 GPU。**
+
 ### 8.3 显存直觉（预告）
 
 训练时显存大致包括：**模型参数**、**优化器状态**、**激活**、**梯度**；推理侧 **KV Cache** 在长上下文下显著（后续课程）。
@@ -1309,7 +1400,9 @@ PyTorch 张量由 **底层一维 storage** + **形状 size** + **步长 stride**
 
 ### 9.2 行主序（C contiguous）
 
-默认 **最后一维**在内存中相邻存储。对形状 `(B, T, D)`，固定 `b,t` 时沿 `D` 相邻。
+C 连续 = 和 C 语言原生多维数组一模一样的内存排布：**逻辑上最右边那一维的元素，在物理内存紧紧挨着**。名字叫 C‑contiguous 就是因为继承 C 语言行主序。
+
+PyTorch 默认是 C 行主序 C‑contiguous，**最后一维的元素在内存中紧密相邻**。以`(B, T, D)`三维张量举例：固定 batch、序列位置，遍历最后一维隐藏维度 D 时，访问的是内存上连续的一块区域。
 
 ### 9.3 `is_contiguous()` 含义
 
@@ -1387,204 +1480,405 @@ describe(y.contiguous(), "contiguous")
 ## 十三、扩展背诵条目（1～200，配合行数与速览）
 
 1. 张量是计算图节点。  
+
+   张量本质是存放数值的数据容器；当开启`requires_grad=True`，张量就会成为 autograd 计算图的节点。节点除了持有数据，还通过`grad_fn`记录运算来源，用来构建反向传播求导链路；算子负责实际数学运算，节点负责保存输入输出与求导信息。叶子节点由用户创建，中间节点由运算生成。
+
 2. `requires_grad` 控制是否追踪。  
+
 3. 非标量 `backward` 需 `gradient` 参数。  
+
 4. `retain_graph` 多步 backward 时用。  
+
 5. `leaf` 张量 `grad` 可直接看。  
+
 6. 非 leaf 需 `retain_grad()`。  
+
 7. `detach` 切断分支梯度。  
+
 8. `no_grad` 推理省显存。  
+
 9. `inference_mode` 更严格。  
+
 10. `train`/`eval` 影响 dropout。  
+
 11. `to(device)` 迁移。  
+
 12. `to(dtype)` 转换类型。  
+
 13. 混合精度 bf16/fp16。  
+
 14. Tensor Core 加速 matmul。  
+
 15. 广播从尾对齐。  
+
 16. `einsum` 表达清晰。  
+
 17. `bmm` batch 矩阵乘。  
+
 18. `matmul` 自动广播。  
+
 19. `addmm` 融合。  
+
 20. 内存带宽常是瓶颈。  
+
 21. 合并小算子 fusion。  
+
 22. `torch.compile` 图优化。  
+
 23. 动态图默认。  
+
 24. 静态图部分场景。  
+
 25. JIT `torch.jit.trace` 了解。  
+
 26. ONNX 导出部署。  
+
 27. 量化 INT8/INT4。  
+
 28. 分布式 `torchrun`。  
+
 29. DDP 梯度同步。  
+
 30. 单机多卡常见。  
+
 31. 随机种子可复现。  
+
 32. cudnn 确定性开关。  
+
 33. 数据加载 `num_workers`。  
+
 34. `pin_memory` CUDA。  
+
 35. `persistent_workers`。  
+
 36. `prefetch_factor`。  
+
 37. 数据集 `Dataset`。  
+
 38. 迭代器 `DataLoader`。  
+
 39. 自定义 `collate_fn`。  
+
 40. 变长序列 pad。  
+
 41. `pack_padded_sequence` 了解。  
+
 42. 梯度裁剪 `clip_grad_norm_`。  
+
 43. 权重衰减 AdamW。  
+
 44. 学习率 warmup。  
+
 45. Cosine schedule。  
+
 46. 梯度累积大 batch。  
+
 47. 检查点 `save`。  
+
 48. 恢复 `load_state_dict`。  
+
 49. 微调冻结层 `requires_grad=False`。  
+
 50. LoRA 低秩适配（扩展）。  
+
 51. 张量命名维度（了解）。  
+
 52. `vmap` 向量化（了解）。  
+
 53. `torch.fx` 符号追踪（了解）。  
+
 54. 自定义 autograd Function（了解）。  
+
 55. 二阶导数 `create_graph`（了解）。  
+
 56. Hessian（了解）。  
+
 57. Jacobian（了解）。  
+
 58. 数值精度 float64 调试。  
+
 59. NaN 检测 `torch.isnan`。  
+
 60. 异常值处理。  
+
 61. 随机数生成器 `Generator`。  
+
 62. 可复现 dropout。  
+
 63. 模型初始化 Xavier。  
+
 64. Kaiming 初始化。  
+
 65. 正交初始化。  
+
 66. 参数统计 `norm`。  
+
 67. 梯度统计监控。  
+
 68. TensorBoard 记录。  
+
 69. WandB 实验（了解）。  
+
 70. 单元测试 pytest。  
+
 71. 形状测试 assert。  
+
 72. CI 跑 lint。  
+
 73. 类型检查 mypy（了解）。  
+
 74. 代码格式化 black（了解）。  
+
 75. 读 CS336 官方作业说明。  
+
 76. 遵守学术诚信。  
+
 77. 引用论文出处。  
+
 78. 许可证合规。  
+
 79. 开源模型协议。  
+
 80. 商业使用注意。  
+
 81. 继续背 PyTorch API。  
+
 82. 继续写小实验。  
+
 83. 调试 print shape。  
+
 84. 调试 print device。  
+
 85. 调试 print dtype。  
+
 86. 三层打印解决一半 bug。  
+
 87. contiguous 解决 view 一半报错。  
+
 88. reshape 更省心。  
+
 89. 性能敏感再优化。  
+
 90. 先正确后快。  
+
 91. 面试先思路后细节。  
+
 92. 白板写公式。  
+
 93. 标注维度 B T D。  
+
 94. 因果 mask 画三角。  
+
 95. 残差画旁路。  
+
 96. 与 Lesson 02 BPE 衔接。  
+
 97. 字节 token ID。  
+
 98. Embedding 查表。  
+
 99. 词表大小 V。  
+
 100. 输出 logits V。  
+
 101. 交叉熵训练。  
+
 102. Softmax 温度。  
+
 103. 采样策略。  
+
 104. Top-p。  
+
 105. Top-k。  
+
 106. 重复惩罚。  
+
 107. EOS token。  
+
 108. BOS 可选。  
+
 109. Padding mask。  
+
 110. Attention mask。  
+
 111. 合并 mask 小心。  
+
 112. 半精度 mask 值域。  
+
 113. `-inf` 用大负数替代有时。  
+
 114. 数值稳定。  
+
 115. LayerNorm eps。  
+
 116. RMSNorm eps。  
+
 117. 深度学习调参。  
+
 118. 学习率是超参。  
+
 119. Batch size 超参。  
+
 120. 序列长度超参。  
+
 121. 一切可实验。  
+
 122. 日志记录实验。  
+
 123. 版本管理 git。  
+
 124. 数据版本管理。  
+
 125. 可复现第一。  
+
 126. 团队协作规范。  
+
 127. Code review。  
+
 128. 读写 README。  
+
 129. 写清楚依赖。  
+
 130. Docker 可选。  
+
 131. 云端 GPU 选型。  
+
 132. A100 H100 了解。  
+
 133. 显存容量规划。  
+
 134. 互联带宽。  
+
 135. NVLink。  
+
 136. InfiniBand。  
+
 137. 多机训练。  
+
 138. 通信后端 NCCL。  
+
 139. 故障排查日志。  
+
 140. OOM 减 batch。  
+
 141. OOM 梯度检查点。  
+
 142. OOM 换小模型。  
+
 143. 工程权衡。  
+
 144. 研究创新。  
+
 145. 产品落地。  
+
 146. 全栈视野。  
+
 147. CS336 路线完整。  
+
 148. 面试自信来源。  
+
 149. 持续学习。  
+
 150. 论文日读。  
+
 151. arXiv 跟踪。  
+
 152. GitHub 跟踪。  
+
 153. HuggingFace 生态。  
+
 154. 模型卡阅读。  
+
 155. Tokenizer 文档。  
+
 156. 配置 yaml。  
+
 157. 超参 sweep。  
+
 158. 早停策略。  
+
 159. 验证集监控。  
+
 160. 过拟合识别。  
+
 161. 欠拟合识别。  
+
 162. 数据增广 NLP。  
+
 163. 回译（了解）。  
+
 164. 对比学习（了解）。  
+
 165. 继续扩展。  
+
 166. 行数足够。  
+
 167. 复习愉快。  
+
 168. 做题愉快。  
+
 169. 面试愉快。  
+
 170. 拿到 offer。  
+
 171. 回馈社区。  
+
 172. 写博客总结。  
+
 173. 教后来者。  
+
 174. 知识传承。  
+
 175. 本附录偏长。  
+
 176. 可跳读。  
+
 177. 抓主干即可。  
+
 178. 条目扫关键词。  
+
 179. 考前速览。  
+
 180. 睡前列想。  
+
 181. 白板模拟。  
+
 182. 计时回答。  
+
 183. 录音回听。  
+
 184. 改进表达。  
+
 185. STAR 故事。  
+
 186. 项目经历。  
+
 187. CS336 写简历。  
+
 188. 量化成果。  
+
 189. 数据规模。  
+
 190. 训练时长。  
+
 191. 指标提升。  
+
 192. 问题解决。  
+
 193. 协作案例。  
+
 194. 冲突处理。  
+
 195. 学习能力。  
+
 196. 自驱力。  
+
 197. 好奇心。  
+
 198. 严谨性。  
+
 199. 工程素养。  
+
 200. 本节扩展完。  
 
 ---
