@@ -87,11 +87,13 @@ BPE 最初是 **Philip Gage（1994）** 的**数据压缩**思路：反复合并
 ### 2.3 Byte-level BPE vs character-level BPE
 
 - **字符级**：在 Unicode 码点上合并。
-- **字节级**：在 UTF-8 **字节**上合并；初始 **256**；任意文本可编码，**字节级无「未知字符」**（与词级 UNK 概念不同）。
+- **字节级**：在 UTF-8 **字节**上合并；初始 **256**；任意文本可编码，**字节级无「未知字符」**（与词级 UNK 概念不同【**UNK** 是 **Unknown token**（未知词元）的缩写】）。
 
 ### 2.4 Why byte-level is preferred
 
 实现简单、跨语言一致、与 GPT / tiktoken 生态对齐；代价是 CJK 等往往 **token 更多**（UTF-8 多字节）。
+
+**CJK** 是 **Chinese、Japanese、Korean** 三个词的缩写，指代**中文、日文、韩文**这三种语言/文字系统。
 
 ---
 
@@ -135,6 +137,8 @@ BPE 最初是 **Philip Gage（1994）** 的**数据压缩**思路：反复合并
 
 **面试要点**：口述「**先全局选 max 频对 → 全片段应用 → 再统计**」；**平局**时说明你的 tie-break（如字典序）。
 
+**Tie-break** 中文叫**平局打破规则**或**决胜规则**，指的是：当出现**多个候选并列最优**时，按什么规则从中选一个。
+
 ---
 
 ## 四、BPE 推理 / 编码流程
@@ -171,20 +175,24 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 import regex as re
 
+# GPT-2 的预分词正则：先按规则切块，再对每块做 BPE
 GPT2_SPLIT_PATTERN = re.compile(
     r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 )
 
 
 def pretokenize_gpt2(text: str) -> List[str]:
+    # 按 GPT-2 规则把文本切成若干片段
     return [m.group(0) for m in GPT2_SPLIT_PATTERN.finditer(text)]
 
 
 def bytes_to_ids(chunk: str) -> List[int]:
+    # 字符串 → UTF-8 字节序列（每个字节一个 id）
     return list(chunk.encode("utf-8"))
 
 
 def get_stats(ids: Sequence[int], counts: Optional[Dict[Tuple[int, int], int]] = None) -> Dict[Tuple[int, int], int]:
+    # 统计相邻字节对的出现次数
     counts = counts if counts is not None else {}
     for i in range(len(ids) - 1):
         pair = (ids[i], ids[i + 1])
@@ -193,6 +201,7 @@ def get_stats(ids: Sequence[int], counts: Optional[Dict[Tuple[int, int], int]] =
 
 
 def merge(ids: List[int], pair: Tuple[int, int], new_id: int) -> List[int]:
+    # 把序列中所有相邻的 pair 替换成 new_id（从左到右，非重叠）
     a, b = pair
     out: List[int] = []
     i, n = 0, len(ids)
@@ -207,6 +216,7 @@ def merge(ids: List[int], pair: Tuple[int, int], new_id: int) -> List[int]:
 
 
 def count_pairs_for_chunks(chunk_freqs: Dict[Tuple[int, ...], int]) -> Dict[Tuple[int, int], int]:
+    # 按片段频次加权统计字节对；相同片段只算一次，再乘频次
     stats: Dict[Tuple[int, int], int] = {}
     for chunk_tuple, freq in chunk_freqs.items():
         ids = list(chunk_tuple)
@@ -217,19 +227,23 @@ def count_pairs_for_chunks(chunk_freqs: Dict[Tuple[int, ...], int]) -> Dict[Tupl
 
 
 def train_bpe(text_corpus: str, num_merges: int, pattern: re.Pattern = GPT2_SPLIT_PATTERN):
+    # 1) 预分词并统计每个片段的出现频次
     chunk_freqs: Dict[Tuple[int, ...], int] = Counter()
     for m in pattern.finditer(text_corpus):
         t = tuple(bytes_to_ids(m.group(0)))
         chunk_freqs[t] += 1
 
+    # 2) 初始词表：0~255 各对应一个字节
     vocab: Dict[int, bytes] = {i: bytes([i]) for i in range(256)}
     merges: List[Tuple[int, int, int]] = []
     next_id = 256
 
+    # 3) 迭代 num_merges 次：选最高频对 → 全片段合并 → 更新词表
     for _ in range(num_merges):
         pair_stats = count_pairs_for_chunks(chunk_freqs)
         if not pair_stats:
             break
+        # 平局时按 pair 字典序取较小者
         best_pair = max(pair_stats.items(), key=lambda kv: (kv[1], kv[0]))[0]
         left, right = best_pair
         new_chunk_freqs: Dict[Tuple[int, ...], int] = defaultdict(int)
@@ -245,10 +259,12 @@ def train_bpe(text_corpus: str, num_merges: int, pattern: re.Pattern = GPT2_SPLI
 
 
 def build_merge_ranks(merges: List[Tuple[int, int, int]]) -> Dict[Tuple[int, int], int]:
+    # pair → 合并优先级（越小越先合并）
     return {(a, b): r for r, (a, b, _) in enumerate(merges)}
 
 
 def encode_piece_by_rank(ids: List[int], merges: List[Tuple[int, int, int]]) -> List[int]:
+    # 按合并优先级反复合并：每次选 rank 最小（同 rank 取最左）的 pair
     pair_to_new = {(a, b): nid for a, b, nid in merges}
     merge_ranks = build_merge_ranks(merges)
     seq = ids[:]
@@ -270,6 +286,7 @@ def encode_piece_by_rank(ids: List[int], merges: List[Tuple[int, int, int]]) -> 
 
 
 def encode_piece_sequential(ids: List[int], merges: List[Tuple[int, int, int]]) -> List[int]:
+    # 按训练顺序依次应用每条 merge 规则
     seq = ids[:]
     for left, right, new_id in merges:
         seq = merge(seq, (left, right), new_id)
@@ -277,6 +294,7 @@ def encode_piece_sequential(ids: List[int], merges: List[Tuple[int, int, int]]) 
 
 
 def bpe_encode(text: str, merges: List[Tuple[int, int, int]], pattern: re.Pattern = GPT2_SPLIT_PATTERN) -> List[int]:
+    # 先预分词，再对每个片段做 BPE，最后拼起来
     out: List[int] = []
     for piece in pretokenize_gpt2(text):
         out.extend(encode_piece_sequential(bytes_to_ids(piece), merges))
@@ -284,10 +302,12 @@ def bpe_encode(text: str, merges: List[Tuple[int, int, int]], pattern: re.Patter
 
 
 def bpe_decode(ids: Sequence[int], vocab: Dict[int, bytes]) -> str:
+    # id → 字节 → 拼起来 → 按 UTF-8 解码
     return b"".join(vocab[i] for i in ids).decode("utf-8", errors="replace")
 
 
 def worker_count_pairs(lines: List[str], pattern: re.Pattern) -> Dict[Tuple[int, int], int]:
+    # 子进程：统计一批文本行的字节对频次
     local: Dict[Tuple[int, int], int] = {}
     for line in lines:
         for m in pattern.finditer(line):
@@ -301,6 +321,7 @@ def worker_count_pairs(lines: List[str], pattern: re.Pattern) -> Dict[Tuple[int,
 def parallel_count_pairs(
     corpus_lines: List[str], num_workers: int = 4, pattern: re.Pattern = GPT2_SPLIT_PATTERN
 ) -> Dict[Tuple[int, int], int]:
+    # 多进程分片统计，再合并结果
     if num_workers <= 1:
         return worker_count_pairs(corpus_lines, pattern)
     chunk_size = max(1, len(corpus_lines) // num_workers)
@@ -315,6 +336,7 @@ def parallel_count_pairs(
 
 
 if __name__ == "__main__":
+    # 小样例：训练 → 编码 → 解码，并断言能还原原文
     sample = "hello hello hello 你好"
     vocab, merges = train_bpe(sample, num_merges=10)
     ids = bpe_encode(sample, merges)
