@@ -43,7 +43,7 @@
 
 ### 2.6 交叉熵在做什么？
 
-对每个位置，模型输出 $V$ 维 logits，与「真实下一个 token」做 **多分类交叉熵**。语言建模通常把 `(B, T, V)` 与右移一位的 `labels` 对齐后 **展平** 成 `(B*(T-1), V)` 与 `(B*(T-1),)` 再计算（忽略 padding 位置时用 `ignore_index`）。
+对每个位置，模型输出 $V$ 维 logits，与「真实下一个 token」做 **多分类交叉熵**。语言建模通常把 `(B, T, V)` 与下一 token 对应的 `labels` 对齐后 **展平** 成 `(B*(T-1), V)` 与 `(B*(T-1),)` 再计算（忽略 padding 位置时用 `ignore_index`）。
 
 ### 2.7 AdamW 与「手写」的意义
 
@@ -223,7 +223,7 @@ assignment1/
 ### 6.3 形状验证
 
 - 在 `forward` 关键处 `assert` 或一次性打印：`embed (B,T,D)`、`attn (B,H,T,T)`、`logits (B,T,V)`。
-- **`cross_entropy`**：`C` 必须在最后一维；否则先 `permute` / `view`。
+- **`cross_entropy`**：PyTorch 的类别维是**第 1 维**（从 0 计数）；本节先将 `(B,T,V)` 展平为 `(B*T,V)`，此时类别维恰好也是最后一维。也可转为 `(B,V,T)`，不能直接把 `(B,T,V)` 当作其多维输入。
 
 ### 6.4 过拟合单 batch
 
@@ -251,7 +251,7 @@ uv run pytest -k "bpe"                   # 按名称子串筛选
 | 现象 | 常见原因 |
 |------|-----------|
 | matmul 维度错误 | $QK^\top$ 中 head 维与 `d_head` 混淆；`transpose` 写错 |
-| `cross_entropy` 报错 | logits 与 labels 长度差 1；`V` 不在最后一维 |
+| `cross_entropy` 报错 | logits/labels 未对齐；未展平或未把 `V` 移到类别维（第 1 维） |
 | attention 广播失败 | 未 reshape 为 `(B, H, T, d)`；mask 长度不是 `T` |
 
 **方法**：固定 `B=1`、小 `T`，逐步打印 `tensor.shape`。
@@ -292,8 +292,8 @@ uv run pytest -k "bpe"                   # 按名称子串筛选
 |----|----------------|------|
 | $D$（d_model） | 128～384 | 先保证能过拟合小数据 |
 | $L$（层数） | 2～6 | 深模型更难调，先浅后深 |
-| $H$（头数） | $D$ 整除 $d_\text{head}$，如 4～8 | 与 RoPE 实现一起测 |
-| $T$（序列长度） | 128～512 | 显存 $\propto B \cdot T^2$（注意力） |
+| $H$（头数） | 如 4～8，要求 $D$ 可被 $H$ 整除，且 RoPE 的头维为偶数 | 联合验证 reshape 与旋转 |
+| $T$（序列长度） | 128～512 | 朴素注意力矩阵为 $O(BHT^2)$；FlashAttention 不完整物化该矩阵 |
 | $B$（batch） | 从 1～8 起 | OOM 则减 $B$ 或梯度累积 |
 | 学习率 $\eta$ | $1\mathrm{e}{-4}$～$3\mathrm{e}{-4}$ 量级试探 | 配合 warmup |
 | weight decay $\lambda$ | $0.01$～$0.1$（常见范围） | bias/LayerNorm 常不衰减 |
@@ -424,7 +424,7 @@ text = tokenizer.decode(ids[0].tolist())
 
 ### Q1：请描述你从零实现语言模型的过程
 
-**参考答案**：我按数据流把任务拆成四块：**分词器、模型、损失与优化、训练与生成**。首先实现 **字节级 BPE**：用课程规定的预分词正则把文本切成片段，在片段内统计相邻字节对，迭代 merge 扩展词表，并严格处理 **平局规则**，保证训练与推理同一套 merge 顺序；`encode` 得到 ID 序列，`decode` 查词表拼回字节再 UTF-8 解码。接着实现 **Decoder-only Transformer**：token embedding、多层 block，每层包含 **RMSNorm**、**多头因果自注意力**（对 $Q,K$ 施加 **RoPE**）、残差与 **SwiGLU FFN**；注意力里用 **causal mask** 禁止看未来位置；最后 **lm_head** 映射到词表 logits。训练时对 logits 与 **右移一位** 的 `input_ids` 做 **交叉熵**。优化器使用 **手写的 AdamW**（含偏差修正与解耦权重衰减），训练循环里配合 **学习率调度**（如 warmup+cosine），并记录 loss。验证无误后用 **top-p** 做文本生成调试。整个过程以 **`pytest`** 与 toy 过拟合实验锁定正确性。
+**参考答案**：我按数据流把任务拆成四块：**分词器、模型、损失与优化、训练与生成**。首先实现 **字节级 BPE**：用课程规定的预分词正则把文本切成片段，在片段内统计相邻字节对，迭代 merge 扩展词表，并严格处理 **平局规则**，保证训练与推理同一套 merge 顺序；`encode` 得到 ID 序列，`decode` 查词表拼回字节再 UTF-8 解码。接着实现 **Decoder-only Transformer**：token embedding、多层 block，每层包含 **RMSNorm**、**多头因果自注意力**（对 $Q,K$ 施加 **RoPE**）、残差与 **SwiGLU FFN**；注意力里用 **causal mask** 禁止看未来位置；最后 **lm_head** 映射到词表 logits。训练时对 logits 与 `input_ids[:, 1:]` 对应的下一 token 标签 做 **交叉熵**。优化器使用 **手写的 AdamW**（含偏差修正与解耦权重衰减），训练循环里配合 **学习率调度**（如 warmup+cosine），并记录 loss。验证无误后用 **top-p** 做文本生成调试。整个过程以 **`pytest`** 与 toy 过拟合实验锁定正确性。
 
 ### Q2：实现过程中遇到的最大挑战是什么？
 

@@ -14,11 +14,11 @@
 
 ### 优化器在训练里做什么？
 
-语言模型训练本质是：给定损失 \(L(\theta)\)，在极高维参数空间 \(\theta\) 上**迭代减小损失**。每一步典型流程为：
+语言模型训练本质是：给定损失 $L(\theta)$，在极高维参数空间 $\theta$ 上**迭代减小损失**。每一步典型流程为：
 
 1. **前向**计算 loss；  
-2. **反向**得到梯度 \(\mathbf{g}_t = \nabla_\theta L(\theta_{t-1})\)；  
-3. **优化器**根据 \(\mathbf{g}_t\) 与历史统计，更新 \(\theta_t\)。
+2. **反向**得到梯度 $\mathbf{g}_t = \nabla_\theta L(\theta_{t-1})$；  
+3. **优化器**根据 $\mathbf{g}_t$ 与历史统计，更新 $\theta_t$。
 
 **AdamW** 是当前 **Decoder-only LLM 预训练** 的主流选择之一（常与 **cosine + warmup**、**全局梯度范数裁剪**、**混合精度** 一起出现）。理解它，等于理解「现代 LM 训练脚本里一半的超参」。
 
@@ -28,13 +28,13 @@
 
 **全批量梯度下降**使用**整个数据集**上的平均梯度：
 
-\[
+$$
 \theta_{t+1} = \theta_t - \eta \cdot \frac{1}{N}\sum_{i=1}^{N} \nabla_\theta L_i(\theta_t)
-\]
+$$
 
-- \(\eta\)：**学习率（learning rate）**，控制每步沿负梯度方向走多远。  
+- $\eta$：**学习率（learning rate）**，控制每步沿负梯度方向走多远。  
 - **优点**：梯度方向是「真实」的期望方向，更新稳定。  
-- **缺点**：\(N\) 很大时每一步都扫全数据，**太慢**；且只有大 batch 才近似稳定。
+- **缺点**：$N$ 很大时每一步都扫全数据，**太慢**；且只有大 batch 才近似稳定。
 
 **直觉**：站在损失曲面上，每一步朝「最陡下坡」的方向走一小步。
 
@@ -42,13 +42,13 @@
 
 ### 2. 随机梯度下降（SGD）
 
-对每个 **mini-batch**（大小 \(B \ll N\)）用样本梯度近似：
+对每个 **mini-batch**（大小 $B \ll N$）用样本梯度近似：
 
-\[
+$$
 \theta_{t+1} = \theta_t - \eta \cdot \mathbf{g}_t
-\]
+$$
 
-其中 \(\mathbf{g}_t\) 是当前 batch 的梯度（是总体梯度的无偏估计，但**方差大**）。
+其中 $\mathbf{g}_t$ 是当前 batch 的梯度（是总体梯度的无偏估计，但**方差大**）。
 
 - **优点**：每步计算量小，可在海量数据上迭代。  
 - **缺点**：噪声大，损失曲面抖动；在狭长「峡谷」里易**之字形**震荡，收敛慢。  
@@ -60,19 +60,20 @@
 
 ### 3. 带动量的 SGD（Momentum）
 
-引入 **速度** \(\mathbf{v}_t\)，把历史梯度做指数滑动平均，阻尼震荡、加速一致方向：
+引入 **速度** $\mathbf{v}_t$，把历史梯度做指数滑动平均，阻尼震荡、加速一致方向：
 
-\[
+$$
 \mathbf{v}_t = \beta \mathbf{v}_{t-1} + \mathbf{g}_t
-\]
-\[
-\theta_{t+1} = \theta_t - \eta \cdot \mathbf{v}_t
-\]
+$$
 
-常见变体也会写成 \(\mathbf{v}_t = \beta \mathbf{v}_{t-1} + (1-\beta)\mathbf{g}_t\)，与 Adam 中一阶矩形式统一，本质是 **对梯度的 EMA（指数滑动平均）**。
+$$
+\theta_{t+1} = \theta_t - \eta \cdot \mathbf{v}_t
+$$
+
+常见变体也会写成 $\mathbf{v}_t = \beta \mathbf{v}_{t-1} + (1-\beta)\mathbf{g}_t$，与 Adam 中一阶矩形式统一，本质是 **对梯度的 EMA（指数滑动平均）**。
 
 - **直觉**：以前几步的「惯性」冲过平坦区、减少直角弯折。  
-- \(\beta\)：典型 **0.9**。  
+- $\beta$：典型 **0.9**。  
 - **局限**：仍只有**一个全局学习率**缩放整向量；各参数维度的梯度尺度差异大时，不如自适应方法省心。
 
 ---
@@ -81,53 +82,54 @@
 
 **Adam**（Adaptive Moment Estimation）同时维护：
 
-- **一阶矩** \(\mathbf{m}_t\)：梯度的指数滑动平均（可理解为梯度方向的「平滑估计」，与 momentum 思想相通）；  
-- **二阶矩** \(\mathbf{v}_t\)：梯度**逐元素平方**的指数滑动平均（刻画各维梯度的**尺度**，用于自适应归一化）。
+- **一阶矩** $\mathbf{m}_t$：梯度的指数滑动平均（可理解为梯度方向的「平滑估计」，与 momentum 思想相通）；  
+- **二阶矩** $\mathbf{v}_t$：梯度**逐元素平方**的指数滑动平均（刻画各维梯度的**尺度**，用于自适应归一化）。
 
 **递推（与 PyTorch / 论文常见写法一致）**：
 
-\[
+$$
 \mathbf{m}_t = \beta_1 \mathbf{m}_{t-1} + (1-\beta_1)\mathbf{g}_t
-\]
-\[
+$$
+
+$$
 \mathbf{v}_t = \beta_2 \mathbf{v}_{t-1} + (1-\beta_2)\mathbf{g}_t^2
-\]
+$$
 
-其中 \(\mathbf{g}_t^2\) 表示 **Hadamard 逐元素平方**（每个参数位置独立）。
+其中 $\mathbf{g}_t^2$ 表示 **Hadamard 逐元素平方**（每个参数位置独立）。
 
-**偏差修正（bias correction）**：初始化 \(\mathbf{m}_0=\mathbf{0}\)、\(\mathbf{v}_0=\mathbf{0}\)，导致初期 \(\mathbf{m}_t,\mathbf{v}_t\) **系统性偏小**（尤其 \(t\) 很小时）。定义：
+**偏差修正（bias correction）**：初始化 $\mathbf{m}_0=\mathbf{0}$、$\mathbf{v}_0=\mathbf{0}$，导致初期 $\mathbf{m}_t,\mathbf{v}_t$ **系统性偏小**（尤其 $t$ 很小时）。定义：
 
-\[
+$$
 \hat{\mathbf{m}}_t = \frac{\mathbf{m}_t}{1-\beta_1^t}, \quad
 \hat{\mathbf{v}}_t = \frac{\mathbf{v}_t}{1-\beta_2^t}
-\]
+$$
 
 **参数更新（Adam 核心步）**：
 
-\[
+$$
 \theta_{t+1} = \theta_t - \eta \cdot \frac{\hat{\mathbf{m}}_t}{\sqrt{\hat{\mathbf{v}}_t} + \epsilon}
-\]
+$$
 
-- **\(\epsilon\)**：数值稳定项（典型 **1e-8**），加在 \(\sqrt{\hat{\mathbf{v}}_t}\) 上防止分母过小。  
-- **直觉**：\(\hat{\mathbf{m}}_t\) 定更新方向；\(\sqrt{\hat{\mathbf{v}}_t}\) 做逐维缩放——历史梯度幅度大的维，有效步长自动被压低（**自适应**）。
+- **$\epsilon$**：数值稳定项（典型 **1e-8**），加在 $\sqrt{\hat{\mathbf{v}}_t}$ 上防止分母过小。  
+- **直觉**：$\hat{\mathbf{m}}_t$ 定更新方向；$\sqrt{\hat{\mathbf{v}}_t}$ 做逐维缩放——历史梯度幅度大的维，有效步长自动被压低（**自适应**）。
 
 ---
 
 ### 5. AdamW：解耦权重衰减（Decoupled Weight Decay）
 
-**经典「Adam + L2」** 常在实现上把 L2 项并入梯度（\(\mathbf{g}_t \leftarrow \mathbf{g}_t + \lambda\theta_t\)），该项再进入 \(\mathbf{m}_t,\mathbf{v}_t\) 的 EMA，与 **自适应分母 \(\sqrt{\hat{\mathbf{v}}}\)** 耦合，**权重衰减的有效行为**与「对 \(\theta\) 显式 \(\ell_2\) 惩罚」不一致。
+**Adam + L2 正则**把 $\lambda\theta$ 加入梯度，确实是在优化带 $\frac{\lambda}{2}\|\theta\|_2^2$ 惩罚的目标；该项也进入一阶/二阶矩。但在 Adam 中，它**不等价于参数按固定比例收缩的 weight decay**，因为受到逐维自适应缩放影响。
 
 **AdamW**（Loshchilov & Hutter, 2019）将 **weight decay** 与 Adam 的自适应更新**解耦**。常见等价写法之一：
 
-\[
+$$
 \theta_{t+1} = \theta_t - \eta \cdot \frac{\hat{\mathbf{m}}_t}{\sqrt{\hat{\mathbf{v}}_t} + \epsilon} - \eta \lambda \theta_t
-\]
+$$
 
-即：先做标准 Adam 步，再对权重做 **与二阶矩无关** 的衰减（实现上常写作在自适应步之后执行 `θ ← θ - η·λ·θ`）。
+此式使用更新前的权重：先执行 `θ ← (1 - η·λ)·θ`，再减去 Adam 自适应更新量。若先做 Adam 步、再缩放已经更新的权重，会额外缩放该更新量，**并不与上式严格等价**。不同讲义可能采用后一种顺序，应明确约定并与测试一致；本节采用 [PyTorch AdamW](https://docs.pytorch.org/docs/stable/generated/torch.optim.AdamW.html) 的先衰减顺序。
 
 | 维度 | L2 并入梯度（与 Adam 耦合） | AdamW（解耦） |
 |------|---------------------------|---------------|
-| 正则如何作用 | 进入 \(\mathbf{m},\mathbf{v}\)，与 \(\sqrt{\hat{\mathbf{v}}}\) 纠缠 | **不**进入矩估计，单独衰减 \(\theta\) |
+| 正则如何作用 | 进入 $\mathbf{m},\mathbf{v}$，与 $\sqrt{\hat{\mathbf{v}}}$ 纠缠 | **不**进入矩估计，单独衰减 $\theta$ |
 | 与自适应关系 | 衰减强度受二阶缩放影响 | 衰减与自适应步长 **独立** |
 | LLM 实践 | 较少作为主配置 | **预训练常用** |
 
@@ -139,27 +141,27 @@
 
 | 符号 | 含义 | 典型值 / 说明 |
 |------|------|----------------|
-| \(\eta\) / `lr` | 学习率 | 与调度器配合；base 常见 \(10^{-4}\sim 3\times 10^{-4}\)（视模型与 batch 而定） |
-| \(\beta_1\) | 一阶矩 EMA 衰减 | **0.9** |
-| \(\beta_2\) | 二阶矩 EMA 衰减 | **0.999**（通用）；部分 **LLM** 用 **0.95** 等更短窗口 |
-| \(\epsilon\) | 分母稳定项 | **1e-8**（FP32）；半精度下有时需略调 |
-| `weight_decay` | \(\lambda\) | **0.01** 量级常见于 Transformer（需任务验证） |
+| $\eta$ / `lr` | 学习率 | 与调度器配合；base 常见 $10^{-4}\sim 3\times 10^{-4}$（视模型与 batch 而定） |
+| $\beta_1$ | 一阶矩 EMA 衰减 | **0.9** |
+| $\beta_2$ | 二阶矩 EMA 衰减 | **0.999**（通用）；部分 **LLM** 用 **0.95** 等更短窗口 |
+| $\epsilon$ | 分母稳定项 | **1e-8**（FP32）；半精度下有时需略调 |
+| `weight_decay` | $\lambda$ | **0.01** 量级常见于 Transformer（需任务验证） |
 
 ---
 
 ### 7. 学习率调度：warmup、余弦、线性衰减、阶梯衰减
 
-**Warmup**：训练前若干 step 将 \(\eta\) 从 0（或很小）**爬升**到目标 base lr。动机：初期 \(\mathbf{m},\mathbf{v}\) 估计不稳定；大 batch / 大 lr 下易数值爆炸；**Transformer** 类模型尤其依赖 warmup。
+**Warmup**：训练前若干 step 将 $\eta$ 从 0（或很小）**爬升**到目标 base lr。动机：初期 $\mathbf{m},\mathbf{v}$ 估计不稳定；大 batch / 大 lr 下易数值爆炸；**Transformer** 类模型尤其依赖 warmup。
 
-**Cosine decay**：在 warmup 结束后，学习率按余弦从 \(\eta_{\max}\) 平滑降到 \(\eta_{\min}\)（接近 0 或某一 floor）。典型形式（示意）：
+**Cosine decay**：在 warmup 结束后，学习率按余弦从 $\eta_{\max}$ 平滑降到 $\eta_{\min}$（接近 0 或某一 floor）。典型形式（示意）：
 
-\[
+$$
 \eta_t = \eta_{\min} + \frac{1}{2}(\eta_{\max}-\eta_{\min})\left(1 + \cos\frac{\pi (t - T_{\mathrm{warm}})}{T_{\mathrm{decay}}}\right)
-\]
+$$
 
-**Linear decay**：从某步起 \(\eta\) **线性**降至 \(\eta_{\min}\)，形式简单，部分基线与课程作业采用。
+**Linear decay**：从某步起 $\eta$ **线性**降至 $\eta_{\min}$，形式简单，部分基线与课程作业采用。
 
-**Step decay（阶梯衰减）**：每隔固定 epoch 或 step 将 \(\eta\) 乘以常数 \(\gamma\in(0,1)\)（如每 30 epoch ×0.1）。边界处 lr **突变**，可能带来 loss 抖动，但在 CV 传统任务中很常见。
+**Step decay（阶梯衰减）**：每隔固定 epoch 或 step 将 $\eta$ 乘以常数 $\gamma\in(0,1)$（如每 30 epoch ×0.1）。边界处 lr **突变**，可能带来 loss 抖动，但在 CV 传统任务中很常见。
 
 **常见组合**：**linear warmup + cosine decay** 是 LLM 预训练标配之一。
 
@@ -169,9 +171,9 @@
 
 **动机**：长序列、大模型或半精度下可能出现 **梯度爆炸**，单步更新过大导致 loss 发散。
 
-**按全局范数裁剪（clip by global norm）**：先算所有参数梯度的整体 \(\ell_2\) 范数 \(G = \|\text{concat}(\mathbf{g}_i)\|_2\)。若 \(G > c\)，则所有梯度乘以 \(c/G\)，**方向不变、只缩小模长**。
+**按全局范数裁剪（clip by global norm）**：先算所有参数梯度的整体 $\ell_2$ 范数 $G = \|\text{concat}(\mathbf{g}_i)\|_2$。若 $G > c$，则所有梯度乘以 $c/G$，**方向不变、只缩小模长**。
 
-**按值裁剪（clip by value）**：逐元素将 \(g_{ij}\) 限制在 \([-c, c]\)，**会改变方向**。
+**按值裁剪（clip by value）**：逐元素将 $g_{ij}$ 限制在 $[-c, c]$，**会改变方向**。
 
 **LLM 训练更常用 global norm**：保留梯度方向，抑制极端大更新。
 
@@ -187,9 +189,9 @@
 | FP16 | 5 | 10 | 动态范围小，易 underflow/overflow |
 | BF16 | 8 | 7 | 与 FP32 同指数宽度，**动态范围大**，尾数少 |
 
-- **Loss scaling（FP16 常用）**：前向得到 loss 后先乘以较大因子 \(S\)（如 \(2^{16}\)），反传梯度同比例放大，避免梯度过小在 FP16 中下溢为 0；`optimizer.step()` 前再 **unscale**，最后用 `scaler.update()` 根据是否出现 inf 调整 \(S\)。  
+- **Loss scaling（FP16 常用）**：前向得到 loss 后先乘以较大因子 $S$（如 $2^{16}$），反传梯度同比例放大，避免梯度过小在 FP16 中下溢为 0；`optimizer.step()` 前再 **unscale**，最后用 `scaler.update()` 根据是否出现 inf 调整 $S$。  
 - **BF16**：许多场景下**不需要** loss scaling（梯度不易下溢），实现更简单。  
-- **Master weights**：半精度前向，FP32 存 \(\theta\) 做 `step`，再写回半精度权重（具体 API 因 `autocast` / FSDP 等而异）。
+- **Master weights**：半精度前向，FP32 存 $\theta$ 做 `step`，再写回半精度权重（具体 API 因 `autocast` / FSDP 等而异）。
 
 **为何大模型训练常用 BF16 而非 FP16？** 核心原因是 **动态范围**：BF16 与 FP32 **相同的 8 位指数**，对大激活/大梯度更宽容；FP16 指数位少，即便有 loss scaling，仍可能在某些层或长训练中出现 **数值不稳定**。在 A100/H100 等硬件上 BF16 吞吐高，已成为 LLM 预训练默认选项之一。但 **FP16 + loss scaling** 在成熟框架下同样广泛使用，最终以硬件支持与实测为准。
 
@@ -200,7 +202,7 @@
 Assignment 1（Basics）通常要求 **BPE + Decoder-only Transformer LM + 手写优化器 + 训练循环**。与优化器直接相关的要点（**以当年官方 README/PDF 为准**）：
 
 1. **手写 AdamW，且不直接 `import` 使用 `torch.optim.AdamW`**：需实现 **bias correction** 与 **decoupled weight decay**。  
-2. **公式对齐**：\(\theta \leftarrow \theta - \eta \left( \hat{\mathbf{m}}_t / (\sqrt{\hat{\mathbf{v}}_t} + \epsilon) + \lambda \theta \right)\)（与先 Adam 步再 decay 等价）。  
+2. **公式与版本**：本节按更新前权重写 $\theta \leftarrow (1-\eta\lambda)\theta-\eta\hat{m}/(\sqrt{\hat{v}}+\epsilon)$，与 [PyTorch AdamW](https://docs.pytorch.org/docs/stable/generated/torch.optim.AdamW.html) 一致。2025 版作业曾使用先自适应步、后衰减的顺序，[官方变更记录](https://github.com/stanford-cs336/assignment1-basics/blob/main/CHANGELOG.md) 在 2026-03-30 修正；复现旧测试时核对年份，两顺序不严格等价。
 3. **`param_groups`**：支持不同组不同 `lr` / `weight_decay`（例如 **bias 不衰减**）。  
 4. **`state`**：每个参数存 `step`、`exp_avg`、`exp_avg_sq`，且在 **`model.to(device)` 之后** 创建，保证与参数 **同设备**。  
 5. **训练循环**：`zero_grad` → `forward` → `loss` → `backward` →（可选）`clip` → `optimizer.step()` → `scheduler.step()`。  
@@ -230,7 +232,7 @@ class AdamW:
     """
     纯 PyTorch 张量实现 AdamW，不依赖 torch.optim.AdamW。
     更新: θ ← θ - η * ( m_hat / (sqrt(v_hat) + ε) + λ * θ )
-    等价于先 Adam 步，再 θ ← θ - η*λ*θ（decoupled weight decay）。
+    先衰减更新前的权重，再执行自适应步，与 PyTorch AdamW 顺序一致。
     """
 
     def __init__(
@@ -314,9 +316,9 @@ class AdamW:
                 v_hat = v / (1.0 - beta2**t)
 
                 denom = v_hat.sqrt().add_(eps)
-                p.add_(m_hat.div_(denom), alpha=-lr)
                 if wd != 0.0:
-                    p.add_(p, alpha=-lr * wd)
+                    p.mul_(1.0 - lr * wd)
+                p.add_(m_hat.div_(denom), alpha=-lr)
 
         return loss
 
@@ -340,6 +342,8 @@ def build_optimizer(model: nn.Module, lr: float = 3e-4, wd: float = 0.1) -> Adam
 ```
 
 > **说明**：`param_groups` 为 **字典列表** 时，每组可单独指定 `lr` / `weight_decay`；`build_optimizer` 将 **bias 等一维参数** 与 **权重矩阵** 分组，符合 Assignment 1 常见写法。
+
+这个极简类只展示密集梯度更新，没有实现完整 `Optimizer` 接口（如 `state_dict/load_state_dict`、稀疏梯度和参数校验）。接入 checkpoint/scheduler 前需补齐对应接口，或使用下节继承 `Optimizer` 的版本；不能直接当成生产优化器替换。
 
 ---
 
@@ -383,9 +387,9 @@ class AdamWRef(Optimizer):
                 v.mul_(b2).addcmul_(g, g, value=1 - b2)
                 m_hat = m / (1 - b1**t)
                 v_hat = v / (1 - b2**t)
-                p.add_(m_hat / (v_hat.sqrt() + eps), alpha=-lr)
                 if wd:
-                    p.add_(p, alpha=-lr * wd)
+                    p.mul_(1.0 - lr * wd)
+                p.add_(m_hat / (v_hat.sqrt() + eps), alpha=-lr)
         return loss
 ```
 
@@ -460,8 +464,10 @@ def clip_grad_norm_(parameters, max_norm: float) -> torch.Tensor:
         return torch.tensor(0.0)
     device = params[0].device
     total_norm_sq = torch.stack([p.grad.detach().float().pow(2).sum() for p in params]).sum()
-    total_norm = total_norm_sq.sqrt().clamp_min(1e-6)
-    clip_coef = (max_norm / total_norm).clamp(max=1.0)
+    if max_norm < 0:
+        raise ValueError("max_norm must be nonnegative")
+    total_norm = total_norm_sq.sqrt()
+    clip_coef = (max_norm / (total_norm + 1e-6)).clamp(max=1.0)
     for p in params:
         p.grad.detach().mul_(clip_coef.to(p.grad.dtype))
     return total_norm.to(device)
@@ -503,13 +509,13 @@ BF16 路径常用 `autocast(dtype=torch.bfloat16)`，许多硬件上**可不使�
 |------|------|
 | GD → SGD | 全批量 vs mini-batch；方差与速度权衡 |
 | Momentum | 梯度 EMA；减震荡；仍非逐维自适应 |
-| Adam | \(\mathbf{m}_t,\mathbf{v}_t\)；\(\hat{\mathbf{m}}_t,\hat{\mathbf{v}}_t\)；\(\hat{\mathbf{m}}/\sqrt{\hat{\mathbf{v}}}\) |
-| AdamW | weight decay **不**进矩估计；\(-\eta\lambda\theta\) |
-| 超参 | \(\beta_1=0.9,\beta_2=0.999,\epsilon=10^{-8}\)；`weight_decay` 与任务相关 |
+| Adam | $\mathbf{m}_t,\mathbf{v}_t$；$\hat{\mathbf{m}}_t,\hat{\mathbf{v}}_t$；$\hat{\mathbf{m}}/\sqrt{\hat{\mathbf{v}}}$ |
+| AdamW | weight decay **不**进矩估计；$-\eta\lambda\theta$ |
+| 超参 | $\beta_1=0.9,\beta_2=0.999,\epsilon=10^{-8}$；`weight_decay` 与任务相关 |
 | 调度 | warmup；cosine / linear / step decay；LLM 常见 warmup+cosine |
 | 梯度裁剪 | global norm 保方向；clip by value 改方向 |
 | 混合精度 | FP16+scaling；BF16 范围大；FP32 master weights |
-| 显存 | 优化器状态常为 **2× 参数量**（\(m,v\)），dtype 依实现多为 FP32 |
+| 显存 | 优化器状态常为 **2× 参数量**（$m,v$），dtype 依实现多为 FP32 |
 
 ---
 
@@ -517,37 +523,37 @@ BF16 路径常用 `autocast(dtype=torch.bfloat16)`，许多硬件上**可不使�
 
 ### Q1：Adam 和 SGD 的区别？
 
-**答**：（1）**SGD**（含 Momentum）对每个参数使用**相同的全局学习率**缩放整个梯度向量；**噪声**来自 mini-batch，方向靠动量平滑。（2）**Adam** 额外维护 **梯度平方的 EMA**（二阶矩），用 \(\sqrt{\hat{\mathbf{v}}_t}\) **逐元素**归一化更新量，相当于 **自适应学习率**，不同参数维度步长比例可不同。（3）**代价**：Adam 需存 **\(m,v\)** 两份状态，**显存与计算**高于 SGD；部分任务上 SGD 泛化讨论较多，但 **LLM 预训练默认**多为 Adam 系（尤其 AdamW）。
+**答**：（1）**SGD**（含 Momentum）对每个参数使用**相同的全局学习率**缩放整个梯度向量；**噪声**来自 mini-batch，方向靠动量平滑。（2）**Adam** 额外维护 **梯度平方的 EMA**（二阶矩），用 $\sqrt{\hat{\mathbf{v}}_t}$ **逐元素**归一化更新量，相当于 **自适应学习率**，不同参数维度步长比例可不同。（3）**代价**：Adam 需存 **$m,v$** 两份状态，**显存与计算**高于 SGD；部分任务上 SGD 泛化讨论较多，但 **LLM 预训练默认**多为 Adam 系（尤其 AdamW）。
 
 ---
 
 ### Q2：AdamW 和 Adam 的区别？为什么要解耦权重衰减？
 
-**答**：**Adam** 若把 **L2 正则**实现为「往梯度里加 \(\lambda\theta\)」，该项会进入 \(\mathbf{m}_t,\mathbf{v}_t\) 的更新，与 **自适应分母 \(\sqrt{\hat{\mathbf{v}}}\)** **耦合**，导致「权重衰减」的强度随自适应缩放变化，**不再等价**于对 \(\theta\) 的显式 \(\ell_2\) 惩罚。**AdamW** 把 **weight decay** 从梯度/矩估计中分离，在自适应更新之后执行 \(\theta \leftarrow \theta - \eta\lambda\theta\)（与 \(\sqrt{\hat{\mathbf{v}}}\) 无关），称为 **解耦权重衰减（decoupled weight decay）**。大模型与 Transformer 上 **经验与可解释性**更好，故预训练常用 AdamW。
+**答**：Adam 中把 $\lambda\theta$ 加入梯度，对应 L2 正则，并会进入矩估计；它不等价于固定比例的参数收缩。AdamW 将衰减与梯度统计解耦，本节先按更新前权重执行 $\theta\leftarrow(1-\eta\lambda)\theta$，再减去自适应更新量。两者的差别是 **L2 正则与解耦 weight decay**，不是“L2 并入梯度不算 L2”。
 
 ---
 
 ### Q3：学习率预热（warmup）的作用？
 
-**答**：训练初期 **\(\mathbf{m},\mathbf{v}\) 从 0 初始化**，\(\hat{\mathbf{m}}/\sqrt{\hat{\mathbf{v}}}\) 在 **前几步可能异常大**；若 **base lr 较大** 或 **batch 很大**，易出现 **loss 尖峰、梯度爆炸、NaN**，混合精度下更明显。Warmup 在若干 step 内将 lr **从低到高**缓慢升到目标值，让矩估计与梯度统计 **稳定下来**。Transformer 类模型几乎**标配** warmup。
+**答**：训练初期 **$\mathbf{m},\mathbf{v}$ 从 0 初始化**，$\hat{\mathbf{m}}/\sqrt{\hat{\mathbf{v}}}$ 在 **前几步可能异常大**；若 **base lr 较大** 或 **batch 很大**，易出现 **loss 尖峰、梯度爆炸、NaN**，混合精度下更明显。Warmup 在若干 step 内将 lr **从低到高**缓慢升到目标值，让矩估计与梯度统计 **稳定下来**。Transformer 类模型几乎**标配** warmup。
 
 ---
 
 ### Q4：为什么要做偏差校正（bias correction）？
 
-**答**：\(\mathbf{m}_t = (1-\beta_1)\sum_{i=1}^{t}\beta_1^{t-i}\mathbf{g}_i\) 在 **\(t\) 较小**时，由于 \(\mathbf{m}_0=\mathbf{0}\)，\(\mathbf{m}_t\) 的期望 **系统性地小于** 真实梯度的一阶矩估计；\(\mathbf{v}_t\) 同理。除以 \(1-\beta_1^t\) 与 \(1-\beta_2^t\) 相当于把 EMA 的 **尺度拉回** 与「真实矩」可比的无偏尺度。**\(t\) 大之后** \(1-\beta^t \to 1\)，修正量可忽略。
+**答**：$\mathbf{m}_t = (1-\beta_1)\sum_{i=1}^{t}\beta_1^{t-i}\mathbf{g}_i$ 在 **$t$ 较小**时，由于 $\mathbf{m}_0=\mathbf{0}$，$\mathbf{m}_t$ 的期望 **系统性地小于** 真实梯度的一阶矩估计；$\mathbf{v}_t$ 同理。除以 $1-\beta_1^t$ 与 $1-\beta_2^t$ 相当于把 EMA 的 **尺度拉回** 与「真实矩」可比的无偏尺度。**$t$ 大之后** $1-\beta^t \to 1$，修正量可忽略。
 
 ---
 
-### Q5：\(\beta_1\) 和 \(\beta_2\) 的物理含义？
+### Q5：$\beta_1$ 和 $\beta_2$ 的物理含义？
 
-**答**：二者都是 **指数滑动平均的衰减系数**。\(\beta_1\) 控制 **一阶矩（梯度方向）** 的历史窗口：越接近 1，方向越平滑、惯性越大，典型 **0.9**。\(\beta_2\) 控制 **二阶矩（梯度平方、逐维幅度）** 的平滑：越接近 1，\(\hat{\mathbf{v}}\) 变化越慢、分母越稳定，典型 **0.999**；若 \(\beta_2\) **偏小**，\(\hat{\mathbf{v}}\) **波动更大**，有效步长更不稳定。部分长训 LLM 会尝试 **略小的 \(\beta_2\)**（如 0.95）以更快适应训练动态。
+**答**：二者都是 **指数滑动平均的衰减系数**。$\beta_1$ 控制 **一阶矩（梯度方向）** 的历史窗口：越接近 1，方向越平滑、惯性越大，典型 **0.9**。$\beta_2$ 控制 **二阶矩（梯度平方、逐维幅度）** 的平滑：越接近 1，$\hat{\mathbf{v}}$ 变化越慢、分母越稳定，典型 **0.999**；若 $\beta_2$ **偏小**，$\hat{\mathbf{v}}$ **波动更大**，有效步长更不稳定。部分长训 LLM 会尝试 **略小的 $\beta_2$**（如 0.95）以更快适应训练动态。
 
 ---
 
 ### Q6：梯度裁剪的两种方式？
 
-**答**：（1）**按全局 \(\ell_2\) 范数（clip by global norm）**：把所有参数的梯度拼成一向量，若范数大于阈值 \(c\)，则整体乘以 \(c/\|\mathbf{g}\|\)，**方向不变**。（2）**按值裁剪（clip by value）**：对每个梯度元素截断到 \([-c,c]\)，**会改变方向**。LLM 训练 **普遍用 global norm**（如 1.0），与 AdamW、大序列更搭。
+**答**：（1）**按全局 $\ell_2$ 范数（clip by global norm）**：把所有参数的梯度拼成一向量，若范数大于阈值 $c$，则整体乘以 $c/\|\mathbf{g}\|$，**方向不变**。（2）**按值裁剪（clip by value）**：对每个梯度元素截断到 $[-c,c]$，**会改变方向**。LLM 训练 **普遍用 global norm**（如 1.0），与 AdamW、大序列更搭。
 
 ---
 
@@ -571,27 +577,27 @@ BF16 路径常用 `autocast(dtype=torch.bfloat16)`，许多硬件上**可不使�
 
 ### Q10：AdamW 的参数量开销是多少？
 
-**答**：对每个可训练参数，AdamW 通常维护 **一阶矩 \(\mathbf{m}\)** 与 **二阶矩 \(\mathbf{v}\)**，形状与参数相同，故 **状态张量元素个数约为模型可训练参数数量的 2 倍**。若 \(m,v\) 以 **FP32** 存储（常见），优化器状态显存约为 **\(2 \times 4 \times |\theta|\) 字节**（不计对齐与框架开销）；若与参数同 dtype 则随精度变化。**面试可答**：约为 **2 倍模型参数量的额外状态**（一阶 + 二阶矩）。
+**答**：对每个可训练参数，AdamW 通常维护 **一阶矩 $\mathbf{m}$** 与 **二阶矩 $\mathbf{v}$**，形状与参数相同，故 **状态张量元素个数约为模型可训练参数数量的 2 倍**。若 $m,v$ 以 **FP32** 存储（常见），优化器状态显存约为 **$2 \times 4 \times |\theta|$ 字节**（不计对齐与框架开销）；若与参数同 dtype 则随精度变化。**面试可答**：约为 **2 倍模型参数量的额外状态**（一阶 + 二阶矩）。
 
 ---
 
 ### Q11（加餐）：手写 AdamW 时最容易踩的坑？
 
-**答**：（1）**步数 \(t\)** 未按参数一致更新，导致 bias correction 错误；（2）**把 weight decay 写进梯度**（耦合 L2）；（3）**在 `model.cuda()` 之前创建优化器**，`state` 留在 CPU；（4）**bias 与 weight 共用同一 `weight_decay`**，与论文不一致；（5）**scheduler 与 `optimizer.step` 顺序**与参考实现不一致导致 lr 曲线错位；（6）**原地运算**误改 \(\mathbf{m}_t\) 后再算 \(\hat{\mathbf{m}}_t\) 的依赖关系（需谨慎）。
+**答**：常见问题有：参数自己的步数计数错误；weight decay 混入矩估计；参数与状态设备/dtype 不匹配；更新顺序或 epsilon 约定与参考版本不一致；scheduler 步数错位；原地运算误改状态。bias/Norm 是否衰减是参数组策略，并非 AdamW 论文强制排除。
 
 ---
 
 ## 练习
 
-1. 默写 \(\mathbf{m}_t,\mathbf{v}_t\)、\(\hat{\mathbf{m}}_t,\hat{\mathbf{v}}_t\) 及 Adam 更新式；说明 \(t=1\) 时偏差修正因子分别为多少。  
+1. 默写 $\mathbf{m}_t,\mathbf{v}_t$、$\hat{\mathbf{m}}_t,\hat{\mathbf{v}}_t$ 及 Adam 更新式；说明 $t=1$ 时偏差修正因子分别为多少。  
 2. 用两种表述对比 **AdamW** 与 **Adam + L2 并入梯度**。  
 3. 手写 **linear warmup**：输入 `step`、`warmup_steps`、`base_lr`，返回当前 `lr`。  
-4. 若 global norm 为 \(5\)、阈值为 \(1\)，裁剪后梯度范数是多少？  
+4. 若 global norm 为 $5$、阈值为 $1$，裁剪后梯度范数是多少？  
 5. 画表对比 FP32 / FP16 / BF16 的指数位、尾数位与动态范围直觉。  
-6. \(\beta_2\) 从 \(0.999\) 改为 \(0.99\) 时，\(\hat{\mathbf{v}}_t\) 波动更大还是更小？对有效步长有何影响？  
+6. $\beta_2$ 从 $0.999$ 改为 $0.99$ 时，$\hat{\mathbf{v}}_t$ 波动更大还是更小？对有效步长有何影响？  
 7. 阅读 PyTorch `AdamW` 文档：`amsgrad` 选项与 weight decay 是否独立？  
 8. 设计实验：同一小 MLP，固定种子，对比 SGD 与 AdamW 的 loss 曲线，预期现象是什么？  
-9. 实现 **step decay** 调度，并在三个 `decay_steps` 上打印 lr 是否符合乘以 \(\gamma\) 的预期。  
+9. 实现 **step decay** 调度，并在三个 `decay_steps` 上打印 lr 是否符合乘以 $\gamma$ 的预期。  
 10. 解释为何 FP16 训练常需要 `GradScaler`，而 BF16 常不需要。
 
 ---
@@ -609,13 +615,13 @@ BF16 路径常用 `autocast(dtype=torch.bfloat16)`，许多硬件上**可不使�
 
 | 符号 | 含义 |
 |------|------|
-| \(\eta\) | 学习率 |
-| \(\mathbf{g}_t\) | 第 \(t\) 步梯度 |
-| \(\mathbf{m}_t,\mathbf{v}_t\) | 一阶、二阶矩（未修正） |
-| \(\hat{\mathbf{m}}_t,\hat{\mathbf{v}}_t\) | 偏差修正后的矩 |
-| \(\beta_1,\beta_2\) | 一阶、二阶衰减率 |
-| \(\lambda\) | weight decay 系数 |
-| \(\epsilon\) | 数值稳定小常数 |
+| $\eta$ | 学习率 |
+| $\mathbf{g}_t$ | 第 $t$ 步梯度 |
+| $\mathbf{m}_t,\mathbf{v}_t$ | 一阶、二阶矩（未修正） |
+| $\hat{\mathbf{m}}_t,\hat{\mathbf{v}}_t$ | 偏差修正后的矩 |
+| $\beta_1,\beta_2$ | 一阶、二阶衰减率 |
+| $\lambda$ | weight decay 系数 |
+| $\epsilon$ | 数值稳定小常数 |
 
 ---
 

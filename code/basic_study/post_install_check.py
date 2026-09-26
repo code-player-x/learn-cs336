@@ -1,7 +1,5 @@
 import torch
 import numpy as np
-from sympy.codegen import Print
-from sympy.codegen.ast import none
 
 # # 打印版本，确认与项目要求一致
 # print("torch version:", torch.__version__)
@@ -591,8 +589,11 @@ def train_bpe(text_corpus: str, num_merges: int, pattern: re.Pattern = GPT2_SPLI
         # 如果没有任何pair可以合并，提前退出循环
         if not pair_stats:
             break
-        # max取频次最高的pair；key=(频次,pair元组)，频次相同就按pair字典序选小的
-        best_pair = max(pair_stats.items(), key=lambda kv: (kv[1], kv[0]))[0]
+        # 频次相同时按实际 token bytes 的字典序取最大的 pair，不按数值 id 排序。
+        best_pair = max(
+            pair_stats,
+            key=lambda pair: (pair_stats[pair], vocab[pair[0]], vocab[pair[1]]),
+        )
         # 解包本轮要合并的两个id
         left, right = best_pair
 
@@ -694,7 +695,7 @@ def bpe_encode(text: str, merges: List[Tuple[int, int, int]], pattern: re.Patter
     # 初始化空列表保存整篇文本所有token id
     out: List[int] = []
     # 对输入文本做GPT‑2预分词，遍历每一个chunk片段
-    for piece in pretokenize_gpt2(text):
+    for piece in (m.group(0) for m in pattern.finditer(text)):
         # piece字符串转字节id列表；调用encode_piece_sequential做BPE合并；extend把结果追加到out
         out.extend(encode_piece_sequential(bytes_to_ids(piece), merges))
     # 返回整篇文本的token id序列

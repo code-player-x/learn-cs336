@@ -65,7 +65,7 @@ NVIDIA CUDA 设备上，**同一时刻、同一指令** 往往由 **一组线程
 #### 3.2 共享内存 Shared Memory / 片上 SRAM
 
 - **同一线程块（block）内可见**，速度 **远快于 HBM**，带宽可达 **约 10～20 TB/s 量级**（教学中常记 **~19 TB/s** 作为 **片上 SRAM 路径** 的峰值锚点）。
-- **单 SM 可用容量** 常见 **约 128～228 KB 量级**（依架构与配置而定，且与 L1 划分有关——面试说 **「一百多 KB / SM 量级」** 即可）。
+- **单 SM 可用容量** 常见 **约 164～228 KB 量级**（依架构与配置而定，且与 L1 划分有关——面试说 **「一百多 KB / SM 量级」** 即可）。
 - **用途**：CUDA 手写分块 GEMM、规约、FlashAttention 类 **tile 数据驻留**，以及 **融合 kernel** 的中间结果。
 
 #### 3.3 L1 / L2 Cache
@@ -82,14 +82,14 @@ NVIDIA CUDA 设备上，**同一时刻、同一指令** 往往由 **一组线程
 #### 3.5 CPU DRAM（主机内存）
 
 - **容量**：服务器常见 **512 GB～2 TB** 等（视配置）。
-- **带宽**：内存本身 **数十～数百 GB/s**；但 **GPU 与 CPU 之间** 经 **PCIe** 或 **NVLink**，**有效端到端带宽** 常见讨论量级 **约 50～400 GB/s**（强依赖链路代际、是否 pinned、是否异步流水线重叠）。
+- **带宽**：CPU 内存与 CPU↔GPU 链路是不同指标。常规独立 GPU 主要通过 PCIe；GPU↔GPU NVLink 带宽不能套用到主机传输。Grace Hopper 等专用平台另有 NVLink-C2C，应分别核对单向/双向与有效/峰值口径。
 
 ### 4. 内存层级对照表（容量与带宽）
 
 | 层级 | 典型容量量级 | 典型带宽量级 | 延迟直觉 |
 |------|----------------|----------------|----------|
 | **寄存器** | 每线程 **极少量（KB 级以下/线程）** | **极高（随执行单元）** | **最低** |
-| **Shared Memory / SRAM** | **~128～228 KB / SM**；全卡合计 **~十 MB 量级** | **~10～20 TB/s（如 ~19 TB/s 锚点）** | **很低** |
+| **Shared Memory / SRAM** | **~164～228 KB / SM**；全卡合计 **~十 MB 量级** | **~10～20 TB/s（如 ~19 TB/s 锚点）** | **很低** |
 | **L1** | **每 SM 较小** | **高** | **低** |
 | **L2 Cache** | **~数十 MB（全卡）** | **介于 Shared 与 HBM 之间** | **低～中** |
 | **HBM（全局显存）** | **~40～80 GB（常见）；更大 SKU 如 ~141 GB** | **~1.5～3.35 TB/s（依代际）** | **相对片上更高** |
@@ -101,9 +101,9 @@ NVIDIA CUDA 设备上，**同一时刻、同一指令** 往往由 **一组线程
 
 #### 5.1 算术强度（Arithmetic Intensity）
 
-\[
+$$
 \text{Arithmetic Intensity} = \frac{\text{FLOPs（或有效计算量）}}{\text{Bytes Transferred（与实现相关的内存流量）}}
-\]
+$$
 
 单位常用 **FLOPs/Byte**：含义是 **每从内存体系搬运 1 字节，平均做多少次浮点运算**。  
 **强度越高**，越可能 **吃满算力**；**强度越低**，越可能 **吃满内存带宽**。
@@ -118,7 +118,7 @@ NVIDIA CUDA 设备上，**同一时刻、同一指令** 往往由 **一组线程
 
 #### 5.3 为什么 Attention（朴素实现）常是 memory-bound
 
-- **朴素 Attention** 往往产生 **大尺寸中间张量**（如 \(O(B \cdot H \cdot T^2)\) 量级），并多次 **读写 HBM**。
+- **朴素 Attention** 往往产生 **大尺寸中间张量**（如 $O(B \cdot H \cdot T^2)$ 量级），并多次 **读写 HBM**。
 - 相对 **GEMM**，**每字节对应的有效 FLOPs** 不够高，或 **实现上 IO 次数过多**，容易 **先触及 HBM 带宽** 而非 Tensor Core 峰值。
 - **FlashAttention** 通过 **分块、融合、重算**，**减少 HBM 往返**，把瓶颈向 **计算** 方向推——这是 Lesson 10 的核心动机之一。
 
@@ -128,7 +128,7 @@ NVIDIA CUDA 设备上，**同一时刻、同一指令** 往往由 **一组线程
 |------|---------------------------|----------------------------|------------------|
 | **架构** | Ampere | Hopper | Hopper 系（更大 HBM） |
 | **显存** | **80GB HBM2e**（常见讨论） | **80GB HBM3** | **更大容量（如 ~141GB 级 SKU）** |
-| **显存带宽** | **~2 TB/s 量级** | **~3.35 TB/s 量级** | **更高（代际提升）** |
+| **显存带宽** | **~2 TB/s 量级** | **~3.35 TB/s 量级** | **4.8 TB/s（141 GB H200 SKU）** |
 | **Tensor Core** | 第三代 | **第四代**（FP8 等） | 在 H100 基础上强化大模型/长上下文场景 |
 | **面试表述** | 上一代训练主力 | **算力 + HBM 带宽** 相对 A100 全面提升 | **更大显存 + 更高带宽**，显存敏感 workload 友好 |
 
@@ -147,7 +147,7 @@ NVIDIA CUDA 设备上，**同一时刻、同一指令** 往往由 **一组线程
 
 #### 8.1 FLOPS 利用率与 MFU（Model FLOPS Utilization）
 
-- **MFU** 定义为：**模型一次前向+反向（或指定步）的实际 achieved FLOPS** 与 **GPU 峰值 FLOPS** 的比值（有时按 **理论模型 FLOPs/步** 与 **墙钟时间** 估算 achieved）。
+- **MFU** 用有效模型训练 FLOPs/步 ÷ 步时 ÷ 所用 GPU 的合计峰值 FLOP/s 估算。通常不把 activation checkpointing 的额外重算计入有效模型 FLOPs；包含硬件实际重算的利用率更接近 HFU。需注明 dtype、是否稀疏峰值和 FLOPs 口径。
 - **意义**：衡量 **算法+实现** 是否 **吃满硬件算力**；大模型训练中 **MFU 低** 可能来自 **访存、通信、小 kernel launch、低 occupancy** 等。
 
 #### 8.2 内存带宽利用率
@@ -182,7 +182,7 @@ NVIDIA CUDA 设备上，**同一时刻、同一指令** 往往由 **一组线程
 | **Adam m** | 4 B |
 | **Adam v** | 4 B |
 
-**合计约 16 B/参数**（仅权重相关静态张量）。再加上 **框架 buffer、梯度聚合、碎片**，教学常记 **约 16～20× 参数字节数** 为 **粗算上界量级**。
+**合计约 16 B/参数**（参数、梯度、Adam 两份状态均为 FP32），即 FP32 权重文件大小的约 4 倍。激活、通信缓冲和分配器开销另计；不能说是“16～20 倍参数字节数”，也不能当作总显存上界。
 
 **（2）激活（Activations）**  
 与 **batch、序列长度、隐藏维、层数、是否 checkpoint、是否重计算 attention** 强相关；常占 **大头**，且 **梯度检查点（activation checkpointing）** 用 **重算前向** 换 **存更少的激活**，是 **用计算换显存**。
@@ -281,7 +281,7 @@ def roofline_hint(flops, bytes_moved, peak_tflops=300, peak_tbs=3.0):
     """
     intensity = flops / max(bytes_moved, 1e-9)
     roof_compute = peak_tflops
-    roof_mem = intensity * peak_tbs * 1000
+    roof_mem = intensity * peak_tbs  # FLOP/byte × TB/s = TFLOP/s，无需乘 1000
     attainable = min(roof_compute, roof_mem)
     return {
         "intensity_flops_per_byte": intensity,
@@ -322,7 +322,7 @@ y.sum().backward()
 2. **SM / Warp**：**SM** 为执行集群；**Warp=32 线程** 为调度粒度；**分支发散** 降效。
 3. **CUDA Core vs Tensor Core**：**CUDA Core** 通用浮点；**Tensor Core** 专吃 **GEMM 类** 峰值。
 4. **层级顺序**：寄存器 → Shared → L1 → L2 → HBM →（跨设备）CPU DRAM；**片上远快于 HBM**。
-5. **锚点（量级）**：Shared **~128～228KB/SM**，片上带宽 **~19 TB/s 量级**；H100 **HBM ~80GB、~3.35 TB/s**；CPU↔GPU **~50～400 GB/s 有效**。
+5. **锚点（量级）**：Shared **~164～228KB/SM**，片上带宽 **~19 TB/s 量级**；H100 **HBM ~80GB、~3.35 TB/s**；CPU↔GPU 带宽取决于 PCIe 或专用互连，需实测。
 6. **强度与 Roofline**：**FLOPs/Byte**；**min(算力顶, 带宽顶)**。
 7. **算子**：**大 GEMM → compute-bound**；**逐元素 → memory-bound**；**朴素 Attention → memory-bound**；**FlashAttention → 减 HBM IO**。
 8. **代际**：**A100** Ampere；**H100** Hopper；**H200** 更大 HBM/带宽。
@@ -346,7 +346,7 @@ y.sum().backward()
 **答**：三步走：**（1）** 估算或测量 **算术强度 FLOPs/Byte**；**（2）** 用 **Roofline** 看 **min(算力顶, 强度×带宽)**；**（3）** 用 **profiler**（`torch.profiler`、Nsight）观察 **kernel 是否接近带宽顶**、**是否大量 memory stall**。若 **大 GEMM** 且 Tensor Core 活跃、**MFU 高**，多 **compute-bound**；若 **逐元素链**、**朴素 Attention** 且 **内存事务占比高**，多 **memory-bound**。
 
 **5. 训练一个模型需要多少 GPU 显存？如何估算？**  
-**答**：分块估算：**静态** = **参数 + 梯度 + 优化器状态**（Adam 常用 **FP32 下约 16 B/参数** 粗算）+ **框架开销（常记 16～20× 参数量字节为量级）**；**动态** = **激活**，与 **batch、T、d、层数、checkpoint** 有关；再加上 **分布式** 下的 **分片、通信缓冲**。实操可用 **`torch.cuda.max_memory_allocated()`** 与 **逐步打开**（无 checkpoint → 有 checkpoint → ZeRO）观测。
+**答**：分块估算：**静态** = **参数 + 梯度 + 优化器状态**（Adam 常用 **FP32 下约 16 B/参数** 粗算）+ **框架开销（另计，不是固定倍率）**；**动态** = **激活**，与 **batch、T、d、层数、checkpoint** 有关；再加上 **分布式** 下的 **分片、通信缓冲**。实操可用 **`torch.cuda.max_memory_allocated()`** 与 **逐步打开**（无 checkpoint → 有 checkpoint → ZeRO）观测。
 
 **6. Tensor Core 的作用是什么？**  
 **答**：**Tensor Core** 是 **矩阵乘累加** 专用单元，在 **FP16/BF16/TF32/FP8** 等格式上对 **GEMM** 提供 **远高于 CUDA Core 标量乘加** 的 **峰值吞吐**。大模型训练 **主力算力** 来自 Tensor Core；**小矩阵、不规则访存** 可能无法充分发挥。
@@ -355,7 +355,7 @@ y.sum().backward()
 **答**：**MFU** 衡量 **模型在真实步进中 achieved FLOPS** 相对 **硬件峰值 FLOPS** 的比例，反映 **实现与调度** 是否 **吃满算力**。**MFU 低** 时需结合 **访存、通信、kernel 粒度、Python 开销** 排查；与 **仅看 GPU-Util** 相比，更贴近 **有效训练吞吐** 讨论。
 
 **8. H100 相比 A100 的主要提升？**  
-**答**：**同代际 Hopper vs Ampere**：**H100** 在 **第四代 Tensor Core**、**峰值算力**、**HBM3 带宽（常见 ~3.35 TB/s 量级）**、**新数据类型（如 FP8）与系统特性** 上整体强于 **A100（~2 TB/s 量级带宽的常见讨论）**；具体数值以 **官方规格** 为准。面试答 **算力 + 内存带宽 + 新特性** 三类即可。
+**答**：**不同架构代际：Hopper vs Ampere**：**H100** 在 **第四代 Tensor Core**、**峰值算力**、**HBM3 带宽（常见 ~3.35 TB/s 量级）**、**新数据类型（如 FP8）与系统特性** 上整体强于 **A100（~2 TB/s 量级带宽的常见讨论）**；具体数值以 **官方规格** 为准。面试答 **算力 + 内存带宽 + 新特性** 三类即可。
 
 **9. 如何使用 profiler 分析性能瓶颈？**  
 **答**：**（1）** 先 **`torch.cuda.synchronize()`** 保证计时正确；**（2）** 用 **`torch.profiler`** 找 **Top CUDA ops** 与 **Python 热点**；**（3）** 用 **Nsight Systems** 看 **DataLoader、H2D、计算是否重叠**；**（4）** 对关键 kernel 用 **Nsight Compute** 看 **occupancy 与内存**；**（5）** 若怀疑 **GIL/Python**，用 **py-spy** 采样。最终把结论映射到 **Roofline：算力顶还是带宽顶**。
@@ -373,7 +373,7 @@ y.sum().backward()
 
 ## 练习
 
-1. **推导**：对 \(A\in\mathbb{R}^{M\times K}, B\in\mathbb{R}^{K\times N}\)，FP32 GEMM 的 **FLOPs** 与 **朴素读写字节上界**；写出 **算术强度** 表达式；当 \(M=N=K\to\infty\) 时强度趋势？
+1. **推导**：对 $A\in\mathbb{R}^{M\times K}, B\in\mathbb{R}^{K\times N}$，FP32 GEMM 的 **FLOPs** 与 **朴素读写字节上界**；写出 **算术强度** 表达式；当 $M=N=K\to\infty$ 时强度趋势？
 
 2. **对比**：**LayerNorm → Dropout → MatMul** 中，哪段更可能 **memory-bound**？为什么？
 
@@ -418,7 +418,7 @@ y.sum().backward()
 
 - **CPU vs GPU**：**少而强、低延迟** 对比 **多而简、高吞吐**；**SIMT + Warp** 是调度核心。
 - **硬件**：**SM** 为执行集群；**CUDA Core** 通用、**Tensor Core** 专吃 **GEMM**。
-- **内存层级**：**寄存器 → Shared（~128～228KB/SM，~19TB/s 量级锚点）→ L1/L2 → HBM（~40～80GB+，~1.5～3.35TB/s）→ CPU DRAM（跨设备 ~50～400GB/s 有效）**。
+- **内存层级**：**寄存器 → Shared（~164～228KB/SM，~19TB/s 量级锚点）→ L1/L2 → HBM（~40～80GB+，~1.5～3.35TB/s）→ CPU DRAM（跨设备带宽依链路而定）**。
 - **性能模型**：**算术强度** + **Roofline**；**GEMM 偏 compute-bound**，**逐元素与朴素 Attention 偏 memory-bound**。
 - **代际**：**A100 → H100 → H200** 算力与 **HBM 容量/带宽** 递进。
 - **工具**：**torch.profiler**、**Nsight Systems/Compute**、**py-spy**；**synchronize** 正确计时。
@@ -433,6 +433,6 @@ y.sum().backward()
 
 ---
 
-**版本说明**：文中 **容量、带宽、延迟** 均为 **教学量级**；生产环境请以 **NVIDIA 官方规格** 与 **实测 profiling** 为准。
+**规格来源与口径**：Shared Memory 的 SM 容量可查 [Ampere 指南](https://docs.nvidia.com/cuda/ampere-tuning-guide/index.html)（A100 164 KB）与 [Hopper 指南](https://docs.nvidia.com/cuda/hopper-tuning-guide/index.html)（H100 228 KB）；显存带宽查 [H100](https://www.nvidia.com/en-us/data-center/h100/) 与 [H200](https://www.nvidia.com/en-us/data-center/h200/) 官方 SKU 表。片上带宽锚点是整卡路径的量级，不能视为单 SM 带宽或统一硬件规格。
 
 **延伸阅读（非面试必答）**：Hopper **TMA（Tensor Memory Accelerator）**、**异步拷贝** 等特性进一步降低 **访存与计算流水** 之间的空隙；若投递 **CUDA / 推理引擎** 方向，可结合 **Nsight Compute** 的 **memory workload analysis** 做深挖。

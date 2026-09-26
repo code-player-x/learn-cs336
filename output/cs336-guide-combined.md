@@ -15,13 +15,15 @@
 
 ## 一、这门课讲什么？
 
-CS336 是斯坦福大学开设的一门**实战型**课程，目标是带你从零开始构建一个完整的语言模型。不同于大多数 AI 课程只讲理论或调用 API，CS336 要求你**亲手实现每一个组件**：
+CS336 是斯坦福大学开设的一门**实战型**课程，通过实现分词器、语言模型、优化器和训练系统等关键组件，理解语言模型的构建过程。
+
+**版本与范围**：本仓库主要参考 [CS336 Spring 2025](https://cs336.stanford.edu/spring2025/)，将相关主题整理为 20 篇学习笔记；这不是官方课次划分。推理部署、LoRA、DPO 等内容包含延伸学习，不能据此认定它们都是必做作业。官方仓库的默认分支可能已更新到新学期，复现时应核对讲义年份与对应提交。
 
 ```
 原始文本 → 分词器 → Transformer模型 → 训练循环 → 系统优化 → 数据工程 → 对齐微调 → 部署推理
 ```
 
-这正是大厂面试中最看重的**全链路能力**。
+这条学习路径可用于展示从数据到训练、评估与推理的**全链路理解**。
 
 ---
 
@@ -38,13 +40,13 @@ CS336 是斯坦福大学开设的一门**实战型**课程，目标是带你从�
 │  (Systems)     │  → 让模型跑得快、跑得稳                       │
 ├─────────────┼───────────────────────────────────────────────┤
 │  Assignment 3  │  缩放：Scaling Laws + 最优配比               │
-│  (Scaling)     │  → 理解"越大越好"的数学规律                    │
+│  (Scaling)     │  → 在算力预算下权衡模型规模与数据规模          │
 ├─────────────┼───────────────────────────────────────────────┤
 │  Assignment 4  │  数据：Common Crawl + 过滤 + 去重            │
 │  (Data)        │  → 从互联网原始数据到高质量训练集               │
 ├─────────────┼───────────────────────────────────────────────┤
-│  Assignment 5  │  对齐：SFT + RLHF + DPO + GRPO             │
-│  (Alignment)   │  → 让模型"听话"、"有用"、"安全"               │
+│  Assignment 5  │  推理：SFT + 验证奖励 + GRPO                 │
+│  (Alignment)   │  → 数学推理训练；偏好对齐另有选做扩展          │
 └─────────────┴───────────────────────────────────────────────┘
 ```
 
@@ -104,7 +106,7 @@ CS336 是斯坦福大学开设的一门**实战型**课程，目标是带你从�
 
 ## 四、面试关联度分析
 
-CS336 的每个模块都直接对应 2026 年 AI 大模型岗位的核心面试考点：
+下表是学习主题与岗位能力的参考对应关系，不是招聘统计或面试频率调查：
 
 ```
 CS336 模块          →    面试岗位方向
@@ -116,10 +118,7 @@ Assignment 4 数据   →    数据工程师（预训练数据）
 Assignment 5 对齐   →    对齐研究员 / 应用算法工程师
 ```
 
-**薪资参考**（2026年 Boss直聘/猎聘数据）：
-- 初级（1-3年）：25K-45K/月
-- 中级（3-5年）：40K-70K/月
-- 高级（5年+）：60K-100K+/月
+薪资受城市、职责、经验和公司影响；本文未提供可核验的招聘样本，不给出薪资区间。
 
 ---
 
@@ -146,7 +145,7 @@ Assignment 5 对齐   →    对齐研究员 / 应用算法工程师
 
 ---
 
-**下一步**：[Lesson 01 - 环境搭建与Python基础](01-环境搭建与Python基础.md) →
+**下一步**：[Lesson 01 - 环境搭建与Python基础](../docs/01-%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA%E4%B8%8EPython%E5%9F%BA%E7%A1%80.md) →
 
 
 
@@ -194,7 +193,7 @@ Assignment 5 对齐   →    对齐研究员 / 应用算法工程师
 
 ### 2.2 conda、pip、uv 分别是什么？
 
-- **conda**：不仅是 Python 包管理器，还能装 **Python 本身、CUDA 相关运行时、非 Python 库**（如某些 C 库）。适合实验室统一配 GPU 驱动与 PyTorch 的场景。
+- **conda**：不仅是 Python 包管理器，还能装 **Python 本身、CUDA 相关运行时、非 Python 库**（如某些 C 库）。可管理 Python/PyTorch 环境，但 **NVIDIA GPU 驱动需要在操作系统层安装**，不能由 conda 环境代替。
 - **pip**：**Python 官方推荐的包安装器**，通常与 **`python -m venv`** 创建的虚拟环境配合：轻量、文档多、生态最大。
 - **uv**（Astral）：用 Rust 实现的**极快**解析与安装工具，可创建虚拟环境、`uv pip install` 与 pip 命令接近，适合 CI 与频繁重建环境。
 
@@ -211,7 +210,7 @@ Assignment 5 对齐   →    对齐研究员 / 应用算法工程师
 ### 2.4 `nn.Module` 与 `nn.Parameter` 各管什么？
 
 - **`nn.Module`**：可组合的计算单元，负责**子模块注册**、`forward` 定义、`train()`/`eval()` 切换（影响 Dropout、BatchNorm 等）。
-- **`nn.Parameter`**：一种特殊的 `Tensor`，会被注册为**可学习参数**，出现在 `model.parameters()` 里，随 `optimizer.step()` 更新，并随 `model.to(device)` 迁移。
+- **`nn.Parameter`**：特殊的 `Tensor`；赋给 `nn.Module` 属性后会注册到 `parameters()`，并随模块迁移。传给优化器且产生梯度时才会被更新。
 
 普通 `Tensor` 挂在 `self` 上若未用 `register_buffer`，**不会**被优化器默认更新，常用于临时常量（需谨慎）。
 
@@ -261,7 +260,8 @@ learn-cs336/
 
 # ---------- pip + venv：经典、标准 ----------
 cd /path/to/learn-cs336
-python3.11 -m venv .venv
+[Mac]python3.11 -m venv .venv
+[windows] py -3.11 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install --upgrade pip
 pip install -r requirements.txt
@@ -338,58 +338,220 @@ print(y[0, 0])  # 不受后续 arr 修改影响（取决于是否仍共享，ten
 ### 3.5 类型标注与小型 `nn.Module`
 
 ```python
+# 从 Python 的 typing 模块导入 Tuple 类型（虽然这段代码里没用到，但可能是为以后准备）
 from typing import Tuple
 
+# 导入 PyTorch 的核心库
 import torch
+# 导入 PyTorch 的神经网络模块，里面包含了所有神经网络的层（比如 Linear、Conv2d 等）
 import torch.nn as nn
 
 
 def split_heads(x: torch.Tensor, n_heads: int, head_dim: int) -> torch.Tensor:
-    """示例：将 (B, T, n_heads*head_dim) 变为多头形状 (B, nh, T, dh)。"""
+    """
+    这个函数的作用：把输入张量重新排列，为"多头注意力机制"做准备
+    
+    大白话解释：
+    输入是一个 3 维数据，形状是 (B, T, 总特征数)
+    我们要把它变成 4 维数据，形状是 (B, 头数, T, 每个头的特征数)
+    
+    类比：就像把一个班级的学生（总特征）分成若干个小组（头数），
+         每个小组负责处理自己的那部分特征
+    
+    参数：
+        x: 输入张量，形状为 (B, T, n_heads * head_dim)
+           - B: batch size（批次大小），可以理解为一次处理多少个独立的样本
+           - T: 序列长度（sequence length），比如一句话有多少个词
+           - 最后一个数字: n_heads * head_dim，即所有头的总特征维度
+        
+        n_heads: 多头数量（要分成几个小组）
+        head_dim: 每个头的特征维度（每个小组处理多少特征）
+    
+    返回：
+        重新排列后的张量，形状为 (B, n_heads, T, head_dim)
+    """
+    
+    # 获取输入张量的形状，解包成三个变量
+    # b = batch size（批次大小）
+    # t = 序列长度（sequence length）
+    # c = 特征总数（即 n_heads * head_dim）
     b, t, c = x.shape
+    
+    # 检查一下：特征总数必须等于 头数 × 每个头的维度
+    # 如果不相等，说明数据格式不对，程序会报错停下来
+    # 比如：n_heads=4, head_dim=8，那么 c 必须等于 32
     assert c == n_heads * head_dim
-    return x.view(b, t, n_heads, head_dim).transpose(1, 2)
+    
+    # 核心操作（分两步）：
+    
+    # 第一步：使用 view() 改变形状，但不改变数据顺序
+    # 从 (B, T, n_heads*head_dim) 变成 (B, T, n_heads, head_dim)
+    # 就是把最后一大坨特征，按照"头数 × 每头维度"的方式重新分组
+    x = x.view(b, t, n_heads, head_dim)
+    
+    # 第二步：使用 transpose() 交换维度位置
+    # 原来的顺序是 (批次, 序列长度, 头数, 每头维度)
+    # 我们想要 (批次, 头数, 序列长度, 每头维度)
+    # 所以把第1维（序列长度）和第2维（头数）交换位置
+    x = x.transpose(1, 2)
+    
+    # 返回处理后的张量
+    return x
 
 
 class DummyModel(nn.Module):
+    """
+    这是一个简单的神经网络模型，用于演示如何自定义模型
+    
+    大白话解释：
+    在 PyTorch 里，所有神经网络都要继承 nn.Module 这个类
+    就像你要做一个玩具，必须先有一个"玩具"的模子（nn.Module）
+    
+    这个模型特别简单：输入什么维度，输出什么维度，中间只经过一个线性变换
+    就像一个"翻译器"，把数字从一种形式翻译成另一种形式，但大小不变
+    """
+    
     def __init__(self, d_model: int) -> None:
+        """
+        初始化函数：当创建这个模型时，会自动调用这个函数
+        
+        参数：
+            d_model: 模型的维度，即输入和输出的特征数量
+                    比如 d_model=512，表示输入是512维，输出也是512维
+        
+        大白话解释：
+        就像你要开一家工厂，需要先买好机器设备（这里就是买一个线性层）
+        """
+        
+        # 调用父类 nn.Module 的初始化函数
+        # 这一行必须写，否则 PyTorch 无法正常管理这个模型
+        # 就像你开店必须先办营业执照一样，这是必须的手续
         super().__init__()
+        
+        # 创建一个线性层（全连接层），把它作为这个模型的"零件"
+        # nn.Linear(d_model, d_model) 的意思是：
+        # 输入维度是 d_model，输出维度也是 d_model
+        # 这个线性层做的事情：y = x * W + b
+        # 其中 W 是权重矩阵，b 是偏置项，它们都是模型需要学习的参数
+        # 把这个线性层存到 self.proj 里，这样模型就能记住自己有这个零件
         self.proj = nn.Linear(d_model, d_model)
-
+    
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        前向传播函数：数据进入模型后，该怎么流动
+        
+        大白话解释：
+        就像工厂的生产线，原材料（输入数据）进来后，
+        经过一道工序（self.proj 线性变换），
+        生产出产品（输出数据）再送出去
+        
+        参数：
+            x: 输入张量，形状可以是任意的，但最后一维必须是 d_model
+        
+        返回：
+            经过线性变换后的张量，形状和输入一样
+        
+        注意：在 PyTorch 中，你通常不直接调用这个函数，
+        而是调用 model(x)，PyTorch 会自动调用 forward()
+        """
+        
+        # 把输入 x 传给 self.proj（线性层），得到输出
+        # 相当于：output = x * W + b
+        # 然后把这个结果返回给调用者
         return self.proj(x)
 ```
 
 ### 3.6 装饰器示例：`@torch.no_grad()` 与自定义计时
 
 ```python
+# 导入 functools 模块，它提供了"装饰器"相关的工具函数
+# 装饰器就像给函数穿上一件"外衣"，在不修改原函数代码的情况下增加新功能
 import functools
+# 导入 time 模块，用来计时
 import time
+# 从 typing 导入类型提示相关的工具
+# Any: 任意类型, Callable: 可调用对象（函数）, TypeVar: 类型变量
 from typing import Any, Callable, TypeVar
 
+# 导入 PyTorch 核心库
 import torch
 
+# 定义一个类型变量 F，表示"可调用对象"（即函数）
+# bound=Callable[...] 限制 F 只能是函数类型，不能是 int、str 等其他类型
+# 这样装饰器就能精准保留被装饰函数的原始类型信息，IDE 会有正确的代码补全
+#
+# Callable[..., Any] 的含义：
+#   - ...（三个点）：表示函数的参数列表【任意】，数量和类型都不限制
+#   - Any：表示函数的返回值类型【任意】，可以是任何类型
+#   合起来就是：一个"参数和返回值都不限定"的函数类型
 F = TypeVar("F", bound=Callable[..., Any])
 
 
 def timeit(fn: F) -> F:
-    """包装函数，打印耗时（教学用）。"""
-
+    """
+    装饰器：给被装饰的函数添加"计时"功能
+    
+    大白话：给函数戴上秒表，执行前开始计时，执行后打印耗时
+    
+    参数：
+        fn: 要被装饰的函数
+    
+    返回：
+        包装后的函数（原函数 + 计时功能）
+    """
+    
+    # functools.wraps 保留原函数的名字、文档字符串等信息
     @functools.wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
+        """
+        包装函数：在调用原函数前后加上计时逻辑
+        
+        *args: 所有位置参数
+        **kwargs: 所有关键字参数
+        """
+        
+        # 记录开始时间（time.perf_counter() 是高精度计时器，单位秒）
         t0 = time.perf_counter()
+        
+        # 调用原函数
         out = fn(*args, **kwargs)
+        
+        # 记录结束时间，计算并打印耗时（转换为毫秒）
         t1 = time.perf_counter()
         print(f"{fn.__name__}: {(t1 - t0) * 1000:.2f} ms")
+        
+        # 返回原函数的执行结果
         return out
-
+    
     return wrapper  # type: ignore[return-value]
 
 
 @torch.no_grad()
 def eval_forward(model: torch.nn.Module, x: torch.Tensor) -> torch.Tensor:
-    """推理阶段关闭梯度，省显存与算力。"""
+    """
+    模型推理函数（评估/测试阶段使用）
+    
+    作用：
+    1. 把模型切换到评估模式（model.eval()）
+    2. 用模型做一次前向传播
+    
+    好处：
+    - 关闭梯度计算，节省显存/内存
+    - 加快推理速度
+    
+    参数：
+        model: PyTorch 模型
+        x: 输入数据（张量）
+    
+    返回：
+        模型的预测结果（张量）
+    """
+    
+    # 切换到评估模式
+    # 会影响 Dropout（关闭随机丢弃）和 BatchNorm（用全局统计量）等层的行为
     model.eval()
+    
+    # 前向传播（@torch.no_grad() 保证这里不会记录梯度）
     return model(x)
 ```
 
@@ -398,15 +560,87 @@ def eval_forward(model: torch.nn.Module, x: torch.Tensor) -> torch.Tensor:
 ```python
 import torch
 
-# 从最后一维对齐；逐维「相等或其一为 1」可广播
-a = torch.randn(32, 1, 128)
-b = torch.randn(128)
-c = a + b   # 结果形状 (32, 1, 128)
+# ============================================================================
+# 示例1：广播机制基础演示
+# ============================================================================
+# 广播（Broadcasting）规则：
+# 从最后一维开始向前对齐，逐维比较，满足以下条件之一即可广播：
+#   1. 两个维度大小相等
+#   2. 其中一个维度大小为 1
+#   3. 某个维度缺失（相当于大小为 1）
+# ============================================================================
 
+# 创建一个形状为 (32, 1, 128) 的张量
+# - 32: 批次大小（batch size）
+# - 1:  中间维度大小为1，可以被广播
+# - 128: 特征维度
+a = torch.randn(32, 1, 128)
+
+# 创建一个形状为 (128,) 的一维张量
+# 这是一个一维向量，没有批次和序列维度
+b = torch.randn(128)
+
+# a + b 的广播过程：
+# 1. a 的形状: (32, 1, 128)
+# 2. b 的形状: (128,) → 先在前面补1 → (1, 1, 128)
+# 3. 比较维度（从后往前）：
+#    - 最后一维: 128 vs 128 ✅ 相等
+#    - 第二维:   1   vs 1   ✅ 相等（b补了1）
+#    - 第一维:   32  vs 1   ✅ b的维度为1，可以广播到32
+# 4. 结果形状: (32, 1, 128)
+c = a + b
+
+print(f"a 的形状: {a.shape}")      # torch.Size([32, 1, 128])
+print(f"b 的形状: {b.shape}")      # torch.Size([128])
+print(f"c 的形状: {c.shape}")      # torch.Size([32, 1, 128])
+
+
+# ============================================================================
+# 示例2：大语言模型中的实际应用
+# ============================================================================
+# 场景：在 Transformer 的 Softmax 之前，为每个 token 加上偏置（bias）
+# ============================================================================
+
+# logits: 模型的原始输出分数
+# 形状为 (4, 10, 50257) 表示：
+#   - 4:   批次大小（4个句子）
+#   - 10:  序列长度（每个句子10个token）
+#   - 50257: 词表大小（每个token在50257个词上的得分）
 logits = torch.randn(4, 10, 50257)
-bias = torch.randn(50257).view(1, 1, -1)
+
+# bias: 词表偏置，每个词有一个偏置值
+# 形状为 (50257,) 的一维向量
+bias = torch.randn(50257)
+
+# view(1, 1, -1) 将 bias 变成 (1, 1, 50257)
+# - 第0维变成1（批次维度，可以广播）
+# - 第1维变成1（序列维度，可以广播）  
+# - 第2维是 -1，自动计算为 50257（保持不变）
+# 
+# 广播过程：
+# logits: (4, 10, 50257)
+# bias:   (1, 1, 50257) → 广播到 (4, 10, 50257)
+# 结果:   (4, 10, 50257)
+bias = bias.view(1, 1, -1)
+
+# 加上偏置：每个 token 的每个词得分都加上对应的词偏置
 out = logits + bias
-print(out.shape)
+
+print(f"\nlogits 的形状: {logits.shape}")   # torch.Size([4, 10, 50257])
+print(f"bias 的形状:   {bias.shape}")     # torch.Size([1, 1, 50257])
+print(f"out 的形状:    {out.shape}")      # torch.Size([4, 10, 50257])
+
+# ============================================================================
+# 广播的优缺点
+# ============================================================================
+# 优点：
+#   - 无需显式扩展张量，节省内存
+#   - 代码简洁，可读性好
+# 
+# 注意：
+#   - 如果维度不匹配且都不为1，会报错
+#   - 例如：(4, 10, 50257) + (4, 10, 10) ❌ 最后一维 50257 ≠ 10 且都不为1
+# ============================================================================
 ```
 
 ### 3.8 自动求导与 `zero_grad`
@@ -414,35 +648,192 @@ print(out.shape)
 ```python
 import torch
 
-w = torch.randn(10, 1, requires_grad=True)
-x = torch.randn(1, 10)
-y = (x @ w).sum()
-y.backward()
-print(w.grad.shape)   # 与 w 同形状
+# ============================================================================
+# 自动求导（Autograd）基础演示
+# ============================================================================
+# 在深度学习中，我们需要计算损失函数对模型参数的梯度（导数），
+# 然后用梯度下降法更新参数。PyTorch 的 autograd 可以自动帮我们计算这些梯度。
+# ============================================================================
 
-# 下一轮迭代前必须清零，否则梯度会累加
+# 创建一个需要求导的张量 w（权重矩阵）
+# - shape: (10, 1)，10行1列
+# - requires_grad=True: 表示 PyTorch 需要追踪对这个张量的所有运算，
+#   以便后续自动计算梯度
+# - 数值来自标准正态分布（随机初始化）
+w = torch.randn(10, 1, requires_grad=True)
+
+# 创建一个输入张量 x（不需要求导，因为它是数据，不是要训练的参数）
+# - shape: (1, 10)，1行10列
+# - 数值来自标准正态分布
+x = torch.randn(1, 10)
+
+# ============================================================================
+# 前向传播：计算损失（标量）
+# ============================================================================
+# x @ w: 矩阵乘法
+#   - x 形状: (1, 10)
+#   - w 形状: (10, 1)
+#   - 结果形状: (1, 1)
+#
+# .sum(): 把所有元素求和，变成标量（0维张量）
+# 
+# 为什么需要 .sum()？
+#   在 PyTorch 中，.backward() 要求从标量开始反向传播。
+#   .sum() 把预测结果聚合成一个数，这样就能调用 y.backward() 了。
+#
+# 一句话总结：(x @ w).sum() = 先做矩阵乘法得到预测值，再求和变成标量
+# 
+# 在真正的训练中，这里的 y 通常是损失函数（如 MSE、交叉熵），
+# 会自然产生标量，但这里为了教学演示，用 .sum() 来构造一个标量。
+y = (x @ w).sum()
+
+# ============================================================================
+# 反向传播：计算梯度
+# ============================================================================
+# .backward() 会执行反向传播，自动计算所有 requires_grad=True 的张量的梯度
+# 具体来说：
+#   1. 从 y 开始，沿着计算图反向传播
+#   2. 计算 dy/dw（损失对权重 w 的导数）
+#   3. 把计算结果存到 w.grad 中
+y.backward()
+
+# 查看梯度形状
+# w.grad 的形状和 w 完全一样，都是 (10, 1)
+# 每个位置的梯度值表示：如果改变 w 中该位置的数值，y 会变化多少
+# 大白话：w.grad 告诉我们"每个权重应该往哪个方向调整才能让损失变小"
+print(w.grad.shape)   # 输出: torch.Size([10, 1])
+
+# ============================================================================
+# 梯度清零（非常重要！）
+# ============================================================================
+# 在 PyTorch 中，梯度是【累加】的，而不是覆盖的。
+# 也就是说，每次调用 .backward()，新的梯度会【加到】旧的梯度上。
+# 
+# 为什么这样设计？
+#   某些场景下需要累加梯度（比如梯度累积，用多个小批次模拟大批次）
+#   但大多数情况下，我们只需要当前批次的梯度，所以每次更新前要清零。
+#
+# 如果不清零会怎样？
+#   第一次反向传播: w.grad = 梯度1
+#   第二次反向传播: w.grad = 梯度1 + 梯度2  ← 累加了！
+#   这样更新权重时用的是"累加后的梯度"，会导致训练出错！
+#
+# .zero_() 方法：
+#   - 下划线 _ 表示"原地操作"（in-place），直接修改张量本身
+#   - 把 w.grad 中的所有元素设置为 0
+#   - 为下一轮迭代做好准备
 w.grad.zero_()
+
+# 清零后，w.grad 全部变成 0
+print(w.grad)  # 输出: tensor([[0.], [0.], ...])
 ```
 
 ### 3.9 `nn.Parameter` 与自定义线性层
 
 ```python
+# 导入 PyTorch 核心库
 import torch
+# 导入 PyTorch 神经网络模块
 import torch.nn as nn
 
 
+# ============================================================================
+# 自定义线性层（全连接层）
+# ============================================================================
+# 这是一个从零实现的全连接层，功能等同于 nn.Linear(in_features, out_features)
+# 
+# 大白话：建立一个"翻译器"，输入 in_features 个数字，输出 out_features 个数字
+# 比如：输入4个特征（身高、体重、年龄、学历），输出2个值（收入预测、信用评分）
+# ============================================================================
+
 class TinyLinear(nn.Module):
+    """
+    自定义线性层（全连接层）
+    
+    数学公式：y = x @ W.T
+    其中 W 是权重矩阵，形状为 (out_features, in_features)
+    """
+    
     def __init__(self, in_features: int, out_features: int):
+        """
+        初始化线性层
+        
+        参数：
+            in_features:  输入特征数量（比如 4）
+            out_features: 输出特征数量（比如 2）
+        
+        大白话：买好"翻译器"的零件（权重矩阵），准备开始工作
+        """
+        
+        # 调用父类 nn.Module 的初始化（必须的"办营业执照"步骤）
         super().__init__()
-        # 小随机初始化，避免一开始饱和
+        
+        # ============================================================
+        # 创建权重矩阵（模型需要学习的参数）
+        # ============================================================
+        # nn.Parameter() 的作用：
+        #   - 把张量"包装"成模型参数
+        #   - 这样 model.parameters() 才能识别并收集它
+        #   - 训练时优化器会自动更新它
+        #
+        # 形状：torch.randn(out_features, in_features)
+        #   - 为什么是 (out_features, in_features)？
+        #     因为矩阵乘法时：x @ W.T
+        #     输入 x 形状: (batch, in_features)
+        #     权重 W 形状: (out_features, in_features)  
+        #     W.T 转置后: (in_features, out_features)
+        #     这样 (batch, in_features) @ (in_features, out_features) 
+        #     = (batch, out_features) ✅
+        #
+        # * 0.02：小随机初始化
+        #   - 标准正态分布（均值0，方差1）乘以 0.02
+        #   - 让初始值非常小（标准差只有0.02）
+        #   - 为什么？避免一开始数值太大导致"饱和"
+        #     （比如激活函数是 Sigmoid 或 Tanh 时，大数值会进入平坦区，梯度消失）
+        #   - 在真正的 nn.Linear 中，初始化策略更复杂（如 Kaiming 初始化）
         self.weight = nn.Parameter(torch.randn(out_features, in_features) * 0.02)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        前向传播：数据流过这个层
+        
+        参数：
+            x: 输入张量，形状为 (batch_size, in_features)
+               比如 (32, 4) 表示 32 个样本，每个 4 个特征
+        
+        返回：
+            输出张量，形状为 (batch_size, out_features)
+               比如 (32, 2) 表示 32 个样本，每个 2 个输出值
+        
+        计算公式：y = x @ W.T
+        
+        为什么用 W.T（转置）？
+            输入 x: (batch, in_features)
+            权重 W: (out_features, in_features)  ← 我们存储的格式
+            W.T:   (in_features, out_features)   ← 转置后
+            x @ W.T: (batch, out_features)       ← 结果
+            
+            如果不转置直接用 W：(batch, in_features) @ (out_features, in_features)
+            ❌ 矩阵乘法不合法（列数 in_features ≠ 行数 out_features）
+        """
+        
+        # 矩阵乘法：输入 @ 权重的转置 = 输出
         return x @ self.weight.T
 
 
+# ============================================================================
+# 使用示例
+# ============================================================================
+
+# 创建一个线性层：4个输入特征 → 2个输出特征
 m = TinyLinear(4, 2)
+
+# 打印参数个数
+# p.numel() 返回张量中元素的总个数（number of elements）
+# 权重矩阵是 (2, 4)，所以有 2 × 4 = 8 个参数
+# sum(...) 把所有参数的个数加起来
 print("参数个数:", sum(p.numel() for p in m.parameters()))
+# 输出: 参数个数: 8
 ```
 
 ### 3.10 einops：与 Attention 形状强相关
@@ -451,19 +842,139 @@ print("参数个数:", sum(p.numel() for p in m.parameters()))
 import torch
 from einops import rearrange, repeat
 
-B, T, HD = 2, 64, 128
-H, D = 8, 16
-assert H * D == HD
+# 定义张量的维度大小
+B, T, HD = 2, 64, 128   # batch size=2, 序列长度=64, 隐藏维度=128
+H, D = 8, 16            # 注意力头数=8, 每个头的维度=16
+assert H * D == HD      # 校验：多头拼接后的总维度必须等于隐藏维度
+
+# 构造一个形状为 (B, T, H*D) 的随机张量，模拟 Transformer 中的隐藏状态
 x = torch.randn(B, T, H * D)
 
 # 命名维度：论文里常见的 (B, T, H, D) 拆分
+# 将最后一维 (H*D) 拆分为 (H, D)，即把隐藏维度拆成多个注意力头
+# 结果形状: (B, H, T, D)，方便后续按头做注意力计算
 x_heads = rearrange(x, "b t (h d) -> b h t d", h=H, d=D)
-print(x_heads.shape)
+print(x_heads.shape)    # torch.Size([2, 8, 64, 16])
 
+# 构造一个形状为 (3, 1) 的随机张量
 y = torch.randn(3, 1)
+
+# 沿第二维（b 维度）复制 repeat=4 次
+# "a b -> a (repeat b)" 表示保持 a 维不变，把 b 维扩展为 repeat 份并拼接到一起
+# 结果形状: (3, 1*4) = (3, 4)
 y_rep = repeat(y, "a b -> a (repeat b)", repeat=4)
-print(y_rep.shape)
+print(y_rep.shape)      # torch.Size([3, 4])
+
+#rearrange 的拆维："b t (h d) -> b h t d" 中括号 (h d) 表示把最后一维按 h 和 d 两个因子拆开，h=H, d=D 明确指定各因子大小；输出顺序 b h t d 把 h 提到了 t 前面。
+
+#repeat 的复制："a b -> a (repeat b)" 中的 repeat 是一个新的轴名（不是关键字，只是约定俗成的名字），右侧 (repeat b) 表示把 b 维复制 repeat 份后与 b 拼在一起。等价于 y.unsqueeze(1).expand(-1, 4, -1).reshape(3, 4)。
+
+#两种操作的本质区别：rearrange 只做形状变换（view/permute），不复制数据；repeat 会真正复制数据，因此内存占用会随 repeat 倍数增长。
+
+
 ```
+
+```python
+# 导入 PyTorch 核心库
+import torch
+# 从 einops 导入张量操作工具
+# rearrange: 重新排列张量的维度（类似 view/permute，但更易读）
+# repeat: 重复张量的内容（类似 expand/repeat，但更直观）
+from einops import rearrange, repeat
+
+# ============================================================================
+# 设置张量维度参数
+# ============================================================================
+B, T, HD = 2, 64, 128
+# B (Batch):   批次大小，一次处理 2 个独立样本
+# T (Time/Seq): 序列长度，每个样本有 64 个 token/时刻
+# HD (Hidden Dimension): 隐藏层总维度，128
+
+H, D = 8, 16
+# H (Heads):   多头数量，8 个头
+# D (Depth/Head Dimension): 每个头的维度，16
+
+# 验证：总维度 = 头数 × 每头维度
+# 128 = 8 × 16 ✅
+assert H * D == HD
+
+# 创建一个随机张量，形状为 (B, T, H*D) = (2, 64, 128)
+# 这个形状是 Transformer 中典型的"混合头"格式
+# 所有的头信息都堆叠在最后一个维度里
+x = torch.randn(B, T, H * D)
+
+# ============================================================================
+# rearrange: 重新排列维度（拆分头）
+# ============================================================================
+# 代码：x_heads = rearrange(x, "b t (h d) -> b h t d", h=H, d=D)
+#
+# 大白话：把"混合在一起的头"拆分成"独立的头"
+# 
+# 详细解释：
+#   左侧描述原始形状："b t (h d)"
+#     - b: 批次维度
+#     - t: 序列长度维度
+#     - (h d): 把最后一个维度拆分成两部分 h 和 d（括号表示拆分）
+# 
+#   右侧描述目标形状："b h t d"
+#     - b: 批次维度不变
+#     - h: 头数（变成独立的维度）
+#     - t: 序列长度维度
+#     - d: 每个头的维度
+# 
+#   h=H, d=D: 指定拆分后的维度大小
+# 
+# 形状变化：(2, 64, 128) → (2, 8, 64, 16)
+#   原来 128 维 = 8 个头 × 每个头 16 维
+#   拆分成 8 个独立的头，每个头 16 维
+x_heads = rearrange(x, "b t (h d) -> b h t d", h=H, d=D)
+
+# 打印拆分后的形状
+print(x_heads.shape)  # 输出: torch.Size([2, 8, 64, 16])
+
+# 为什么要这样做？
+# 在多头注意力中，每个头独立计算注意力，需要把"混合头"变成"独立头"格式
+# 这样每个头可以并行计算，提高效率
+
+
+# ============================================================================
+# repeat: 重复张量内容
+# ============================================================================
+# 创建一个形状为 (3, 1) 的张量，包含 3 行 1 列
+# 就像 3 个样本，每个样本只有 1 个特征
+y = torch.randn(3, 1)
+
+# 代码：y_rep = repeat(y, "a b -> a (repeat b)", repeat=4)
+#
+# 大白话：把 b 维度重复 4 次
+# 
+# 详细解释：
+#   左侧描述原始形状："a b"
+#     - a: 第1维（大小为 3）
+#     - b: 第2维（大小为 1）
+# 
+#   右侧描述目标形状："a (repeat b)"
+#     - a: 第1维不变
+#     - (repeat b): 把 b 维度重复 repeat 次（括号表示合并）
+# 
+#   repeat=4: 指定重复次数
+# 
+# 形状变化：(3, 1) → (3, 4)
+#   原来第2维只有 1 列，重复 4 次变成 4 列
+y_rep = repeat(y, "a b -> a (repeat b)", repeat=4)
+
+# 打印重复后的形状
+print(y_rep.shape)  # 输出: torch.Size([3, 4])
+
+# 实际效果演示：
+# 假设 y = [[1.0], [2.0], [3.0]]
+# 重复后变成：
+# [[1.0, 1.0, 1.0, 1.0],
+#  [2.0, 2.0, 2.0, 2.0],
+#  [3.0, 3.0, 3.0, 3.0]]
+```
+
+
 
 ### 3.11 资源估算：参数量显存与 matmul FLOPs
 
@@ -486,39 +997,161 @@ M, N, K = 4096, 4096, 4096
 print("4096^3 matmul FLOPs (2MNK):", matmul_flops_2mnk(M, N, K))
 ```
 
+```python
+# ============================================================================
+# 模型参数显存与计算量估算工具
+# ============================================================================
+# 在深度学习中，我们需要估算：
+# 1. 模型参数占多少显存（能不能装进 GPU）
+# 2. 矩阵乘法需要多少次计算（训练速度有多快）
+# ============================================================================
+
+def param_memory_gb(num_params: int, bytes_per_param: int = 4) -> float:
+    """
+    计算模型参数占用的显存大小（仅权重本身，不含优化器状态和激活值）
+    
+    参数：
+        num_params: 模型参数个数
+        bytes_per_param: 每个参数占用的字节数
+            - FP32 (单精度): 4 字节
+            - FP16/BF16 (半精度): 2 字节
+            - FP64 (双精度): 8 字节
+            - INT8: 1 字节
+    
+    返回：
+        显存大小（单位：GB）
+    
+    计算公式：
+        GB = 参数个数 × 每参数字节数 / (1024^3)
+    
+    为什么除以 1024^3？
+        1 KB = 1024 字节
+        1 MB = 1024^2 字节
+        1 GB = 1024^3 字节
+    """
+    # 总字节数 = 参数个数 × 每参数字节数
+    # 除以 1024^3 转换成 GB（用 1024 而不是 1000，这是计算机存储的标准）
+    return num_params * bytes_per_param / (1024**3)
+
+
+def matmul_flops_2mnk(m: int, n: int, k: int) -> int:
+    """
+    计算矩阵乘法的浮点运算次数（FLOPs）
+    
+    矩阵乘法：C = A @ B
+        - A 的形状: (m, k)
+        - B 的形状: (k, n)
+        - C 的形状: (m, n)
+    
+    参数：
+        m: 矩阵 A 的行数
+        n: 矩阵 B 的列数
+        k: 矩阵 A 的列数 / 矩阵 B 的行数（内积维度）
+    
+    返回：
+        FLOPs 总数（浮点运算次数）
+    
+    计算公式：2 × m × n × k
+    
+    为什么是 2？
+        对于 C[i, j] = sum(A[i, :] × B[:, j])：
+        - 有 k 次乘法
+        - 有 (k-1) 次加法 ≈ k 次加法
+        - 总共约 2k 次运算
+        - 所以总 FLOPs = 2 × m × n × k
+    
+    注意：这是"一次矩阵乘法"的计算量
+    """
+    return 2 * m * n * k
+
+
+# ============================================================================
+# 示例计算
+# ============================================================================
+
+# 创建一个变量 n，表示 10 亿个参数
+n = 1_000_000_000  # 1B = 10 亿
+
+# 计算 10 亿参数在不同精度下的显存占用
+# FP32（单精度）：每个参数 4 字节
+print(f"1B 参数 FP32 权重约 {param_memory_gb(n, 4):.2f} GB")
+# 计算：1,000,000,000 × 4 / 1024^3 ≈ 3.73 GB
+
+# BF16/FP16（半精度）：每个参数 2 字节
+print(f"1B 参数 BF16 权重约 {param_memory_gb(n, 2):.2f} GB")
+# 计算：1,000,000,000 × 2 / 1024^3 ≈ 1.86 GB
+
+# ============================================================================
+# 矩阵乘法计算量示例
+# ============================================================================
+
+# 设置矩阵维度为 4096 × 4096 × 4096
+M, N, K = 4096, 4096, 4096  # 3 个维度都是 4096
+
+# 计算这个矩阵乘法的 FLOPs
+print("4096^3 matmul FLOPs (2MNK):", matmul_flops_2mnk(M, N, K))
+# 计算：2 × 4096 × 4096 × 4096 = 2 × 68,719,476,736 = 137,438,953,472
+# 结果：约 1.37e11 FLOPs（1370 亿次浮点运算）
+
+
+# ============================================================================
+# 补充：大模型的实际数字
+# ============================================================================
+
+# GPT-3 175B 参数
+gpt3_params = 175_000_000_000
+print(f"\nGPT-3 (175B 参数):")
+print(f"  FP32 权重显存: {param_memory_gb(gpt3_params, 4):.2f} GB")
+print(f"  BF16 权重显存: {param_memory_gb(gpt3_params, 2):.2f} GB")
+
+# 实际训练还需要额外显存：
+# 1. 梯度（梯度通常和参数一样大）
+# 2. 优化器状态（Adam 需要额外 2 倍参数显存）
+# 3. 激活值（取决于批次大小和序列长度）
+# 所以实际需求远大于模型本身！
+```
+
+
+
 ### 3.12 最小训练循环（线性层 + MSE）
 
 ```python
 import torch
 import torch.nn as nn
 
+# 自动选择运行设备：有 GPU 就用 GPU，否则用 CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class MyLinear(nn.Module):
+    """手写线性层：y = x @ W^T + b"""
+
     def __init__(self, in_f: int, out_f: int):
         super().__init__()
+        # 权重 (out_f, in_f)，用小幅随机值初始化
         self.weight = nn.Parameter(torch.randn(out_f, in_f, device=device) * 0.01)
+        # 偏置 (out_f,)，初始化为 0
         self.bias = nn.Parameter(torch.zeros(out_f, device=device))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # (..., in_f) @ (in_f, out_f) + (out_f,) -> (..., out_f)
         return x @ self.weight.T + self.bias
 
 
-torch.manual_seed(0)
-model = MyLinear(5, 3).to(device)
-opt = torch.optim.SGD(model.parameters(), lr=0.1)
+torch.manual_seed(0)                       # 固定随机种子，保证结果可复现
+model = MyLinear(5, 3).to(device)          # 输入维度 5，输出维度 3
+opt = torch.optim.SGD(model.parameters(), lr=0.1)  # 随机梯度下降优化器
 
-x = torch.randn(4, 5, device=device)
-target = torch.randn(4, 3, device=device)
+x = torch.randn(4, 5, device=device)       # 4 个样本，每个 5 维
+target = torch.randn(4, 3, device=device)  # 回归目标
 
 for step in range(3):
-    opt.zero_grad(set_to_none=True)  # 或 zero_grad()
-    pred = model(x)
-    loss = (pred - target).pow(2).mean()
-    loss.backward()
-    opt.step()
-    print(step, loss.item())
+    opt.zero_grad(set_to_none=True)        # 清空上一步的梯度（set_to_none 更省内存）
+    pred = model(x)                        # 前向传播
+    loss = (pred - target).pow(2).mean()   # MSE 损失
+    loss.backward()                        # 反向传播，计算梯度
+    opt.step()                             # 更新参数
+    print(step, loss.item())               # 打印当前步的损失
 ```
 
 ---
@@ -544,13 +1177,90 @@ for step in range(3):
 
 2. **梯度**：`w = torch.tensor(2.0, requires_grad=True)`，`y = w ** 3`，一次 `backward()` 后 `w.grad` 是多少？若再调用一次 `y.backward()` 且未 `zero_grad`，梯度会怎样？
 
+   ```python
+   w = torch.tensor(2.0, requires_grad=True)
+   y = w ** 3
+   y.backward()
+   
+   #dy/dw = 3 * w² = 3 * 4 = 12
+   
+   #w.grad = tensor(12.)
+   
+   #若再调用一次 y.backward() 且未 zero_grad：
+   
+   #PyTorch 默认累加梯度，不会覆盖。
+   
+   #第二次又加 12 → w.grad = tensor(24.)
+   
+   #注意：若 y 已被释放（默认 backward() 后计算图释放），第二次调用 y.backward() 会报错 RuntimeError: Trying to backward through the graph a second time，除非在第一次时指定 retain_graph=True。在能执行的前提下，梯度是累加的。
+   ```
+
+   
+
 3. **Parameter**：模块内有 `self.buf = torch.ones(3)` 与 `self.w = nn.Parameter(torch.ones(3))`。`list(model.parameters())` 长度？`buf` 会被默认优化器更新吗？
+
+   ```python
+   self.buf = torch.ones(3)                        # 普通张量，不是 Parameter
+   self.w   = nn.Parameter(torch.ones(3))          # 注册为参数
+   
+   # list(model.parameters()) 的长度为 1（只有 self.w）。
+   
+   #buf 不会被默认优化器更新。它不在 model.parameters() 里。
+   
+   #若想被保存进 state_dict 但不训练，应注册为 buffer：self.register_buffer("buf", torch.ones(3))
+   
+   #若想被训练，应改为 nn.Parameter。
+   ```
+
+   
 
 4. **einops**：`x` 形状 `(2, 64, 768)`，12 个头、每头 64 维，写出 `rearrange` 得到 `(2, 12, 64, 64)`。
 
+   ```python
+   from einops import rearrange
+   
+   x = torch.randn(2, 64, 768)   # (B, T, H*D)
+   x = rearrange(x, "b t (h d) -> b h t d", h=12, d=64)
+   print(x.shape)                # torch.Size([2, 12, 64, 64])
+   ```
+
 5. **资源**：线性层 `in_f=4096, out_f=4096`，`batch=8`，按 **2MNK** 估算一次前向主要 matmul 的 FLOPs。权重用 BF16 存储约多少 GB（仅权重）？
 
+   > 线性层：`in_f = 4096`，`out_f = 4096`，`batch = 8`，输入可视为 `(8, 4096)`。
+   >
+   > **FLOPs（按 2MNK）：**
+   >
+   > - `M = 8`（batch），`N = 4096`（out_f），`K = 4096`（in_f）
+   > - `FLOPs = 2 * M * N * K = 2 * 8 * 4096 * 4096 ≈ 2.68e8`（约 0.27 GFLOPs）
+   >
+   > **权重显存（仅权重，BF16 = 2 字节）：**
+   >
+   > - 参数量：`4096 * 4096 = 16,777,216 ≈ 16.78M`
+   > - 显存：`16,777,216 * 2 bytes ≈ 33.55 MB ≈ 0.0335 GB`
+   >
+   > > 若算上 bias（4096 个），可忽略不计。
+
 6. **设备**：创建 `nn.Linear(100, 10)` 与输入 `(32, 100)`，在**不显式** `.to(device)` 的前提下，用构造函数参数把二者放到 GPU（若可用）。
+
+   用 `nn.Linear` 的 `device` 构造参数，以及 `torch.randn` 的 `device` 参数：
+
+   ```Python
+   import torch
+   import torch.nn as nn
+   
+   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+   
+   # 通过构造函数参数把权重放到 GPU
+   model = nn.Linear(100, 10, device=device)
+   
+   # 通过 device 参数把输入放到 GPU
+   x = torch.randn(32, 100, device=device)
+   
+   y = model(x)          # 二者同设备，可直接计算
+   print(y.shape)        # torch.Size([32, 10])
+   ```
+
+   
 
 > **建议**：每题限时 5～10 分钟，先闭卷再对照下文「面试高频题」中的相关思路或运行代码验证。
 
@@ -560,7 +1270,7 @@ for step in range(3):
 
 | 上一节 | 下一节 |
 |--------|--------|
-| [← 课程总览与学习路线](00-课程总览与学习路线.md) | [BPE 分词器原理与实现 →](02-BPE分词器原理与实现.md) |
+| [← 课程总览与学习路线](../docs/00-%E8%AF%BE%E7%A8%8B%E6%80%BB%E8%A7%88%E4%B8%8E%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF.md) | [BPE 分词器原理与实现 →](../docs/02-BPE%E5%88%86%E8%AF%8D%E5%99%A8%E5%8E%9F%E7%90%86%E4%B8%8E%E5%AE%9E%E7%8E%B0.md) |
 
 更多官方资源：[Stanford CS336 课程站](https://stanford-cs336.github.io/spring2025/)、[stanford-cs336 GitHub](https://github.com/stanford-cs336)。
 
@@ -574,13 +1284,72 @@ for step in range(3):
 
 **答**：（1）PyTorch 张量可把计算放在 **GPU / MPS**，NumPy 数组默认在 CPU。（2）PyTorch 集成 **autograd**，支持 `requires_grad` 与 `backward()`。（3）与 `nn.Module`、优化器、分布式工具链深度集成；NumPy 更适合通用数值与数据预处理。二者可通过 `torch.from_numpy` / `.numpy()` 交互，需注意 **dtype、设备、内存是否共享**。
 
+下面分别说明 PyTorch 权重的存储形状与实际矩阵乘法：
+
+---
+
 ### Q2：广播规则怎样快速判断「能不能逐元素相加」？
 
-**答**：从**最后一维**向左对齐两形状，较短者左侧**补 1**；每一维必须**相等**或**其中一方为 1**。例如 `(4,1,512)` 与 `(512,)` → 后者视为 `(1,1,512)`，与 `(4,1,512)` 兼容。若 `(4,10,512)` 与 `(10,512)`，对齐为 `(4,10,512)` 与 `(1,10,512)`，最左一维 `4` 与 `1` 不匹配且都不是 1，**不能直接广播**；需 `unsqueeze` 或调整布局使意图明确（如给第二方加 batch 维）。
+**答**：从**最后一维**向左对齐两形状，维数不足的一方在**左侧补 1**；对齐后每一维必须满足**相等**或**其中一方为 1**，全部满足才能逐元素相加。结果形状取每一维的**最大值**。
+
+**例 1**：`(4, 1, 512)` 与 `(512,)`
+
+`(512,)` 左侧补 1 → `(1, 1, 512)`。
+
+| 从右往左 | a    | b（补后） | 判断   |
+| -------- | ---- | --------- | ------ |
+| 第 1 维  | 512  | 512       | 相等 ✓ |
+| 第 2 维  | 1    | 1         | 相等 ✓ |
+| 第 3 维  | 4    | 1         | 有 1 ✓ |
+
+**可相加，结果 `(4, 1, 512)`。**
+
+---
+
+**例 2**：`(4, 10, 512)` 与 `(10, 512)`
+
+`(10, 512)` 左侧补 1 → `(1, 10, 512)`。
+
+| 从右往左 | a    | b（补后） | 判断   |
+| -------- | ---- | --------- | ------ |
+| 第 1 维  | 512  | 512       | 相等 ✓ |
+| 第 2 维  | 10   | 10        | 相等 ✓ |
+| 第 3 维  | 4    | 1         | 有 1 ✓ |
+
+**可相加，结果 `(4, 10, 512)`。**（`b` 在最左维被广播到 4。）
+
+> ⚠️ 原答案此处误写为“不能广播”，是错的：`4` 与 `1` 满足“其中一方为 1”，因此兼容。
+
+---
+
+**真正不能相加的反例**（某维既不相等、又无 1）：
+
+- `(4, 10, 512)` 与 `(10,)`  
+  对齐 → `(4, 10, 512)` vs `(1, 1, 10)`，最右 `512` vs `10` → ❌ 报错。  
+  改法：给第二方补一个尾维，`b.unsqueeze(-1)` → `(10, 1)`，再广播得 `(4, 10, 512)`。
+
+- `(4, 10, 512)` 与 `(8, 512)`  
+  对齐 → `(4, 10, 512)` vs `(1, 8, 512)`，中间 `10` vs `8` → ❌ 报错。
+
+---
+
+**汇总表：**
+
+| 组合                      | 对齐后                      | 能否相加 | 结果         |
+| ------------------------- | --------------------------- | -------- | ------------ |
+| `(4,1,512)` + `(512,)`    | `(4,1,512)` + `(1,1,512)`   | ✅        | `(4,1,512)`  |
+| `(4,10,512)` + `(10,512)` | `(4,10,512)` + `(1,10,512)` | ✅        | `(4,10,512)` |
+| `(4,10,512)` + `(10,)`    | `(4,10,512)` + `(1,1,10)`   | ❌        | 报错         |
+| `(4,10,512)` + `(8,512)`  | `(4,10,512)` + `(1,8,512)`  | ❌        | 报错         |
 
 ### Q3：`nn.Parameter` 与普通 `Tensor` 作为模块属性有何区别？
 
-**答**：`nn.Parameter` 会注册进 `parameters()`，默认被优化器更新，并随 `model.to(device)` 迁移。普通 `Tensor` 若仅 `self.x = torch.ones(3)`，通常**不**视为可训练参数；若需持久化且非训练（如 running mean），应 **`register_buffer`**。面试强调：**是否参与训练**、**是否出现在 `parameters()`**、**是否随设备迁移**。
+**答**：
+
+- 将 `nn.Parameter` 赋给 `nn.Module` 属性后，它会注册进 `parameters()` 并随 `model.to(device)` 迁移。只有将其传给优化器、允许求导且产生梯度时，优化器才会更新它。
+
+- 普通 `Tensor` 若仅 `self.x = torch.ones(3)`，不会自动注册成参数或 buffer，也不会随 `model.to(device)` 自动迁移或写入 `state_dict()`。
+- 若需持久化且非训练（如 running mean），应 **`register_buffer`**。面试强调：**是否参与训练**、**是否出现在 `parameters()`**、**是否随设备迁移**。
 
 ### Q4：为什么 `loss.backward()` 前常要 `optimizer.zero_grad()`？
 
@@ -588,15 +1357,62 @@ for step in range(3):
 
 ### Q5：`model.train()` 与 `model.eval()` 改变什么？
 
-**答**：切换子模块在训练/推理下的行为，例如 **Dropout**（训练随机置零，推理关闭）、**BatchNorm**（训练用 batch 统计，推理常用滑动均值方差）。`LayerNorm` 多数实现两者一致。推理时常配合 **`torch.no_grad()`** 跳过建图，节省显存与算力。
+**答**：切换子模块在训练/推理下的行为，本身不改变参数值，只改一个运行模式标志，并递归作用到所有子模块。典型受影响的层是 **Dropout**（训练时按概率随机置零并缩放，推理时直接关闭）和 **BatchNorm**（训练时用当前 batch 的均值方差归一化并更新滑动统计量，推理时改用滑动均值方差且不再更新）。**LayerNorm**、Linear、Conv、ReLU 等与 batch 无关的层，两种模式下行为完全一致。
+
+要注意 `eval()` 只改层的行为，**不影响 autograd**，仍会建图、仍可反向。真正省显存提速靠的是 `torch.no_grad()`（不建计算图、不存中间激活）。所以推理的标准写法是：
+
+```python
+model.eval()
+with torch.no_grad():
+    pred = model(x)
+```
+
+两者职责不同：`eval()` 保证数值行为正确（Dropout 关闭、BN 在默认 `track_running_stats=True` 时用滑动统计），`no_grad()` 保证不把显存和算力浪费在反向上。训练前记得切回 `model.train()`，否则 Dropout 不生效、BN 不更新，容易欠拟合；另外 BN 的滑动统计只在 train 模式更新，若从未训练就使用 eval，滑动统计可能不准确。微调时若想冻结 BN，可单独把 BN 层设回 `eval()`。
 
 ### Q6：如何估算一个全连接层的前向 FLOPs 与权重大小？
 
 **答**：设 batch 为 `B`，输入维 `I`，输出维 `O`。主要计算为 `(B, I) @ (I, O)`，按 **2×B×I×O**（2MNK）为一种常见 FLOPs 口径。参数量约 **I×O**（加偏置则 +O，常可忽略主导项）。显存：**参数量 × 每参数字节**（FP32 为 4，BF16 约 2）。训练时若用 Adam，动量等状态通常再占**数倍**于权重，视面试深度展开。
 
+---
+
 ### Q7：`torch.no_grad()` 与 `tensor.detach()` 有何不同？
 
-**答**：**`no_grad()`** 在一段代码块内**关闭梯度追踪**，不建图，省显存与算力，适合验证/推理。**`detach()`** 返回与原张量共享数据但**不参与后续反向**的张量，仍可能在 `requires_grad=True` 的上下文中用于切断某条分支的梯度。二者都可用于「不要给某部分求导」，但语义与使用场景不同：`no_grad` 是上下文，`detach` 是单张量操作。
+**答**：二者都能“不要给某部分求导”，但作用层级和语义不同。
+
+**`torch.no_grad()`** 是一个**上下文管理器**，关闭当前线程内运算的反向自动求导记录，一般运算结果的 `requires_grad=False`。它不改变已有张量的属性；接受 `requires_grad` 参数的工厂函数，以及创建 `nn.Parameter` 等操作是例外。典型用途是验证/推理，避免建立反向计算图：
+
+```python
+with torch.no_grad():
+    pred = model(x)      # 不建图，无法 backward
+```
+
+**`detach()`** 是**单张量操作**，返回一个与原张量**共享底层数据**、但**从计算图中剪断**的新张量。它的梯度不会回传到上游，常用于“我只想用这个张量的值，不想让梯度经过它”：
+
+```python
+y = x.detach()           # y 与 x 共享数据，但 y 不参与反向
+```
+
+---
+
+**关键区别：**
+
+- **作用范围**：`no_grad` 是**当前线程的上下文级**（有工厂函数例外，也不关闭前向模式 AD）；`detach` 是**单张量级**（切断该张量的自动求导关系）。
+- **是否改变已有张量**：都不改。`no_grad` 只影响块内新建的张量；`detach` 返回一个新张量。
+- **数据是否共享**：`detach` 返回的张量**与原张量共享内存**（改一个另一个也变，除非 `clone`）；`no_grad` 与共享无关，它只是不记录梯度。
+- **典型场景**：`no_grad` 用于推理、评估、参数更新时防止建图；`detach` 用于强化学习里的 target 网络、停止梯度、把张量转成 numpy/日志记录。
+
+---
+
+**常见误用与注意点：**
+
+- `detach()` 后**还能**再 `requires_grad_()` 打开梯度，但此时它已是计算图的“叶子”，与原来的图无关。
+- 在 `no_grad` 内执行需要反向传播的**前向运算**会丢失相应计算图；但若图已在外部建立，仍可在该上下文内调用 `backward()`。已有张量的 `requires_grad` 属性不变。
+- 想**永久**切断某参数的梯度，用 `param.requires_grad_(False)`；想**临时**切断，用 `with torch.no_grad():`。
+- 标准顺序是 `loss.backward()` **之后**再 `optimizer.step()`。PyTorch 优化器通常自行在无梯度上下文中更新参数；手写更新应使用 `no_grad`。不要把训练前向和 loss 计算包进 `no_grad`。
+
+---
+
+**一句话总结**：`no_grad` 是**上下文级**的“整块不建图”，`detach` 是**张量级**的“剪断这一条梯度链”，二者常配合使用，但语义与粒度不同。
 
 ### Q8：出现 `RuntimeError: Expected all tensors to be on the same device` 时如何排查？
 
@@ -626,10 +1442,103 @@ for step in range(3):
 ```python
 import torch
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+#能直接在目标设备创建，就不要先建在 CPU 再搬过去。
 x = torch.randn(1000, 1000, device=device)
 ```
 
 频繁在 CPU/GPU 间拷贝会成为瓶颈；训练时应尽量 **batch 化传输**，配合 `pin_memory=True`（CUDA）等。
+
+这两个问题都跟 **CPU↔GPU 数据传输是瓶颈** 这个核心事实有关。下面分开讲。
+
+**一、为什么训练时要尽量 batch 化输入？**
+
+**1.传输开销包含固定启动成本和随数据量增长的搬运成本**
+
+一次 CPU→GPU 拷贝（`cudaMemcpy`）本身有固定的启动开销（kernel launch、同步、DMA 建立等），大概在微秒量级。如果你把 1000 个样本一个一个传：
+
+```python
+# 坏做法：1000 次小拷贝
+for i in range(1000):
+    x = data[i].to(device)   # 每次都触发一次传输
+    y = model(x)
+```
+
+那么你要付 **1000 次固定开销**，而每次只搬一点点数据，带宽根本跑不满。
+
+如果一次传 1000 个：
+
+```python
+# 好做法：1 次大拷贝
+x = data[:1000].to(device)   # 一次传输，摊薄了固定开销
+```
+
+固定启动开销只付一次，同时仍需承担随字节数增长的搬运成本，近似为“启动延迟 + 字节数 / 有效带宽”。GPU 侧传输与计算重叠还需要 pinned 源内存、独立 CUDA stream 和可用 DMA 引擎，并处理同步依赖；同一 stream 内不会自动重叠。参见 [PyTorch 官方传输教程](https://docs.pytorch.org/tutorials/intermediate/pinmem_nonblock.html)。
+
+**2.让 GPU 保持"吃饱"状态**
+
+GPU 计算极快，但一旦要等数据从 CPU 过来就会空闲（starvation）。batch 化让每次搬运的数据量足够大，GPU 一次能算很久，计算/传输的重叠效率更高。这也是为什么用 `DataLoader` + 多 worker 预取（`num_workers>0`）能进一步掩盖传输延迟。
+
+**3.和 GPU 的并行度匹配**
+
+GPU 擅长的是大矩阵并行运算。batch 太小（比如 1），kernel 利用率低、launch 开销占比高，既浪费算力也放大传输开销。
+
+> 一句话总结：**传输的固定开销要靠"批量"来摊薄，GPU 的空闲要靠"批量"来填满。**
+
+**二、`pin_memory=True` 是什么？**
+
+**1.背景：CUDA 的"页锁定内存"（pinned / page-locked memory）**
+
+普通 CPU 内存（pageable memory）可能被操作系统换页（swap）到磁盘。GPU 的 DMA 引擎不能安全地直接读取这种"可能被移动"的内存，所以： 
+
+- **pageable memory → GPU**：CUDA 驱动得先偷偷在后台把数据拷到一块临时的 pinned 缓冲区，再从那里 DMA 到 GPU。等于**多了一次内存拷贝**。
+- **pinned memory → GPU**：DMA 可以直接读，**不需要中转**，速度快很多。
+
+```
+pageable:  CPU内存 --(CPU拷贝)--> 临时pinned缓冲 --(DMA)--> GPU   ← 两次搬运
+pinned:    CPU内存 ---------------------------(DMA)--> GPU   ← 一次搬运
+```
+
+**2. `pin_memory=True` 在 DataLoader 里做什么**
+
+```python
+loader = DataLoader(dataset, batch_size=64, num_workers=4, pin_memory=True)
+```
+
+开启后，DataLoader 会把取出的 batch 放进 **pinned memory**。配合下面的选项，可避免每次拷贝后都阻塞主机线程；实际速度需测量，并不保证更快：
+
+```python
+x = x.to(device, non_blocking=True)
+```
+
+`non_blocking=True` 避免主机线程在每次拷贝后立即同步等待，但**不保证拷贝与 GPU 计算重叠**。GPU 侧重叠还需要 pinned 源内存、与计算不同的 CUDA stream、可用 DMA 引擎，以及正确的同步依赖；同一 stream 内仍按顺序执行。条件满足时，可用预取下一批数据等方式隐藏传输时间，详见 [PyTorch 官方传输教程](https://docs.pytorch.org/tutorials/intermediate/pinmem_nonblock.html)。
+
+**3. 注意事项**
+
+- 只有**要用 GPU 时**才设 `pin_memory=True`；纯 CPU 训练设了没意义甚至有害。
+- pinned memory 是**稀缺资源**，分配/释放比普通内存贵，不能滥用。
+- 它主要加速的是 **Host→Device** 方向（训练输入）；Device→Host（比如取 loss）也受益但通常不是瓶颈。
+- 配合 `num_workers>0` 效果最好，否则 pin 操作在主的进程里可能反而拖慢。
+
+三、**两者怎么配合**
+
+```python
+loader = DataLoader(
+    dataset,
+    batch_size=256,          # ① batch 化，摊薄传输固定开销、喂饱 GPU
+    shuffle=True,
+    num_workers=4,           # 多进程预取，掩盖传输延迟
+    pin_memory=True,         # ② 放进页锁定内存，让 H2D 拷贝更快
+    persistent_workers=True,
+)
+
+for x, y in loader:
+    x = x.to(device, non_blocking=True)   # ③ 主机侧不逐次等待；同一 CUDA stream 内仍按序执行
+    y = y.to(device, non_blocking=True)
+    ...
+```
+
+① 解决"传多少次"的问题，②③ 解决"每次传多快、能不能和计算重叠"的问题。二者目标一致：**别让 CPU↔GPU 的搬运拖住 GPU。**
 
 ### 8.3 显存直觉（预告）
 
@@ -645,7 +1554,9 @@ PyTorch 张量由 **底层一维 storage** + **形状 size** + **步长 stride**
 
 ### 9.2 行主序（C contiguous）
 
-默认 **最后一维**在内存中相邻存储。对形状 `(B, T, D)`，固定 `b,t` 时沿 `D` 相邻。
+C 连续 = 和 C 语言原生多维数组一模一样的内存排布：**逻辑上最右边那一维的元素，在物理内存紧紧挨着**。名字叫 C‑contiguous 就是因为继承 C 语言行主序。
+
+PyTorch 默认是 C 行主序 C‑contiguous，**最后一维的元素在内存中紧密相邻**。以`(B, T, D)`三维张量举例：固定 batch、序列位置，遍历最后一维隐藏维度 D 时，访问的是内存上连续的一块区域。
 
 ### 9.3 `is_contiguous()` 含义
 
@@ -720,216 +1631,345 @@ describe(y.contiguous(), "contiguous")
 
 ---
 
-## 十三、扩展背诵条目（1～200，配合行数与速览）
+## 十三、扩展复习条目
 
 1. 张量是计算图节点。  
+
+   张量本质是存放数值的数据容器；当开启`requires_grad=True`，张量就会成为 autograd 计算图的节点。节点除了持有数据，还通过`grad_fn`记录运算来源，用来构建反向传播求导链路；算子负责实际数学运算，节点负责保存输入输出与求导信息。叶子节点由用户创建，中间节点由运算生成。
+
 2. `requires_grad` 控制是否追踪。  
+
 3. 非标量 `backward` 需 `gradient` 参数。  
+
 4. `retain_graph` 多步 backward 时用。  
+
 5. `leaf` 张量 `grad` 可直接看。  
+
 6. 非 leaf 需 `retain_grad()`。  
+
 7. `detach` 切断分支梯度。  
+
 8. `no_grad` 推理省显存。  
+
 9. `inference_mode` 更严格。  
+
 10. `train`/`eval` 影响 dropout。  
+
 11. `to(device)` 迁移。  
+
 12. `to(dtype)` 转换类型。  
+
 13. 混合精度 bf16/fp16。  
+
 14. Tensor Core 加速 matmul。  
+
 15. 广播从尾对齐。  
+
 16. `einsum` 表达清晰。  
+
 17. `bmm` batch 矩阵乘。  
+
 18. `matmul` 自动广播。  
+
 19. `addmm` 融合。  
+
 20. 内存带宽常是瓶颈。  
+
 21. 合并小算子 fusion。  
+
 22. `torch.compile` 图优化。  
+
 23. 动态图默认。  
+
 24. 静态图部分场景。  
+
 25. JIT `torch.jit.trace` 了解。  
+
 26. ONNX 导出部署。  
+
 27. 量化 INT8/INT4。  
+
 28. 分布式 `torchrun`。  
+
 29. DDP 梯度同步。  
+
 30. 单机多卡常见。  
+
 31. 随机种子可复现。  
+
 32. cudnn 确定性开关。  
+
 33. 数据加载 `num_workers`。  
+
 34. `pin_memory` CUDA。  
+
 35. `persistent_workers`。  
+
 36. `prefetch_factor`。  
+
 37. 数据集 `Dataset`。  
+
 38. 迭代器 `DataLoader`。  
+
 39. 自定义 `collate_fn`。  
+
 40. 变长序列 pad。  
+
 41. `pack_padded_sequence` 了解。  
+
 42. 梯度裁剪 `clip_grad_norm_`。  
+
 43. 权重衰减 AdamW。  
+
 44. 学习率 warmup。  
+
 45. Cosine schedule。  
+
 46. 梯度累积大 batch。  
+
 47. 检查点 `save`。  
+
 48. 恢复 `load_state_dict`。  
+
 49. 微调冻结层 `requires_grad=False`。  
+
 50. LoRA 低秩适配（扩展）。  
+
 51. 张量命名维度（了解）。  
+
 52. `vmap` 向量化（了解）。  
+
 53. `torch.fx` 符号追踪（了解）。  
+
 54. 自定义 autograd Function（了解）。  
+
 55. 二阶导数 `create_graph`（了解）。  
+
 56. Hessian（了解）。  
+
 57. Jacobian（了解）。  
+
 58. 数值精度 float64 调试。  
+
 59. NaN 检测 `torch.isnan`。  
+
 60. 异常值处理。  
+
 61. 随机数生成器 `Generator`。  
+
 62. 可复现 dropout。  
+
 63. 模型初始化 Xavier。  
+
 64. Kaiming 初始化。  
+
 65. 正交初始化。  
+
 66. 参数统计 `norm`。  
+
 67. 梯度统计监控。  
+
 68. TensorBoard 记录。  
+
 69. WandB 实验（了解）。  
+
 70. 单元测试 pytest。  
+
 71. 形状测试 assert。  
+
 72. CI 跑 lint。  
+
 73. 类型检查 mypy（了解）。  
+
 74. 代码格式化 black（了解）。  
+
 75. 读 CS336 官方作业说明。  
+
 76. 遵守学术诚信。  
+
 77. 引用论文出处。  
+
 78. 许可证合规。  
+
 79. 开源模型协议。  
+
 80. 商业使用注意。  
+
 81. 继续背 PyTorch API。  
+
 82. 继续写小实验。  
+
 83. 调试 print shape。  
+
 84. 调试 print device。  
+
 85. 调试 print dtype。  
+
 86. 三层打印解决一半 bug。  
+
 87. contiguous 解决 view 一半报错。  
+
 88. reshape 更省心。  
+
 89. 性能敏感再优化。  
+
 90. 先正确后快。  
+
 91. 面试先思路后细节。  
+
 92. 白板写公式。  
+
 93. 标注维度 B T D。  
+
 94. 因果 mask 画三角。  
+
 95. 残差画旁路。  
+
 96. 与 Lesson 02 BPE 衔接。  
+
 97. 字节 token ID。  
+
 98. Embedding 查表。  
+
 99. 词表大小 V。  
+
 100. 输出 logits V。  
+
 101. 交叉熵训练。  
+
 102. Softmax 温度。  
+
 103. 采样策略。  
+
 104. Top-p。  
+
 105. Top-k。  
+
 106. 重复惩罚。  
+
 107. EOS token。  
+
 108. BOS 可选。  
+
 109. Padding mask。  
+
 110. Attention mask。  
+
 111. 合并 mask 小心。  
+
 112. 半精度 mask 值域。  
+
 113. `-inf` 用大负数替代有时。  
+
 114. 数值稳定。  
+
 115. LayerNorm eps。  
+
 116. RMSNorm eps。  
+
 117. 深度学习调参。  
+
 118. 学习率是超参。  
+
 119. Batch size 超参。  
+
 120. 序列长度超参。  
+
 121. 一切可实验。  
+
 122. 日志记录实验。  
+
 123. 版本管理 git。  
+
 124. 数据版本管理。  
+
 125. 可复现第一。  
+
 126. 团队协作规范。  
+
 127. Code review。  
+
 128. 读写 README。  
+
 129. 写清楚依赖。  
+
 130. Docker 可选。  
+
 131. 云端 GPU 选型。  
+
 132. A100 H100 了解。  
+
 133. 显存容量规划。  
+
 134. 互联带宽。  
+
 135. NVLink。  
+
 136. InfiniBand。  
+
 137. 多机训练。  
+
 138. 通信后端 NCCL。  
+
 139. 故障排查日志。  
+
 140. OOM 减 batch。  
+
 141. OOM 梯度检查点。  
+
 142. OOM 换小模型。  
+
 143. 工程权衡。  
+
 144. 研究创新。  
+
 145. 产品落地。  
+
 146. 全栈视野。  
+
 147. CS336 路线完整。  
+
 148. 面试自信来源。  
+
 149. 持续学习。  
+
 150. 论文日读。  
+
 151. arXiv 跟踪。  
+
 152. GitHub 跟踪。  
+
 153. HuggingFace 生态。  
+
 154. 模型卡阅读。  
+
 155. Tokenizer 文档。  
+
 156. 配置 yaml。  
+
 157. 超参 sweep。  
+
 158. 早停策略。  
+
 159. 验证集监控。  
+
 160. 过拟合识别。  
+
 161. 欠拟合识别。  
+
 162. 数据增广 NLP。  
+
 163. 回译（了解）。  
+
 164. 对比学习（了解）。  
-165. 继续扩展。  
-166. 行数足够。  
-167. 复习愉快。  
-168. 做题愉快。  
-169. 面试愉快。  
-170. 拿到 offer。  
-171. 回馈社区。  
-172. 写博客总结。  
-173. 教后来者。  
-174. 知识传承。  
-175. 本附录偏长。  
-176. 可跳读。  
-177. 抓主干即可。  
-178. 条目扫关键词。  
-179. 考前速览。  
-180. 睡前列想。  
-181. 白板模拟。  
-182. 计时回答。  
-183. 录音回听。  
-184. 改进表达。  
-185. STAR 故事。  
-186. 项目经历。  
-187. CS336 写简历。  
-188. 量化成果。  
-189. 数据规模。  
-190. 训练时长。  
-191. 指标提升。  
-192. 问题解决。  
-193. 协作案例。  
-194. 冲突处理。  
-195. 学习能力。  
-196. 自驱力。  
-197. 好奇心。  
-198. 严谨性。  
-199. 工程素养。  
-200. 本节扩展完。  
 
 ---
 
 ### 十四、结语（张量内存与 PyTorch 基础）
 
-**GPU/CPU 分工**、**contiguous / view / reshape**、**autograd 与 Module** 是后续 BPE、Transformer、训练循环的**公共底座**；建议把第九节与第九节代码**默写一遍**，面试中「PyTorch 基础关」可稳过。
+**GPU/CPU 分工**、**contiguous / view / reshape**、**autograd 与 Module** 是后续课程的公共底座；建议结合第九节概念与第十节代码练习。
 
-**文档说明**：为满足「单文件超长详细版」复习需求，第十三节含大量可扫读条目；时间有限可只读 **第八～十节**与 **Q&A**。
+**复习建议**：时间有限时，可先读 **第八～十节**与 **Q&A**。
 
 ---
 
@@ -946,15 +1986,15 @@ describe(y.contiguous(), "contiguous")
 
 ---
 
-### 十六、版本与兼容性备忘（2026）
+### 十六、版本与兼容性备忘
 
 - 以课程当年 `requirements.txt` 与 PyTorch 官方 wheel 为准；**CUDA 驱动版本 ≥ PyTorch 期望的最低驱动**。  
-- Apple Silicon 优先试 **MPS**；不支持算子时会自动或手动回退 CPU（速度下降）。  
+- Apple Silicon 可试 **MPS**；未支持的算子不保证自动回退。部分算子可通过 `PYTORCH_ENABLE_MPS_FALLBACK=1` 启用 CPU 回退，仍需检查支持范围与速度，见 [PyTorch MPS 环境变量](https://docs.pytorch.org/docs/stable/mps_environment_variables.html)。
 - **Python 3.11+** 与 `typing`、性能、生态兼容性整体更好。
 
 ---
 
-**【全文完 · 行数目标：800+ 行面试导向详细版】**
+**【全文完】**
 
 
 
@@ -987,9 +2027,9 @@ describe(y.contiguous(), "contiguous")
 
 ---
 
-## 漫画导入 (reference: ![漫画](../comics/ch02-BPE分词器.png))
+## 漫画导入 (reference: ![漫画](../comics/ch02-BPE%E5%88%86%E8%AF%8D%E5%99%A8.png))
 
-![漫画](../comics/ch02-BPE分词器.png)
+![漫画](../comics/ch02-BPE%E5%88%86%E8%AF%8D%E5%99%A8.png)
 
 （若本地尚无该图片，可将 `comics/ch02-BPE分词器.png` 放入仓库后显示。漫画用于直觉：**长文本像绳子，BPE 不断把「最常一起出现的两股」拧成一股**，直到词表达到目标大小。）
 
@@ -1018,7 +2058,7 @@ logits / 下一 token 分布
 | 粒度 | 优点 | 缺点 |
 |------|------|------|
 | **词级**（空格分词等） | 单 token 语义完整；序列短 | 词表巨大；OOV 严重；形态变化浪费参数 |
-| **字符级** | 词表极小；无 OOV | 序列极长；长程依赖难学 |
+| **字符级** | 词表较小；保留字符边界 | 未覆盖的字符仍可能 OOV；序列长 |
 | **子词级**（BPE、WordPiece、SentencePiece 等） | 词表大小与序列长度折中 | 需训练分词器 |
 
 ### 1.3 The vocabulary size tradeoff（词表大小的权衡）
@@ -1050,11 +2090,13 @@ BPE 最初是 **Philip Gage（1994）** 的**数据压缩**思路：反复合并
 ### 2.3 Byte-level BPE vs character-level BPE
 
 - **字符级**：在 Unicode 码点上合并。
-- **字节级**：在 UTF-8 **字节**上合并；初始 **256**；任意文本可编码，**字节级无「未知字符」**（与词级 UNK 概念不同）。
+- **字节级**：在 UTF-8 **字节**上合并；初始 **256**；任意文本可编码，**字节级无「未知字符」**（与词级 UNK 概念不同【**UNK** 是 **Unknown token**（未知词元）的缩写】）。
 
 ### 2.4 Why byte-level is preferred
 
 实现简单、跨语言一致、与 GPT / tiktoken 生态对齐；代价是 CJK 等往往 **token 更多**（UTF-8 多字节）。
+
+**CJK** 是 **Chinese、Japanese、Korean** 三个词的缩写，指代**中文、日文、韩文**这三种语言/文字系统。
 
 ---
 
@@ -1066,7 +2108,7 @@ BPE 最初是 **Philip Gage（1994）** 的**数据压缩**思路：反复合并
 
 ### Step 2：Pre-tokenize using regex（GPT-2 pattern）
 
-用与推理**完全一致**的正则切分为片段，**通常不跨空格合并**。
+用与推理**完全一致**的正则切分为片段，合并**不跨预分词片段边界**。GPT-2 风格正则允许一个前导空格与后面的词同属一片段，空格可以参与片段内合并。特殊 token 要先单独切出，不参与普通 BPE 合并。
 
 ### Step 3：Count adjacent byte pair frequencies
 
@@ -1074,7 +2116,7 @@ BPE 最初是 **Philip Gage（1994）** 的**数据压缩**思路：反复合并
 
 ### Step 4：Find most frequent pair（break ties lexicographically）
 
-`argmax` 频次；平局按 **pair 字典序**（或其它**固定**规则）。
+`argmax` 频次；本节采用 CS336 的同频规则：选择 **字节串二元组 `(left_bytes, right_bytes)` 字典序最大** 的 pair，不能按 token ID 或拼接后的字节串比较。参见 [官方变更记录](https://github.com/stanford-cs336/assignment1-basics/blob/main/CHANGELOG.md) 中 original bytes 与 tuple comparison 的说明。
 
 ### Step 5：Create new token, merge all occurrences
 
@@ -1093,10 +2135,12 @@ BPE 最初是 **Philip Gage（1994）** 的**数据压缩**思路：反复合并
 设**不做**复杂正则，语料仅为重复字符串 `"aaab"` 的 UTF-8 字节（字母 `a`=97，`b`=98），且整段作为一个片段：
 
 - 初始序列：`[97,97,97,98]`。
-- 第一轮统计：`(97,97)` 出现 **2 次**，`(97,98)` 出现 **1 次** → 合并 `(97,97)→256`，从左到右非重叠合并后得 `[256,97,98]`（第二次 `aa` 与后面的 `a` 相邻，是否再形成 `97,97` 取决于合并后序列；此例合并后仅剩一对 `97` 与 `98` 相邻）。
+- 第一轮统计：`(97,97)` 出现 **2 次**（有重叠），`(97,98)` 出现 **1 次** → 合并 `(97,97)→256`，从左到右非重叠合并后得 `[256,97,98]`。新序列包含 `(256,97)` 与 `(97,98)` 两个相邻 pair，各出现 1 次。
 - 下一轮在**新序列**上重新数对；后续合并由新频次决定。
 
 **面试要点**：口述「**先全局选 max 频对 → 全片段应用 → 再统计**」；**平局**时说明你的 tie-break（如字典序）。
+
+**Tie-break** 中文叫**平局打破规则**或**决胜规则**，指的是：当出现**多个候选并列最优**时，按什么规则从中选一个。
 
 ---
 
@@ -1125,165 +2169,343 @@ BPE 最初是 **Philip Gage（1994）** 的**数据压缩**思路：反复合并
 ```python
 """
 BPE 教学实现 — CS336 Lesson 02
+逐行详细注释版本
 """
+# 允许注解里使用还未定义的类型，老python版本兼容
 from __future__ import annotations
-
+# 导入多进程库，用于并行统计语料pair频次
 import multiprocessing as mp
+# Counter用于统计频次；defaultdict带默认值的字典
 from collections import Counter, defaultdict
+# 类型注解，标明输入输出的数据结构
 from typing import Dict, List, Optional, Sequence, Tuple
-
+# regex第三方正则库，支持unicode属性\p{L}\p{N}，比内置re更强
 import regex as re
 
+# GPT‑2 的预分词正则：先按规则切块，再对每块做 BPE
+# 把文本切为后缀、单词、数字、符号、空白，限制合并在预分词片段内部
 GPT2_SPLIT_PATTERN = re.compile(
     r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 )
 
-
+# ============================================================
+# 函数作用：GPT2预分词，把原始字符串切为独立片段chunk列表
+# 阶段：【训练阶段、推理阶段 两者都用】
+# 输入：text：待切分原始字符串
+# 输出：List[str]，切分后的各个预分词片段
+# ============================================================
 def pretokenize_gpt2(text: str) -> List[str]:
+    # finditer遍历正则匹配到的全部片段；m.group(0)拿到匹配到的字符串
+    # 列表推导收集所有chunk返回
     return [m.group(0) for m in GPT2_SPLIT_PATTERN.finditer(text)]
 
-
+# ============================================================
+# 函数作用：单个字符串片段转UTF‑8字节id列表，每个字节映射为0‑255整数
+# 阶段：【训练阶段、推理阶段 两者都用】
+# 输入：chunk：一个预分词得到的字符串片段
+# 输出：List[int]，字节id序列，全部取值0~255
+# ============================================================
 def bytes_to_ids(chunk: str) -> List[int]:
+    # .encode("utf-8") 将字符串转为utf8字节bytes对象
+    # list()把bytes拆解成一个个0~255的int，就是初始id序列
     return list(chunk.encode("utf-8"))
 
-
+# ============================================================
+# 函数作用：统计id序列内部所有相邻pair出现频次，可外部传入字典累加
+# 阶段：【工具函数，训练阶段内部使用】
+# 输入：ids：字节/子词id序列；counts：可选，外部传入的pair计数字典用于累加
+# 输出：Dict[Tuple[int,int], int]，pair→出现次数的统计字典
+# ============================================================
 def get_stats(ids: Sequence[int], counts: Optional[Dict[Tuple[int, int], int]] = None) -> Dict[Tuple[int, int], int]:
+    # 如果没有传入counts，新建空字典；否则复用传入的字典实现累加
     counts = counts if counts is not None else {}
+    # 遍历ids，取每一组相邻id对
     for i in range(len(ids) - 1):
+        # 取出相邻两个id，组成pair元组作为key
         pair = (ids[i], ids[i + 1])
+        # dict.get(key,默认值)，key不存在返回0，再+1计数
         counts[pair] = counts.get(pair, 0) + 1
+    # 返回统计好的pair频次字典
     return counts
 
-
+# ============================================================
+# 函数作用：序列内把所有相邻的(a,b)pair替换为new_id，从左到右非重叠替换
+# 阶段：【工具函数，训练阶段、推理阶段都调用】
+# 输入：ids：待处理id列表；pair：待合并(a,b)；new_id：合并后的新token id
+# 输出：List[int]，执行替换之后新的id列表
+# ============================================================
 def merge(ids: List[int], pair: Tuple[int, int], new_id: int) -> List[int]:
+    # 解包待合并的两个id
     a, b = pair
+    # 新建空列表存放输出结果
     out: List[int] = []
+    # i循环游标；n是输入序列总长度
     i, n = 0, len(ids)
+    # while循环遍历整个ids序列
     while i < n:
+        # 判断：不是最后一个元素，并且当前位置正好匹配(a,b)待合并pair
         if i < n - 1 and ids[i] == a and ids[i + 1] == b:
+            # 匹配成功，写入合并后的new_id
             out.append(new_id)
+            # 向后跳2位，跳过已经合并的两个元素（非重叠）
             i += 2
         else:
+            # 不匹配，直接把当前id原样写入输出
             out.append(ids[i])
+            # 游标向后走1位
             i += 1
+    # 返回完成合并后的新id序列
     return out
 
-
+# ============================================================
+# 函数作用：基于chunk频次加权统计pair；每个chunk_tuple乘上自身出现频次统计pair
+# 阶段：【工具函数，训练阶段train_bpe内部调用】
+# 输入：chunk_freqs：Dict[Tuple[int,...], int] key=chunk的id元组 value=该片段出现频次
+# 输出：Dict[Tuple[int,int], int]，全局pair加权计数字典
+# ============================================================
 def count_pairs_for_chunks(chunk_freqs: Dict[Tuple[int, ...], int]) -> Dict[Tuple[int, int], int]:
+    # 初始化空字典保存pair统计结果
     stats: Dict[Tuple[int, int], int] = {}
+    # 遍历每一个chunk元组，以及该chunk在语料中出现的频次freq
     for chunk_tuple, freq in chunk_freqs.items():
+        # 元组转list得到id序列
         ids = list(chunk_tuple)
+        # 遍历这个chunk内部全部相邻pair
         for i in range(len(ids) - 1):
+            # 取出相邻id对
             p = (ids[i], ids[i + 1])
+            # 加权累加：这个chunk出现freq次，所以pair计数 += freq，而不是+1
             stats[p] = stats.get(p, 0) + freq
+    # 返回加权统计后的pair频次
     return stats
 
-
+# ============================================================
+# 函数作用：BPE主训练逻辑，输入原始语料，迭代多轮merge生成vocab与merges表
+# 阶段：【训练阶段】
+# 输入：text_corpus：训练原始大语料字符串；num_merges：要执行多少轮合并；pattern：预分词正则
+# 输出：(vocab, merges)
+#       vocab:Dict[int,bytes] key=token_id value=对应字节；merges:List[(left,right,new_id)]合并规则列表
+# ============================================================
 def train_bpe(text_corpus: str, num_merges: int, pattern: re.Pattern = GPT2_SPLIT_PATTERN):
+    # 字典：key是chunk的id元组，value是该片段出现次数；Counter专门做计数
     chunk_freqs: Dict[Tuple[int, ...], int] = Counter()
+    # 正则遍历语料所有预分词chunk
     for m in pattern.finditer(text_corpus):
+        # 将chunk字符串转为字节id列表，再转元组（list不能做字典key，tuple可以）
         t = tuple(bytes_to_ids(m.group(0)))
+        # 该chunk计数+1
         chunk_freqs[t] += 1
 
+    # 初始化词表：0~255分别对应单个原始字节
     vocab: Dict[int, bytes] = {i: bytes([i]) for i in range(256)}
+    # merges保存所有合并规则：(左id,右id,新生成id)
     merges: List[Tuple[int, int, int]] = []
+    # 第一个新token id从256开始，0‑255是原始字节
     next_id = 256
 
+    # 循环num_merges次，执行指定轮数的BPE合并
     for _ in range(num_merges):
+        # 加权统计当前所有chunk上的pair频次
         pair_stats = count_pairs_for_chunks(chunk_freqs)
+        # 如果没有任何pair可以合并，提前退出循环
         if not pair_stats:
             break
-        best_pair = max(pair_stats.items(), key=lambda kv: (kv[1], kv[0]))[0]
+        # 同频时比较原始字节串二元组，选最大者；不能直接比较 token ID
+        best_pair = max(pair_stats, key=lambda p: (pair_stats[p], (vocab[p[0]], vocab[p[1]])))
+        # 解包本轮要合并的两个id
         left, right = best_pair
-        new_chunk_freqs: Dict[Tuple[int, ...], int] = defaultdict(int)
-        for chunk_tuple, freq in chunk_freqs.items():
-            merged = merge(list(chunk_tuple), best_pair, next_id)
-            new_chunk_freqs[tuple(merged)] += freq
-        chunk_freqs = dict(new_chunk_freqs)
-        vocab[next_id] = vocab[left] + vocab[right]
-        merges.append((left, right, next_id))
-        next_id += 1
 
+        # defaultdict(int) key不存在时默认value=0，用于保存合并之后新chunk的频次
+        new_chunk_freqs: Dict[Tuple[int, ...], int] = defaultdict(int)
+        # 遍历全部旧chunk，逐个执行merge
+        for chunk_tuple, freq in chunk_freqs.items():
+            # 对当前chunk执行一次best_pair合并
+            merged = merge(list(chunk_tuple), best_pair, next_id)
+            # 合并后的id列表转为tuple，累加到新的频次字典，带上原来的freq
+            new_chunk_freqs[tuple(merged)] += freq
+        # 更新chunk_freqs为本轮全部合并完成后的结果
+        chunk_freqs = dict(new_chunk_freqs)
+
+        # 更新词表：新token的bytes等于左右两个token的bytes拼接
+        vocab[next_id] = vocab[left] + vocab[right]
+        # 将本轮合并规则记录进merges列表
+        merges.append((left, right, next_id))
+        # id自增，下一轮使用下一个id
+        next_id += 1
+    # 返回训练产物：词表、合并规则
     return vocab, merges
 
-
+# ============================================================
+# 函数作用：构建pair→rank字典，rank越小代表越早训练生成，推理要优先合并
+# 阶段：【工具函数，推理阶段使用】
+# 输入：merges：训练输出的合并规则列表 List[(a,b,nid)]
+# 输出：Dict[Tuple[int,int], int] pair对应合并优先级rank
+# ============================================================
 def build_merge_ranks(merges: List[Tuple[int, int, int]]) -> Dict[Tuple[int, int], int]:
+    # enumerate拿到merges下标r(就是rank)和每一条(a,b,_)；pair做key，rank做value
     return {(a, b): r for r, (a, b, _) in enumerate(merges)}
 
-
+# ============================================================
+# 函数作用：单chunk BPE合并实现；每轮扫描选rank最小pair合并；同rank取最左位置
+# 阶段：【推理阶段】
+# 输入：ids：单个预分词chunk的原始字节id列表；merges：训练产出合并规则
+# 输出：List[int]，BPE合并完成后的子词token id序列
+# ============================================================
 def encode_piece_by_rank(ids: List[int], merges: List[Tuple[int, int, int]]) -> List[int]:
+    # 构建pair到new_id的映射，方便查到合并后的id
     pair_to_new = {(a, b): nid for a, b, nid in merges}
+    # 构建合并优先级rank字典
     merge_ranks = build_merge_ranks(merges)
+    # 拷贝输入序列，不修改原输入
     seq = ids[:]
+
+    # 循环：不断找当前序列中可以合并的最优pair，直到没有可合并pair
     while True:
+        # best_rank记录当前最优合并的优先级；pos记录位置，初始None代表无
         best_rank, pos = None, None
+        # 遍历当前seq，查找全部可合并pair
         for i in range(len(seq) - 1):
+            # 取出当前相邻pair
             p = (seq[i], seq[i + 1])
+            # 如果这个pair不在merges规则里，跳过
             if p not in merge_ranks:
                 continue
+            # 获取该pair的合并优先级rank
             r = merge_ranks[p]
+            # 如果还没有选pair，或者当前pair rank更小，或者rank相等位置更靠左，则更新最优
             if best_rank is None or r < best_rank or (r == best_rank and pos is not None and i < pos):
                 best_rank, pos = r, i
+        # best_rank/pos为None，代表没有可以合并的pair，跳出while循环
         if best_rank is None or pos is None:
             break
+        # 获取要合并的pair
         p = (seq[pos], seq[pos + 1])
+        # 根据pair查到合并后的new_id
         new_id = pair_to_new[p]
+        # 切片替换：pos位置两个元素替换成new_id，生成新序列
         seq = seq[:pos] + [new_id] + seq[pos + 2 :]
+    # 返回反复合并完成后的token id序列
     return seq
 
-
+# ============================================================
+# 函数作用：单chunk BPE合并实现，按merges列表顺序逐条执行全部合并规则
+# 阶段：【推理阶段】
+# 输入：ids：单个预分词chunk原始字节id列表；merges：训练产出合并规则
+# 输出：List[int]，BPE合并完成后的子词token id序列
+# ============================================================
 def encode_piece_sequential(ids: List[int], merges: List[Tuple[int, int, int]]) -> List[int]:
+    # 拷贝输入序列，不改动外部传入的ids
     seq = ids[:]
+    # 按merges训练生成的顺序，逐条取出合并规则
     for left, right, new_id in merges:
+        # 调用merge函数：在整个seq上把所有(left,right)替换成new_id，得到新seq
         seq = merge(seq, (left, right), new_id)
+    # 全部规则应用完毕，返回结果
     return seq
 
-
+# ============================================================
+# 函数作用：完整文本BPE编码对外入口：预分词→逐chunk转字节id→逐chunkBPE合并→拼接结果
+# 阶段：【推理阶段】
+# 输入：text：待编码原始字符串；merges：训练得到合并规则；pattern：GPT2预分词正则
+# 输出：List[int]，整篇文本编码后的完整token id序列
+# ============================================================
 def bpe_encode(text: str, merges: List[Tuple[int, int, int]], pattern: re.Pattern = GPT2_SPLIT_PATTERN) -> List[int]:
+    # 初始化空列表保存整篇文本所有token id
     out: List[int] = []
+    # 对输入文本做GPT‑2预分词，遍历每一个chunk片段
     for piece in pretokenize_gpt2(text):
+        # piece字符串转字节id列表；调用encode_piece_sequential做BPE合并；extend把结果追加到out
         out.extend(encode_piece_sequential(bytes_to_ids(piece), merges))
+    # 返回整篇文本的token id序列
     return out
 
-
+# ============================================================
+# 函数作用：BPE解码，token id序列还原回原始字符串
+# 阶段：【推理阶段】
+# 输入：ids：待解码token id序列；vocab：词表字典 key=token_id value=bytes
+# 输出：str，还原得到字符串；非法字节自动替换为�不抛异常
+# ============================================================
 def bpe_decode(ids: Sequence[int], vocab: Dict[int, bytes]) -> str:
+    # 1.遍历ids，每个id查表vocab拿到对应的bytes对象
+    # 2.b"".join把所有小bytes拼接成一整个大bytes
+    # 3.decode("utf‑8")转为字符串；errors="replace"遇到非法字节不会崩溃，替换为�符号
     return b"".join(vocab[i] for i in ids).decode("utf-8", errors="replace")
 
-
+# ============================================================
+# 函数作用：多进程worker子进程，统计给定一批文本行内部pair局部频次
+# 阶段：【训练阶段，仅被parallel_count_pairs调用】
+# 输入：lines：分给当前worker的一批文本行；pattern：预分词正则
+# 输出：Dict[Tuple[int,int], int]，本分片pair局部计数字典
+# ============================================================
 def worker_count_pairs(lines: List[str], pattern: re.Pattern) -> Dict[Tuple[int, int], int]:
+    # 本worker分片内pair的局部计数字典
     local: Dict[Tuple[int, int], int] = {}
+    # 遍历分配给本进程的每一行文本
     for line in lines:
+        # 正则预分词，遍历该行切分出的每一个chunk
         for m in pattern.finditer(line):
+            # chunk字符串转为字节id列表
             ids = bytes_to_ids(m.group(0))
+            # 遍历chunk全部相邻id对
             for i in range(len(ids) - 1):
+                # 取出pair
                 p = (ids[i], ids[i + 1])
+                # 局部计数+1
                 local[p] = local.get(p, 0) + 1
+    # 返回本分片统计结果，交给主进程汇总
     return local
 
-
+# ============================================================
+# 函数作用：多进程并行统计全语料pair频次；切分语料分片给worker，汇总各进程计数
+# 阶段：【训练阶段】
+# 输入：corpus_lines：全部训练语料按行组成list；num_workers：进程数量；pattern：预分词正则
+# 输出：Dict[Tuple[int,int], int]，全语料汇总pair全局频次字典
+# ============================================================
 def parallel_count_pairs(
     corpus_lines: List[str], num_workers: int = 4, pattern: re.Pattern = GPT2_SPLIT_PATTERN
 ) -> Dict[Tuple[int, int], int]:
+    # 如果进程数≤1，不走多进程开销，直接单线程执行
     if num_workers <= 1:
         return worker_count_pairs(corpus_lines, pattern)
+    # 计算每个分片分配多少行；max(1, ...)防止总行数小于worker数时分片大小为0
     chunk_size = max(1, len(corpus_lines) // num_workers)
+    # 将全部语料切分成多个分片shard，每个shard交给一个worker
     shards = [corpus_lines[i : i + chunk_size] for i in range(0, len(corpus_lines), chunk_size)]
+    # 创建进程池，with退出时自动关闭进程池，释放资源
     with mp.Pool(num_workers) as pool:
+        # starmap把每个shard和pattern传入worker_count_pairs，并行执行，收集各个worker返回结果
         parts = pool.starmap(worker_count_pairs, [(s, pattern) for s in shards])
+    # 主进程全局总pair计数字典
     total: Dict[Tuple[int, int], int] = {}
+    # 遍历每一个worker返回的局部统计字典
     for d in parts:
+        # 遍历该worker的每一组(pair,频次)
         for k, v in d.items():
+            # 不同worker相同pair的计数累加，得到全局总频次
             total[k] = total.get(k, 0) + v
+    # 返回汇总完成的全局pair频次字典
     return total
 
-
+# ============================================================
+# 脚本主入口演示：训练BPE模型，再编码解码，断言校验无损还原
+# 阶段：【演示脚本，训练+推理链路完整跑通做验证】
+# 输入：脚本内置sample测试字符串，无外部入参
+# 输出：控制台打印token ids与OK；断言失败抛出AssertionError，无函数返回值
+# ============================================================
 if __name__ == "__main__":
+    # 测试样例文本，包含重复英文、中文，覆盖ASCII与UTF‑8多字节字符
     sample = "hello hello hello 你好"
+    # 执行BPE训练，做10轮合并，得到词表vocab、合并规则merges
     vocab, merges = train_bpe(sample, num_merges=10)
+    # 使用训练好的merges对sample文本做推理编码，得到token id序列
     ids = bpe_encode(sample, merges)
+    # 解码id序列还原字符串；断言：解码结果必须等于原始sample，不等直接抛AssertionError
     assert bpe_decode(ids, vocab) == sample
+    # 在控制台打印编码得到的token ids
     print("token ids:", ids)
+    # 断言没有报错，打印OK，代表整套链路运行正常
     print("OK")
+
 ```
 
 **说明**：`encode_piece_sequential` 按 `merges` 顺序逐条合并；`encode_piece_by_rank` 为等价实现。`parallel_count_pairs` 用于大语料**分块统计 pair**，主进程合并 Counter 后再选 `best_pair` 并与单进程训练逻辑对齐。
@@ -1297,23 +2519,51 @@ if __name__ == "__main__":
 3. **哈希表**：`(a,b) -> rank` 与 `(a,b) -> new_id`。
 4. **原生实现**：tiktoken / Rust 后端。
 
-**复杂度（朴素）**：训练约 \(O(M \cdot T)\)，编码约 \(O(L \cdot M)\)（\(M\) 为合并条数）。
+**复杂度（朴素实现）**
+
+- $M$：合并条数（`num_merges`），即训练做了多少轮 merge。
+- $T$：训练语料所有片段的总长度（按字节/token 计）。
+- $L$：待编码序列的长度（按字节/token 计）。
+
+**训练：$O(M \cdot T)$**
+
+- 每轮：扫一遍全部片段，统计相邻对频次 → $O(T)$；再扫一遍应用 merge → $O(T)$。
+- 共 $M$ 轮，所以 $O(M \cdot T)$。
+
+**编码：$O(L \cdot M)$**
+
+- 按训练顺序逐条应用 merge，每条规则扫一遍当前序列 → $O(L)$。
+- 共 $M$ 条规则，所以 $O(L \cdot M)$。
+
+**为什么叫“朴素”**
+
+- 每轮/每条规则都全量重扫。
+- 优化版：训练用优先队列 + 增量更新；编码用 `pair → rank` 表选择当前可合并 pair。rank 表只减少规则查询成本，不会自动变成单次扫描；本节逐次重扫的 rank 版最坏仍为 $O(L^2)$。链表配合优先队列的编码在常见假设下可达 $O(L\log L)$（不含 rank 表预处理）。
+- 教学代码为直观，用朴素版。
+
+**一句话记**
+训练是“$M$ 轮 × 全语料 $T$”，编码是“$M$ 条规则 × 全序列 $L$”。
 
 ---
 
 ## 七、常见现象解释
 
-### 7.1 Why numbers get split oddly（"12345" → "12" "34" "5"）
+### 7.1 为什么数字会被拆成多个 token？
 
-数字被预分词为片段后，由**字节级合并统计**决定子词，不是按十进制数位。
+数字的切分同时受预分词正则与合并词表影响。本节 GPT-2 正则将连续数字作为片段，再按 BPE 合并；其他 tokenizer 可能先限制每个数字片段的位数。`12345 → 12 / 34 / 5` 只是可能的示例，不是固定规则。
 
 ### 7.2 Why same word tokenizes differently with/without leading space
 
-GPT-2 风格正则把「可选空格 + 词」绑在一起，`hello` 与 ` hello` 是不同片段。
+GPT-2 风格正则把「可选空格 + 词」绑在一起，`hello` 与 `  hello  ` 是不同片段。
 
 ### 7.3 Why Chinese uses more tokens than English（UTF-8 encoding）
 
-汉字多为 **3 字节**；英文 ASCII 多为 **1 字节**；再加英文语料上合并偏置，中文往往 **token 更多**。
+**中文 token 为什么比英文多（UTF-8）**
+
+1. **字节起点不同**：汉字 UTF-8 多为 3 字节，英文 ASCII 多为 1 字节，同样一个字/字母，中文占的字节数就多。
+2. **语料偏置**：训练语料英文占多数，高频字节对偏英文，英文被大量合并成短 token；中文对 rank 靠后、合并机会少，更多以字节形式保留。
+
+两条叠加 → 中文 token 更多。
 
 ---
 
@@ -1323,7 +2573,7 @@ GPT-2 风格正则把「可选空格 + 词」绑在一起，`hello` 与 ` hello`
 |---------|-----|-----------|----------------|
 | **合并准则** | 相邻对 **频次** 最高 | 似然类目标（依实现） | 可配 **BPE 或 Unigram** |
 | **空白与多语** | 依赖预分词 | 子词 + `##` 等 | 空白可编码，**不依赖英文空格** |
-| **初始单元** | 常为 **256 字节** | 子词/字符混合 | 句子级端到端 |
+| **初始单元** | 字节级 BPE 为 **256 字节** | 通常从字符等基本符号开始 | 通常为 Unicode 字符，可选 byte fallback；算法可为 BPE 或 Unigram |
 | **典型模型** | GPT、Llama 等 | BERT 系 | T5、多语模型等 |
 
 **补充**：SentencePiece 是**工具/流程**；内部可跑 BPE 或 Unigram。WordPiece 与 BPE 的**目标函数**不同，面试常考。
@@ -1334,7 +2584,7 @@ GPT-2 风格正则把「可选空格 + 词」绑在一起，`hello` 与 ` hello`
 
 ### 1. BPE 分词器的训练流程是什么？
 
-**答**：预分词 → 片段转 UTF-8 字节 → 加权统计相邻对 → 选频次最高对（平局字典序）→ 新 ID 并全局应用合并 → 重复至目标词表。推理时用相同预分词与 `merges`。
+**答**：预分词 → 片段转 UTF-8 字节 → 加权统计相邻对 → 选频次最高对（平局字典序）→ 生成新 ID 并全局应用合并 → 重复至目标词表。推理时用相同预分词与 `merges`。
 
 ### 2. 字节级 BPE 相比字符级 BPE 有什么优势？
 
@@ -1342,7 +2592,22 @@ GPT-2 风格正则把「可选空格 + 词」绑在一起，`hello` 与 ` hello`
 
 ### 3. BPE 的时间复杂度是多少？如何优化？
 
-**答**：朴素 \(O(M \cdot T)\) 量级；优化为增量统计、并行 map-reduce、`merge_ranks` 哈希、原生代码。
+**朴素复杂度**
+- 训练：$O(M \cdot T)$
+  - $M$：merge 条数；$T$：语料总长度。
+  - 每轮全量重扫统计 + 应用合并，共 $M$ 轮。
+- 编码：$O(L \cdot M)$
+  - $L$：待编码序列长度。
+  - 逐条应用 merge，每条扫一遍序列，共 $M$ 条。
+
+**优化手段**
+1. **增量统计**：只更新受合并影响的局部 pair 频次，不每轮全量重扫。具体复杂度取决于合并次数、索引与优先队列实现，不能统一保证 $O(T\log T)$。
+2. **并行 map-reduce**：分片统计 pair 频次，再合并结果（代码里的 `parallel_count_pairs`）。
+3. **`merge_ranks` 哈希**：`pair → rank` 建表，编码时 $O(1)$ 查优先级，避免线性找规则。
+4. **原生代码**：热点用 C/C++/Rust 实现（如 HuggingFace `tokenizers`），减少 Python 开销。
+
+**一句话记**
+朴素是“每轮全量重扫”，优化靠“增量 + 并行 + 哈希 + 原生”。
 
 ### 4. 为什么中文在英文分词器中消耗更多 token？
 
@@ -1400,7 +2665,7 @@ GPT-2 风格正则把「可选空格 + 词」绑在一起，`hello` 与 ` hello`
 
 | 文档 | 说明 |
 |------|------|
-| [00-课程总览与学习路线](00-课程总览与学习路线.md) | CS336 全局路线图 |
+| [00-课程总览与学习路线](../docs/00-%E8%AF%BE%E7%A8%8B%E6%80%BB%E8%A7%88%E4%B8%8E%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF.md) | CS336 全局路线图 |
 | Assignment 1（Basics） | 常含 BPE + Transformer + 训练循环；实现须与作业说明中的 **tie-break、预分词** 完全一致 |
 
 **结语**：把**初始化—预分词—统计—合并—编解码**闭环跑通一次，面试会轻松很多。
@@ -1436,7 +2701,7 @@ GPT-2 风格正则把「可选空格 + 词」绑在一起，`hello` 与 ` hello`
 | 1 | 训练流程？ | 见第十二节 |
 | 2 | 字节级原因？ | 256、无字符 OOV |
 | 3 | 中文 token？ | UTF-8 多字节 + 语料 |
-| 4 | 复杂度？ | 朴素 \(O(MT)\) 量级 |
+| 4 | 复杂度？ | 朴素 $O(MT)$ 量级 |
 | 5 | 优化？ | 并行统计、哈希、C++ |
 | 6 | vs WordPiece/Unigram？ | 频次 / 似然 / LM |
 | 7 | 预分词？ | 限制范围、空格附着 |
@@ -1445,412 +2710,6 @@ GPT-2 风格正则把「可选空格 + 词」绑在一起，`hello` 与 ` hello`
 | 10 | merge 顺序？ | 推理须与训练一致 |
 
 ---
-
-## 十四、扩展条目 1～400（行数扩展 · 扫读）
-1. BPE 扩展背诵条目第 1 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-2. BPE 扩展背诵条目第 2 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-3. BPE 扩展背诵条目第 3 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-4. BPE 扩展背诵条目第 4 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-5. BPE 扩展背诵条目第 5 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-6. BPE 扩展背诵条目第 6 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-7. BPE 扩展背诵条目第 7 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-8. BPE 扩展背诵条目第 8 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-9. BPE 扩展背诵条目第 9 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-10. BPE 扩展背诵条目第 10 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-11. BPE 扩展背诵条目第 11 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-12. BPE 扩展背诵条目第 12 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-13. BPE 扩展背诵条目第 13 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-14. BPE 扩展背诵条目第 14 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-15. BPE 扩展背诵条目第 15 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-16. BPE 扩展背诵条目第 16 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-17. BPE 扩展背诵条目第 17 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-18. BPE 扩展背诵条目第 18 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-19. BPE 扩展背诵条目第 19 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-20. BPE 扩展背诵条目第 20 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-21. BPE 扩展背诵条目第 21 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-22. BPE 扩展背诵条目第 22 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-23. BPE 扩展背诵条目第 23 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-24. BPE 扩展背诵条目第 24 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-25. BPE 扩展背诵条目第 25 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-26. BPE 扩展背诵条目第 26 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-27. BPE 扩展背诵条目第 27 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-28. BPE 扩展背诵条目第 28 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-29. BPE 扩展背诵条目第 29 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-30. BPE 扩展背诵条目第 30 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-31. BPE 扩展背诵条目第 31 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-32. BPE 扩展背诵条目第 32 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-33. BPE 扩展背诵条目第 33 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-34. BPE 扩展背诵条目第 34 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-35. BPE 扩展背诵条目第 35 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-36. BPE 扩展背诵条目第 36 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-37. BPE 扩展背诵条目第 37 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-38. BPE 扩展背诵条目第 38 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-39. BPE 扩展背诵条目第 39 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-40. BPE 扩展背诵条目第 40 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-41. BPE 扩展背诵条目第 41 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-42. BPE 扩展背诵条目第 42 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-43. BPE 扩展背诵条目第 43 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-44. BPE 扩展背诵条目第 44 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-45. BPE 扩展背诵条目第 45 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-46. BPE 扩展背诵条目第 46 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-47. BPE 扩展背诵条目第 47 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-48. BPE 扩展背诵条目第 48 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-49. BPE 扩展背诵条目第 49 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-50. BPE 扩展背诵条目第 50 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-51. BPE 扩展背诵条目第 51 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-52. BPE 扩展背诵条目第 52 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-53. BPE 扩展背诵条目第 53 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-54. BPE 扩展背诵条目第 54 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-55. BPE 扩展背诵条目第 55 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-56. BPE 扩展背诵条目第 56 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-57. BPE 扩展背诵条目第 57 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-58. BPE 扩展背诵条目第 58 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-59. BPE 扩展背诵条目第 59 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-60. BPE 扩展背诵条目第 60 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-61. BPE 扩展背诵条目第 61 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-62. BPE 扩展背诵条目第 62 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-63. BPE 扩展背诵条目第 63 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-64. BPE 扩展背诵条目第 64 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-65. BPE 扩展背诵条目第 65 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-66. BPE 扩展背诵条目第 66 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-67. BPE 扩展背诵条目第 67 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-68. BPE 扩展背诵条目第 68 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-69. BPE 扩展背诵条目第 69 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-70. BPE 扩展背诵条目第 70 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-71. BPE 扩展背诵条目第 71 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-72. BPE 扩展背诵条目第 72 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-73. BPE 扩展背诵条目第 73 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-74. BPE 扩展背诵条目第 74 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-75. BPE 扩展背诵条目第 75 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-76. BPE 扩展背诵条目第 76 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-77. BPE 扩展背诵条目第 77 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-78. BPE 扩展背诵条目第 78 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-79. BPE 扩展背诵条目第 79 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-80. BPE 扩展背诵条目第 80 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-81. BPE 扩展背诵条目第 81 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-82. BPE 扩展背诵条目第 82 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-83. BPE 扩展背诵条目第 83 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-84. BPE 扩展背诵条目第 84 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-85. BPE 扩展背诵条目第 85 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-86. BPE 扩展背诵条目第 86 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-87. BPE 扩展背诵条目第 87 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-88. BPE 扩展背诵条目第 88 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-89. BPE 扩展背诵条目第 89 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-90. BPE 扩展背诵条目第 90 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-91. BPE 扩展背诵条目第 91 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-92. BPE 扩展背诵条目第 92 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-93. BPE 扩展背诵条目第 93 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-94. BPE 扩展背诵条目第 94 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-95. BPE 扩展背诵条目第 95 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-96. BPE 扩展背诵条目第 96 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-97. BPE 扩展背诵条目第 97 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-98. BPE 扩展背诵条目第 98 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-99. BPE 扩展背诵条目第 99 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-100. BPE 扩展背诵条目第 100 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-101. BPE 扩展背诵条目第 101 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-102. BPE 扩展背诵条目第 102 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-103. BPE 扩展背诵条目第 103 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-104. BPE 扩展背诵条目第 104 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-105. BPE 扩展背诵条目第 105 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-106. BPE 扩展背诵条目第 106 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-107. BPE 扩展背诵条目第 107 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-108. BPE 扩展背诵条目第 108 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-109. BPE 扩展背诵条目第 109 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-110. BPE 扩展背诵条目第 110 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-111. BPE 扩展背诵条目第 111 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-112. BPE 扩展背诵条目第 112 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-113. BPE 扩展背诵条目第 113 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-114. BPE 扩展背诵条目第 114 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-115. BPE 扩展背诵条目第 115 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-116. BPE 扩展背诵条目第 116 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-117. BPE 扩展背诵条目第 117 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-118. BPE 扩展背诵条目第 118 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-119. BPE 扩展背诵条目第 119 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-120. BPE 扩展背诵条目第 120 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-121. BPE 扩展背诵条目第 121 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-122. BPE 扩展背诵条目第 122 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-123. BPE 扩展背诵条目第 123 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-124. BPE 扩展背诵条目第 124 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-125. BPE 扩展背诵条目第 125 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-126. BPE 扩展背诵条目第 126 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-127. BPE 扩展背诵条目第 127 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-128. BPE 扩展背诵条目第 128 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-129. BPE 扩展背诵条目第 129 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-130. BPE 扩展背诵条目第 130 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-131. BPE 扩展背诵条目第 131 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-132. BPE 扩展背诵条目第 132 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-133. BPE 扩展背诵条目第 133 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-134. BPE 扩展背诵条目第 134 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-135. BPE 扩展背诵条目第 135 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-136. BPE 扩展背诵条目第 136 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-137. BPE 扩展背诵条目第 137 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-138. BPE 扩展背诵条目第 138 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-139. BPE 扩展背诵条目第 139 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-140. BPE 扩展背诵条目第 140 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-141. BPE 扩展背诵条目第 141 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-142. BPE 扩展背诵条目第 142 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-143. BPE 扩展背诵条目第 143 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-144. BPE 扩展背诵条目第 144 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-145. BPE 扩展背诵条目第 145 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-146. BPE 扩展背诵条目第 146 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-147. BPE 扩展背诵条目第 147 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-148. BPE 扩展背诵条目第 148 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-149. BPE 扩展背诵条目第 149 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-150. BPE 扩展背诵条目第 150 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-151. BPE 扩展背诵条目第 151 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-152. BPE 扩展背诵条目第 152 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-153. BPE 扩展背诵条目第 153 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-154. BPE 扩展背诵条目第 154 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-155. BPE 扩展背诵条目第 155 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-156. BPE 扩展背诵条目第 156 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-157. BPE 扩展背诵条目第 157 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-158. BPE 扩展背诵条目第 158 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-159. BPE 扩展背诵条目第 159 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-160. BPE 扩展背诵条目第 160 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-161. BPE 扩展背诵条目第 161 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-162. BPE 扩展背诵条目第 162 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-163. BPE 扩展背诵条目第 163 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-164. BPE 扩展背诵条目第 164 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-165. BPE 扩展背诵条目第 165 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-166. BPE 扩展背诵条目第 166 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-167. BPE 扩展背诵条目第 167 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-168. BPE 扩展背诵条目第 168 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-169. BPE 扩展背诵条目第 169 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-170. BPE 扩展背诵条目第 170 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-171. BPE 扩展背诵条目第 171 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-172. BPE 扩展背诵条目第 172 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-173. BPE 扩展背诵条目第 173 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-174. BPE 扩展背诵条目第 174 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-175. BPE 扩展背诵条目第 175 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-176. BPE 扩展背诵条目第 176 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-177. BPE 扩展背诵条目第 177 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-178. BPE 扩展背诵条目第 178 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-179. BPE 扩展背诵条目第 179 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-180. BPE 扩展背诵条目第 180 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-181. BPE 扩展背诵条目第 181 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-182. BPE 扩展背诵条目第 182 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-183. BPE 扩展背诵条目第 183 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-184. BPE 扩展背诵条目第 184 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-185. BPE 扩展背诵条目第 185 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-186. BPE 扩展背诵条目第 186 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-187. BPE 扩展背诵条目第 187 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-188. BPE 扩展背诵条目第 188 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-189. BPE 扩展背诵条目第 189 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-190. BPE 扩展背诵条目第 190 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-191. BPE 扩展背诵条目第 191 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-192. BPE 扩展背诵条目第 192 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-193. BPE 扩展背诵条目第 193 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-194. BPE 扩展背诵条目第 194 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-195. BPE 扩展背诵条目第 195 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-196. BPE 扩展背诵条目第 196 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-197. BPE 扩展背诵条目第 197 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-198. BPE 扩展背诵条目第 198 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-199. BPE 扩展背诵条目第 199 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-200. BPE 扩展背诵条目第 200 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-201. BPE 扩展背诵条目第 201 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-202. BPE 扩展背诵条目第 202 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-203. BPE 扩展背诵条目第 203 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-204. BPE 扩展背诵条目第 204 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-205. BPE 扩展背诵条目第 205 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-206. BPE 扩展背诵条目第 206 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-207. BPE 扩展背诵条目第 207 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-208. BPE 扩展背诵条目第 208 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-209. BPE 扩展背诵条目第 209 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-210. BPE 扩展背诵条目第 210 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-211. BPE 扩展背诵条目第 211 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-212. BPE 扩展背诵条目第 212 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-213. BPE 扩展背诵条目第 213 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-214. BPE 扩展背诵条目第 214 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-215. BPE 扩展背诵条目第 215 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-216. BPE 扩展背诵条目第 216 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-217. BPE 扩展背诵条目第 217 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-218. BPE 扩展背诵条目第 218 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-219. BPE 扩展背诵条目第 219 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-220. BPE 扩展背诵条目第 220 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-221. BPE 扩展背诵条目第 221 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-222. BPE 扩展背诵条目第 222 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-223. BPE 扩展背诵条目第 223 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-224. BPE 扩展背诵条目第 224 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-225. BPE 扩展背诵条目第 225 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-226. BPE 扩展背诵条目第 226 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-227. BPE 扩展背诵条目第 227 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-228. BPE 扩展背诵条目第 228 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-229. BPE 扩展背诵条目第 229 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-230. BPE 扩展背诵条目第 230 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-231. BPE 扩展背诵条目第 231 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-232. BPE 扩展背诵条目第 232 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-233. BPE 扩展背诵条目第 233 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-234. BPE 扩展背诵条目第 234 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-235. BPE 扩展背诵条目第 235 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-236. BPE 扩展背诵条目第 236 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-237. BPE 扩展背诵条目第 237 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-238. BPE 扩展背诵条目第 238 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-239. BPE 扩展背诵条目第 239 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-240. BPE 扩展背诵条目第 240 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-241. BPE 扩展背诵条目第 241 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-242. BPE 扩展背诵条目第 242 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-243. BPE 扩展背诵条目第 243 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-244. BPE 扩展背诵条目第 244 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-245. BPE 扩展背诵条目第 245 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-246. BPE 扩展背诵条目第 246 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-247. BPE 扩展背诵条目第 247 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-248. BPE 扩展背诵条目第 248 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-249. BPE 扩展背诵条目第 249 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-250. BPE 扩展背诵条目第 250 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-251. BPE 扩展背诵条目第 251 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-252. BPE 扩展背诵条目第 252 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-253. BPE 扩展背诵条目第 253 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-254. BPE 扩展背诵条目第 254 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-255. BPE 扩展背诵条目第 255 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-256. BPE 扩展背诵条目第 256 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-257. BPE 扩展背诵条目第 257 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-258. BPE 扩展背诵条目第 258 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-259. BPE 扩展背诵条目第 259 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-260. BPE 扩展背诵条目第 260 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-261. BPE 扩展背诵条目第 261 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-262. BPE 扩展背诵条目第 262 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-263. BPE 扩展背诵条目第 263 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-264. BPE 扩展背诵条目第 264 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-265. BPE 扩展背诵条目第 265 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-266. BPE 扩展背诵条目第 266 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-267. BPE 扩展背诵条目第 267 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-268. BPE 扩展背诵条目第 268 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-269. BPE 扩展背诵条目第 269 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-270. BPE 扩展背诵条目第 270 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-271. BPE 扩展背诵条目第 271 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-272. BPE 扩展背诵条目第 272 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-273. BPE 扩展背诵条目第 273 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-274. BPE 扩展背诵条目第 274 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-275. BPE 扩展背诵条目第 275 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-276. BPE 扩展背诵条目第 276 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-277. BPE 扩展背诵条目第 277 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-278. BPE 扩展背诵条目第 278 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-279. BPE 扩展背诵条目第 279 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-280. BPE 扩展背诵条目第 280 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-281. BPE 扩展背诵条目第 281 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-282. BPE 扩展背诵条目第 282 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-283. BPE 扩展背诵条目第 283 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-284. BPE 扩展背诵条目第 284 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-285. BPE 扩展背诵条目第 285 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-286. BPE 扩展背诵条目第 286 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-287. BPE 扩展背诵条目第 287 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-288. BPE 扩展背诵条目第 288 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-289. BPE 扩展背诵条目第 289 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-290. BPE 扩展背诵条目第 290 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-291. BPE 扩展背诵条目第 291 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-292. BPE 扩展背诵条目第 292 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-293. BPE 扩展背诵条目第 293 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-294. BPE 扩展背诵条目第 294 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-295. BPE 扩展背诵条目第 295 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-296. BPE 扩展背诵条目第 296 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-297. BPE 扩展背诵条目第 297 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-298. BPE 扩展背诵条目第 298 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-299. BPE 扩展背诵条目第 299 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-300. BPE 扩展背诵条目第 300 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-301. BPE 扩展背诵条目第 301 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-302. BPE 扩展背诵条目第 302 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-303. BPE 扩展背诵条目第 303 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-304. BPE 扩展背诵条目第 304 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-305. BPE 扩展背诵条目第 305 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-306. BPE 扩展背诵条目第 306 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-307. BPE 扩展背诵条目第 307 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-308. BPE 扩展背诵条目第 308 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-309. BPE 扩展背诵条目第 309 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-310. BPE 扩展背诵条目第 310 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-311. BPE 扩展背诵条目第 311 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-312. BPE 扩展背诵条目第 312 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-313. BPE 扩展背诵条目第 313 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-314. BPE 扩展背诵条目第 314 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-315. BPE 扩展背诵条目第 315 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-316. BPE 扩展背诵条目第 316 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-317. BPE 扩展背诵条目第 317 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-318. BPE 扩展背诵条目第 318 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-319. BPE 扩展背诵条目第 319 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-320. BPE 扩展背诵条目第 320 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-321. BPE 扩展背诵条目第 321 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-322. BPE 扩展背诵条目第 322 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-323. BPE 扩展背诵条目第 323 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-324. BPE 扩展背诵条目第 324 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-325. BPE 扩展背诵条目第 325 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-326. BPE 扩展背诵条目第 326 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-327. BPE 扩展背诵条目第 327 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-328. BPE 扩展背诵条目第 328 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-329. BPE 扩展背诵条目第 329 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-330. BPE 扩展背诵条目第 330 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-331. BPE 扩展背诵条目第 331 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-332. BPE 扩展背诵条目第 332 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-333. BPE 扩展背诵条目第 333 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-334. BPE 扩展背诵条目第 334 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-335. BPE 扩展背诵条目第 335 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-336. BPE 扩展背诵条目第 336 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-337. BPE 扩展背诵条目第 337 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-338. BPE 扩展背诵条目第 338 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-339. BPE 扩展背诵条目第 339 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-340. BPE 扩展背诵条目第 340 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-341. BPE 扩展背诵条目第 341 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-342. BPE 扩展背诵条目第 342 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-343. BPE 扩展背诵条目第 343 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-344. BPE 扩展背诵条目第 344 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-345. BPE 扩展背诵条目第 345 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-346. BPE 扩展背诵条目第 346 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-347. BPE 扩展背诵条目第 347 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-348. BPE 扩展背诵条目第 348 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-349. BPE 扩展背诵条目第 349 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-350. BPE 扩展背诵条目第 350 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-351. BPE 扩展背诵条目第 351 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-352. BPE 扩展背诵条目第 352 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-353. BPE 扩展背诵条目第 353 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-354. BPE 扩展背诵条目第 354 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-355. BPE 扩展背诵条目第 355 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-356. BPE 扩展背诵条目第 356 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-357. BPE 扩展背诵条目第 357 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-358. BPE 扩展背诵条目第 358 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-359. BPE 扩展背诵条目第 359 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-360. BPE 扩展背诵条目第 360 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-361. BPE 扩展背诵条目第 361 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-362. BPE 扩展背诵条目第 362 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-363. BPE 扩展背诵条目第 363 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-364. BPE 扩展背诵条目第 364 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-365. BPE 扩展背诵条目第 365 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-366. BPE 扩展背诵条目第 366 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-367. BPE 扩展背诵条目第 367 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-368. BPE 扩展背诵条目第 368 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-369. BPE 扩展背诵条目第 369 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-370. BPE 扩展背诵条目第 370 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-371. BPE 扩展背诵条目第 371 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-372. BPE 扩展背诵条目第 372 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-373. BPE 扩展背诵条目第 373 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-374. BPE 扩展背诵条目第 374 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-375. BPE 扩展背诵条目第 375 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-376. BPE 扩展背诵条目第 376 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-377. BPE 扩展背诵条目第 377 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-378. BPE 扩展背诵条目第 378 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-379. BPE 扩展背诵条目第 379 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-380. BPE 扩展背诵条目第 380 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-381. BPE 扩展背诵条目第 381 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-382. BPE 扩展背诵条目第 382 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-383. BPE 扩展背诵条目第 383 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-384. BPE 扩展背诵条目第 384 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-385. BPE 扩展背诵条目第 385 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-386. BPE 扩展背诵条目第 386 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-387. BPE 扩展背诵条目第 387 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-388. BPE 扩展背诵条目第 388 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-389. BPE 扩展背诵条目第 389 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-390. BPE 扩展背诵条目第 390 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-391. BPE 扩展背诵条目第 391 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-392. BPE 扩展背诵条目第 392 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-393. BPE 扩展背诵条目第 393 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-394. BPE 扩展背诵条目第 394 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-395. BPE 扩展背诵条目第 395 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-396. BPE 扩展背诵条目第 396 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-397. BPE 扩展背诵条目第 397 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-398. BPE 扩展背诵条目第 398 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-399. BPE 扩展背诵条目第 399 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-400. BPE 扩展背诵条目第 400 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-
----
-
-**【Lesson 02 全文完 · 800+ 行】**
 
 
 
@@ -1879,10 +2738,10 @@ GPT-2 风格正则把「可选空格 + 词」绑在一起，`hello` 与 ` hello`
 ### 1.2 学完本课你应该能回答
 
 - 「Attention Is All You Need」相对 RNN 的核心主张是什么？
-- Self-Attention 中 Q、K、V 如何一步步算出输出？为什么要除以 \(\sqrt{d_k}\)？
+- Self-Attention 中 Q、K、V 如何一步步算出输出？为什么要除以 $\sqrt{d_k}$？
 - 多头注意力与 FFN 分工是什么？Pre-Norm 与残差如何配合？
 - 因果掩码如何实现？与自回归训练、推理的关系？
-- 如何估算 \(L\) 层、维度 \(d\)、词表 \(V\) 下的参数量级？
+- 如何估算 $L$ 层、维度 $d$、词表 $V$ 下的参数量级？
 
 ### 1.3 预备知识
 
@@ -1906,7 +2765,7 @@ BPE 分词 ──→ 【本课：Transformer 块级架构】──→ 多头细�
 
 **序列建模的早期范式**
 
-- **RNN**：第 \(t\) 步隐藏状态 \(h_t\) 依赖 \(h_{t-1}\) 与当前输入 \(x_t\)，形成**时间上的递归**。信息沿时间步传递，**长距离依赖**需经过很多步，易出现**梯度消失/爆炸**。
+- **RNN**：第 $t$ 步隐藏状态 $h_t$ 依赖 $h_{t-1}$ 与当前输入 $x_t$，形成**时间上的递归**。信息沿时间步传递，**长距离依赖**需经过很多步，易出现**梯度消失/爆炸**。
 - **LSTM/GRU**：通过门控与记忆单元**缓解**长依赖与梯度问题，但本质仍是**逐步计算**，**时间步之间难以完全并行**（训练时虽有 Truncated BPTT 等技巧，但并行度仍受限）。
 
 **CNN 作为序列模型的补充**
@@ -2036,34 +2895,42 @@ Vaswani 等人在 **「Attention Is All You Need」**（NeurIPS 2017）中提出
 
 #### （1）Input Embedding 与位置信息
 
-- **Token Embedding**：查表矩阵 \(E \in \mathbb{R}^{V \times d}\)，第 \(i\) 个 token 得到 \(d\) 维向量。输出形状 `[B, n, d]`。
-- **为何需要位置编码**：Self-Attention 若只看内容向量，对位置**置换**缺乏区分能力（排列 token 顺序会得到相同的注意力结构）。必须注入**位置信息**（绝对正弦、可学习位置、**RoPE** 等，RoPE 在 Lesson 04 展开）。
-- **常见做法**：\(X = \text{TokEmb} + \text{PosEmb}\)（或 RoPE 作用于 Q/K）。
+- **Token Embedding**：查表矩阵 $E \in \mathbb{R}^{V \times d}$，第 $i$ 个 token 得到 $d$ 维向量。输出形状 `[B, n, d]`。
+- **为何需要位置编码**：无位置编码、也无固定因果掩码的 Self-Attention 对输入置换**等变**，不能仅凭内容区分顺序；置换后输出随之置换，而非原地不变。通常用绝对正弦、可学习位置或 **RoPE** 注入位置；因果掩码本身也提供顺序约束。
+- **常见做法**：$X = \text{TokEmb} + \text{PosEmb}$（或 RoPE 作用于 Q/K）。
 
 #### （2）Self-Attention 逐步推导（Q、K、V）
 
-对单头、忽略 batch，隐藏维度为 \(d\)，每头维度 \(d_k = d / H\)（\(H\) 为头数）。
+忽略 batch，输入隐藏维度为 $d$，头数为 $H$，以下推导多头注意力中的第 $h$ 个头。采用常见的 $d_k = d_v = d/H$ 设置；真正的单头情形对应 $H=1$、$d_k=d$。下文统一采用行向量/右乘权重的记法。
 
-1. **线性投影**：对输入 \(X \in \mathbb{R}^{n \times d}\)，  
-   \(Q = X W_Q,\quad K = X W_K,\quad V = X W_V\)，  
-   其中 \(W_Q, W_K, W_V \in \mathbb{R}^{d \times d}\)（多头时通常先投影到 \(d\) 再拆头）。
-2. **注意力分数**：\( \text{Scores} = Q K^\top \in \mathbb{R}^{n \times n}\)，第 \(i\) 行表示位置 \(i\) 对每个位置 \(j\) 的相似度。
-3. **缩放**：\( \text{Scores}' = \text{Scores} / \sqrt{d_k} \)。
-4. **掩码（Decoder）**：对**不允许 attend** 的位置（未来位置）将分数置为 \(-\infty\)，Softmax 后概率为 0。
-5. **Softmax（按行）**：\(A = \text{softmax}(\text{Scores}', \text{dim}=\text{last})\)，\(A \in \mathbb{R}^{n \times n}\)。
-6. **聚合**：输出 \(O = A V \in \mathbb{R}^{n \times d}\)。
-7. **输出投影**：\(O' = O W_O\)，\(W_O \in \mathbb{R}^{d \times d}\)。
+1. **线性投影**：对输入 $X \in \mathbb{R}^{n \times d}$，
+   $Q_h = X W_{Q,h},\quad K_h = X W_{K,h},\quad V_h = X W_{V,h}$，
+   其中 $W_{Q,h}, W_{K,h}, W_{V,h} \in \mathbb{R}^{d \times d_k}$，所以 $Q_h, K_h, V_h \in \mathbb{R}^{n \times d_k}$。工程上通常把各头投影合并为三个 $d \times d$ 矩阵，先投影到 $d$ 再拆头。
+2. **注意力分数**：$S_h = Q_h K_h^\top \in \mathbb{R}^{n \times n}$，第 $i$ 行表示位置 $i$ 对每个位置 $j$ 的相似度。
+3. **缩放**：$\widetilde{S}_h = S_h / \sqrt{d_k}$。
+4. **掩码（Decoder）**：使用加性掩码 $M$，允许位置取 $M_{ij}=0$，未来位置（$j>i$）取 $M_{ij}=-\infty$。Softmax 前加到缩放后的分数上，未来位置概率为 0。无掩码的 Encoder 注意力可取 $M=0$。
+5. **Softmax（按行）**：$A_h = \operatorname{softmax}(\widetilde{S}_h + M)$，$A_h \in \mathbb{R}^{n \times n}$；对每个查询位置，沿键位置维归一化。
+6. **聚合**：每头输出 $O_h = A_h V_h \in \mathbb{R}^{n \times d_k}$。
+7. **拼接与输出投影**：$O = \operatorname{Concat}(O_1,\ldots,O_H) \in \mathbb{R}^{n \times d}$，再计算 $O' = O W_O$，其中 $W_O \in \mathbb{R}^{d \times d}$。
+
+**每头的完整公式**：
+
+$$
+O_h = \operatorname{softmax}\left(\frac{Q_h K_h^\top}{\sqrt{d_k}} + M\right)V_h
+$$
+
+公式与投影维度可对照 [Attention Is All You Need，§3.2](https://arxiv.org/html/1706.03762v7#S3.SS2)。
 
 **直觉**：每个位置用**查询 Q** 去和**键 K** 匹配，得到权重，再对**值 V** 加权求和——即「按内容相关性」从全序列收集信息。
 
-#### （3）为什么要除以 \(\sqrt{d_k}\)？与 Softmax 饱和
+#### （3）为什么要除以 $\sqrt{d_k}$？与 Softmax 饱和
 
-- **方差稳定**：若 \(q, k\) 各分量近似零均值、有限方差，则点积 \(q^\top k\) 的方差随 \(d_k\) **线性增长**。除以 \(\sqrt{d_k}\) 使点积尺度**不随维度爆炸**，Softmax 不会过早进入**极端饱和区**。
-- **与梯度的关系**：Softmax 在输入**极大或极小**时梯度接近 0（饱和），不利于学习；缩放使 logits 保持在更温和的范围，**优化更稳定**。面试中可表述为：**避免点积过大导致 Softmax 几乎 one-hot、梯度消失**（与「梯度稳定」同一方向）。
+- **方差稳定**：在 $q, k$ 的各分量相互独立、零均值、方差为 1 的简化假设下，$\operatorname{Var}(q^\top k)=d_k$，而 $\operatorname{Var}(q^\top k/\sqrt{d_k})=1$。除以 $\sqrt{d_k}$ 使点积尺度**不随维度爆炸**，降低 Softmax 过早进入**极端饱和区**的风险。
+- **与梯度的关系**：Softmax 对所有 logits 加同一个常数并不敏感；真正导致饱和的是 **logits 的相对差距过大**，使概率几乎 one-hot、梯度接近 0。缩放有助于控制这种差距，**优化更稳定**，但不保证任何输入下都不会饱和。
 
 #### （4）Multi-Head Attention
 
-将 \(d\) 拆成 \(H\) 个头，每头独立一组 \(Q_h, K_h, V_h\)（维度 \(d_k = d/H\)），并行计算 \(H\) 个注意力，再 **concat** 并经 \(W_O\) 融合。
+将 $d$ 拆成 $H$ 个头，每头独立一组 $Q_h, K_h, V_h$（维度 $d_k = d/H$），并行计算 $H$ 个注意力，再 **concat** 并经 $W_O$ 融合。
 
 **直觉**：多头 = **多个子空间**上并行做「谁该看谁」，有的头偏句法、有的头偏共指等（具体模式由训练涌现）。
 
@@ -2071,22 +2938,22 @@ Vaswani 等人在 **「Attention Is All You Need」**（NeurIPS 2017）中提出
 
 每层通常对每个位置**独立**做两层 MLP：
 
-\[
-\text{FFN}(x) = W_2\,\sigma(W_1 x + b_1) + b_2
-\]
+$$
+\operatorname{FFN}(x) = \sigma(x W_1 + b_1) W_2 + b_2
+$$
 
-中间维度 \(d_{\text{ff}}\) 常取 **\(4d\)**。\(\sigma\) 常用 GELU/ReLU。
+这里 $x \in \mathbb{R}^{1 \times d}$，$W_1 \in \mathbb{R}^{d \times d_{\text{ff}}}$，$W_2 \in \mathbb{R}^{d_{\text{ff}} \times d}$，偏置按输出维广播。中间维度 $d_{\text{ff}}$ 常取 **$4d$**。$\sigma$ 常用 GELU/ReLU。
 
 **分工**：Attention **混合位置间信息**；FFN **在每个位置做强非线性变换**，常被视为**容量与记忆**的重要部分（教学类比，非严格证明）。
 
 #### （6）残差连接与 Layer Normalization
 
-- **残差**：\(x_{\text{out}} = x + \text{Sublayer}(x)\)（Pre-Norm 时子层输入先 LN）。提供近似**恒等路径**，利于梯度回传与**深层堆叠**。
+- **残差**：基本形式为 $x_{\text{out}} = x + \operatorname{Sublayer}(x)$；Pre-Norm 写作 $x_{\text{out}} = x + \operatorname{Sublayer}(\operatorname{LN}(x))$，Post-Norm 写作 $x_{\text{out}} = \operatorname{LN}(x + \operatorname{Sublayer}(x))$。残差提供**恒等路径**，利于梯度回传与**深层堆叠**。
 - **LayerNorm**：在**特征维**上归一化（Transformer 序列任务中通常对每个 token 向量归一），稳定激活分布。
 
 #### （7）输出投影与 Softmax
 
-最后一层隐藏状态 \(h \in \mathbb{R}^d\) 经 **LM Head** \(W_{\text{lm}} \in \mathbb{R}^{V \times d}\) 得 logits，再 Softmax 得词表上的概率分布。训练时常对**下一 token** 位置做交叉熵。
+最后一层隐藏状态按行向量记为 $h \in \mathbb{R}^{1 \times d}$。沿用 PyTorch 的权重存储形状，**LM Head** 的 $W_{\text{lm}} \in \mathbb{R}^{V \times d}$，无偏置时 $\text{logits} = h W_{\text{lm}}^\top \in \mathbb{R}^{1 \times V}$，再 Softmax 得词表上的概率分布。训练时常对**下一 token** 位置做交叉熵。
 
 ---
 
@@ -2094,12 +2961,12 @@ Vaswani 等人在 **「Attention Is All You Need」**（NeurIPS 2017）中提出
 
 **因果掩码（Causal / Lower-Triangular Mask）**
 
-- 位置 \(i\) 只能 attend \(j \le i\)。在 \(n \times n\) 注意力矩阵中，**禁止** \(j > i\) 的位置。
-- 实现：将 **上三角（不含对角）** 的 logits 置为 \(-\infty\)，Softmax 后这些位置权重为 0。
+- 位置 $i$ 只能 attend $j \le i$。在 $n \times n$ 注意力矩阵中，**禁止** $j > i$ 的位置。
+- 实现：将 **上三角（不含对角）** 的 logits 置为 $-\infty$，Softmax 后这些位置权重为 0。
 
 **自回归生成（Autoregressive）**
 
-- 生成第 \(t+1\) 个 token 时，仅依赖已生成的 \(1\ldots t\)。训练时**并行 teacher forcing** 在同一前向中计算所有位置，但每个位置的标签仍是「预测下一个 token」，与推理一致。
+- 生成第 $t+1$ 个 token 时，仅依赖已生成的 $1\ldots t$。训练时**并行 teacher forcing** 在同一前向中计算所有位置，但每个位置的标签仍是「预测下一个 token」，与推理一致。
 
 ---
 
@@ -2112,81 +2979,95 @@ Vaswani 等人在 **「Attention Is All You Need」**（NeurIPS 2017）中提出
 | **注意力** | 因果自注意力 | 双向自注意力 | 因果；常用 GQA、RoPE 等 | Encoder 双向 + Decoder 因果 + Cross-Attn |
 | **典型预训练目标** | Next-Token / 自回归 | MLM、NSP 等 | NTP（自回归） | Span Corruption 等 seq2seq |
 | **强项** | 生成、对话、通用 LM | 分类、检索、句向量 | 开源生态、推理优化多 | 翻译、摘要、文本到文本 |
-| **位置编码** | 可学习 / RoPE | 可学习片段 | **RoPE**（常见） | 相对位置等（依版本） |
+| **位置编码** | 可学习 / RoPE | 可学习绝对位置（另有 segment embedding） | **RoPE**（常见） | 相对位置等（依版本） |
 | **Norm/FFN** | 依代际不同 | LayerNorm + 标准 FFN | 常见 **RMSNorm + SwiGLU**（Lesson 05） | Pre-LN 等 |
 
 ---
 
 ### 2.7 模型参数量估算公式
 
-**记号**：\(V\) 词表，\(d\) 模型宽度，\(L\) 层数，\(d_{\text{ff}}\) FFN 中间维，注意力头数影响 \(d_k\) 但不改变 \(d\times d\) 投影的主项阶（标准 MHA 下）。
+**记号**：$V$ 词表，$d$ 模型宽度，$L$ 层数，$d_{\text{ff}}$ FFN 中间维，注意力头数影响 $d_k$ 但不改变 $d\times d$ 投影的主项阶（标准 MHA 下）。
+
+**适用假设**：以下估算针对 Decoder-only、标准 MHA、标准两矩阵 FFN，忽略 bias、Norm 和位置参数；不直接适用于含 Cross-Attention 的 Decoder 层或 GQA/MQA。若使用可学习绝对位置嵌入，还需另加 $n_{\max}d$ 个位置参数。
 
 **Embedding**
 
-\[
+$$
 P_{\text{emb}} \approx V \cdot d
-\]
+$$
 
-（若与 output **权重共享 weight tying**，则不计第二次 \(Vd\)。）
+（若与 output **权重共享 weight tying**，则不计第二次 $Vd$。）
 
-**每层 Self-Attention（四个 \(d\times d\) 投影 \(W_Q, W_K, W_V, W_O\)）**
+**每层 Self-Attention（四个 $d\times d$ 投影 $W_Q, W_K, W_V, W_O$）**
 
-\[
+$$
 P_{\text{attn}} \approx 4 d^2
-\]
+$$
 
-**每层标准 FFN（两层：\(d \to d_{\text{ff}} \to d\)）**
+**每层标准 FFN（两层：$d \to d_{\text{ff}} \to d$）**
 
-\[
+$$
 P_{\text{ffn}} \approx 2 \cdot d \cdot d_{\text{ff}}
-\]
+$$
 
-当 \(d_{\text{ff}} = 4d\) 时，\(P_{\text{ffn}} \approx 8d^2\)。
+当 $d_{\text{ff}} = 4d$ 时，$P_{\text{ffn}} \approx 8d^2$。
 
 **每层合计（标准假设）**
 
-\[
+$$
 P_{\text{layer}} \approx 4d^2 + 2 d d_{\text{ff}} \approx 12 d^2 \quad (\text{当 } d_{\text{ff}}=4d)
-\]
+$$
 
-**\(L\) 层 Transformer Block**
+**$L$ 层 Transformer Block**
 
-\[
+$$
 P_{\text{blocks}} \approx L \cdot (4d^2 + 2 d d_{\text{ff}})
-\]
+$$
 
 **总参数量（粗算，忽略 bias、Norm 小项）**
 
-\[
-P_{\text{total}} \approx V d + L(4d^2 + 2 d d_{\text{ff}}) + \text{（若不 tying 则再加 } Vd\text{）}
-\]
+$$
+P_{\text{total}} \approx P_{\text{io}} + L(4d^2 + 2 d d_{\text{ff}})
+$$
+
+其中输入 Embedding 与 LM Head 合计为：
+
+$$
+P_{\text{io}} =
+\begin{cases}
+Vd, & \text{共享权重} \\
+2Vd, & \text{不共享权重}
+\end{cases}
+$$
 
 **SwiGLU FFN（LLaMA 等常用）**
 
-SwiGLU 可看作门控：中间有三个投影（up、gate、down），维度常取 **\(\frac{2}{3} \cdot 4d\)** 等以保持 FLOPs 近似。参数量常按三矩阵估算，例如中间宽 \(d_{\text{ff}}\) 时：
+SwiGLU 可看作门控：中间有三个投影（up、gate、down），维度常取 **$\frac{2}{3} \cdot 4d$** 等以保持 FLOPs 近似。参数量常按三矩阵估算，例如中间宽 $d_{\text{ff}}$ 时：
 
-\[
+$$
 P_{\text{ffn}}^{\text{SwiGLU}} \approx 3 \cdot d \cdot d_{\text{ff}}
-\]
+$$
 
-若目标总 FLOPs 与「\(d_{\text{ff}}=4d\) 的两层 MLP」对齐，常取 \(d_{\text{ff}} = \frac{2}{3} \cdot 4d\)，则：
+若目标总 FLOPs 与「$d_{\text{ff}}=4d$ 的两层 MLP」对齐，常取 $d_{\text{ff}} = \frac{2}{3} \cdot 4d$，则：
 
-\[
+$$
 P_{\text{ffn}}^{\text{SwiGLU}} \approx 3 d \cdot \frac{8}{3}d = 8d^2
-\]
+$$
 
-与标准 \(8d^2\) **同量级**（具体系数依实现与是否含 bias 略有出入）。面试说明**假设**即可。
+与标准 $8d^2$ **同量级**（具体系数依实现与是否含 bias 略有出入）。面试说明**假设**即可。
 
-**另一种常见记法（与「把 hidden 设为 \(\frac{2}{3} \times 4d\) 以保持算力」对齐）**
+**另一种常见记法（与「把 hidden 设为 $\frac{2}{3} \times 4d$ 以保持算力」对齐）**
 
-若将「标准 FFN 的中间维」记为 \(4d\)，SwiGLU 为保持前向 FLOPs 近似不变，常取 **中间瓶颈维** \(d_{\text{ff}}^{\text{SwiGLU}} = \frac{2}{3} \times 4d\)，则三个矩阵 \(d \times d_{\text{ff}}^{\text{SwiGLU}}\) 的参数量可记为：
+若将「标准 FFN 的中间维」记为 $4d$，SwiGLU 为保持主要矩阵乘的前向 FLOPs 近似不变，常取 **中间瓶颈维** $d_{\text{ff}}^{\text{SwiGLU}} \approx \frac{2}{3} \times 4d$。up、gate 两个矩阵形状为 $d \times d_{\text{ff}}^{\text{SwiGLU}}$，down 矩阵形状为 $d_{\text{ff}}^{\text{SwiGLU}} \times d$，三者参数量相同，总量可记为：
 
-\[
+$$
 P_{\text{ffn}}^{\text{SwiGLU}} \approx 3 \cdot d \cdot d_{\text{ff}}^{\text{SwiGLU}}
 = 3 \cdot d \cdot \frac{2}{3} \cdot 4d = 8d^2
-\]
+$$
 
-即与「两层标准 FFN、\(d_{\text{ff}}=4d\)」在 **\(8d^2\)** 上**同阶**。面试时写清「**三矩阵 × 中间维**」比死记系数更重要。
+即与「两层标准 FFN、$d_{\text{ff}}=4d$」在 **$8d^2$** 上**同阶**。面试时写清「**三矩阵 × 中间维**」比死记系数更重要。
+
+实际实现通常把中间维取整到便于硬件计算的倍数，上述 $8d^2$ 是未取整时的估算；“FLOPs 对齐”主要比较矩阵乘，不表示激活、门控逐元素运算也完全相同。三矩阵与中间维缩减的依据见 [GLU Variants Improve Transformer，§2](https://arxiv.org/html/2002.05202v1#S2)。
 
 ---
 
@@ -2302,7 +3183,7 @@ class TinyDecoderLM(nn.Module):
         return self.lm_head(x)
 ```
 
-**自查清单**：因果掩码是否作用在 **scores** 上？残差是否在 Attention 与 FFN **各一次**？\(\sqrt{d_k}\) 是否用 **每头维度** 而非 \(d_{\text{model}}\)？
+**自查清单**：因果掩码是否作用在 **scores** 上？残差是否在 Attention 与 FFN **各一次**？$\sqrt{d_k}$ 是否用 **每头维度** 而非 $d_{\text{model}}$？
 
 ---
 
@@ -2316,18 +3197,18 @@ class TinyDecoderLM(nn.Module):
 
 ### 4.2 Self-Attention 的计算复杂度是多少？
 
-**答**：对序列长度 \(n\)、模型维度 \(d\)（单头维度 \(d_k = d/H\)）：
+**答**：对序列长度 $n$、模型维度 $d$（单头维度 $d_k = d/H$）：
 
-- 计算 \(Q, K, V\) 与输出投影：**\(O(n d^2)\)**（主导项为矩阵乘）。
-- 注意力矩阵 \(QK^\top\) 与加权：**\(O(n^2 d_k) = O(n^2 d)\)**（\(H\) 个头总复杂度同级）。
+- 计算 $Q, K, V$ 与输出投影：**$O(n d^2)$**（主导项为矩阵乘）。
+- 注意力矩阵 $Q_hK_h^\top$ 与加权：**单头为 $O(n^2 d_k)$**；全部 $H$ 个头合计为 **$O(H n^2 d_k) = O(n^2 d)$**，因为 $H d_k=d$。
 
-**总**：**\(O(n^2 d + n d^2)\)**。当 \(n\) 很大时，**\(n^2 d\)** 项常主导时间与显存，因此有 FlashAttention、序列并行等。**与 RNN 每步 \(O(d^2)\)、总长 \(O(n d^2)\)** 相比，Attention 在长序列上**平方项**是主要瓶颈。
+**总时间复杂度**：**$O(n^2 d + n d^2)$**。当 $n$ 相对 $d$ 足够大时，**$n^2 d$** 项会主导计算；朴素实现中，显式存储各头注意力矩阵需要 **$O(Hn^2)$** 的空间（忽略 batch），不要将这一空间复杂度与时间复杂度混淆。[FlashAttention](https://arxiv.org/abs/2205.14135) 通过分块避免完整物化注意力矩阵、降低显存占用与访存开销，但不改变精确稠密注意力的二次计算主项。**与 RNN 每步 $O(d^2)$、总长 $O(n d^2)$** 相比，Attention 在长序列上**平方项**是主要瓶颈。
 
 ---
 
-### 4.3 为什么要除以 \(\sqrt{d_k}\)？
+### 4.3 为什么要除以 $\sqrt{d_k}$？
 
-**答**：点积 \(q^\top k\) 若各维独立零均值、方差 1，则方差约为 \(d_k\)，随维度增大 logits **尺度变大**，Softmax 趋近 one-hot，**梯度饱和**。除以 \(\sqrt{d_k}\) 使点积方差**与 \(d_k\) 无关**，Softmax 更平滑、**训练稳定**。面试可补充：这是**缩放**而非任意常数，与维度匹配。
+**答**：点积 $q^\top k$ 若各维独立零均值、方差 1，则方差约为 $d_k$，随维度增大 logits **尺度变大**，Softmax 趋近 one-hot，**梯度饱和**。除以 $\sqrt{d_k}$ 使点积方差**与 $d_k$ 无关**，Softmax 更平滑、**训练稳定**。面试可补充：这是**缩放**而非任意常数，与维度匹配。
 
 ---
 
@@ -2343,7 +3224,7 @@ class TinyDecoderLM(nn.Module):
 
 ### 4.5 残差连接的作用是什么？
 
-**答**：提供 **\(x \mapsto x\)** 的近似恒等通路，使梯度更易回传，**缓解深层网络梯度消失/退化**，让 **几十层** 堆叠可训练；与 **LayerNorm**、合适初始化与学习率共同构成稳定训练的基础。
+**答**：提供 **$x \mapsto x$** 的近似恒等通路，使梯度更易回传，**缓解深层网络梯度消失/退化**，让 **几十层** 堆叠可训练；与 **LayerNorm**、合适初始化与学习率共同构成稳定训练的基础。
 
 ---
 
@@ -2360,19 +3241,19 @@ class TinyDecoderLM(nn.Module):
 
 **答**：分项估算后求和：
 
-1. **Embedding**：约 \(Vd\)（是否 **weight tying** 决定是否再加 \(Vd\)）。
-2. **每层 Attention**：四个 \(d \times d\) 矩阵，约 **\(4d^2\)**。
-3. **每层 FFN**：约 **\(2 d d_{\text{ff}}\)**；若 \(d_{\text{ff}}=4d\)，约 **\(8d^2\)**。
-4. **SwiGLU**：约 **\(3 d d_{\text{ff}}\)**，按 \(d_{\text{ff}}\) 取值与标准 FFN 对齐 FLOPs 时常与 **\(8d^2\)** 同量级。
-5. **LayerNorm、bias** 相对 \(d^2\) 常可忽略（除非问细节）。
+1. **Embedding**：约 $Vd$（是否 **weight tying** 决定是否再加 $Vd$）。
+2. **每层 Attention**：四个 $d \times d$ 矩阵，约 **$4d^2$**。
+3. **每层 FFN**：约 **$2 d d_{\text{ff}}$**；若 $d_{\text{ff}}=4d$，约 **$8d^2$**。
+4. **SwiGLU**：约 **$3 d d_{\text{ff}}$**，按 $d_{\text{ff}}$ 取值与标准 FFN 对齐 FLOPs 时常与 **$8d^2$** 同量级。
+5. **LayerNorm、bias** 相对 $d^2$ 常可忽略（除非问细节）。
 
-**主项**：\(P \approx Vd + L(4d^2 + 2dd_{\text{ff}})\)（在明确假设下）。
+**主项**：$P \approx Vd + L(4d^2 + 2dd_{\text{ff}})$（Decoder-only、标准 MHA/FFN、输入 Embedding 与 LM Head 共享；不共享时再加 $Vd$，其余假设见 2.7）。
 
 ---
 
 ### 4.8 因果掩码（causal mask）是如何实现的？
 
-**答**：对长度 \(n\)，构造 **\(n \times n\)** 掩码：**位置 \(i\) 仅允许 \(j \le i\)**。在 **Softmax 之前**，将 **\(j > i\)** 的 logits 设为 **\(-\infty\)**，Softmax 后这些位置概率为 0。实现上常用 **`torch.triu(..., diagonal=1)`** 得到上三角 True，再 `masked_fill`。广播到 **batch 与 head** 维。
+**答**：对长度 $n$，构造 **$n \times n$** 掩码：**位置 $i$ 仅允许 $j \le i$**。在 **Softmax 之前**，将 **$j > i$** 的 logits 设为 **$-\infty$**，Softmax 后这些位置概率为 0。实现上常用 **`torch.triu(..., diagonal=1)`** 得到上三角 True，再 `masked_fill`。广播到 **batch 与 head** 维。
 
 ---
 
@@ -2402,22 +3283,22 @@ class TinyDecoderLM(nn.Module):
 
 ### 4.12 多头注意力（Multi-Head）解决什么问题？
 
-**答**：单头注意力在**一个**子空间里学习「谁看谁」，表达能力有限。**多头**将 \(d\) 拆成 \(H\) 份，在 **\(H\) 个并行子空间**里各自学习不同的相关模式（如句法、共指、局部短语），再经 \(W_O\) **融合**。效果上类似**多视角投票**，降低单头需同时拟合多种关系的压力，是 Transformer **表达力**的关键之一。
+**答**：单头注意力在**一个**子空间里学习「谁看谁」，表达能力有限。**多头**将 $d$ 拆成 $H$ 份，在 **$H$ 个并行子空间**里各自学习不同的相关模式（如句法、共指、局部短语），再经 $W_O$ **融合**。效果上类似**多视角投票**，降低单头需同时拟合多种关系的压力，是 Transformer **表达力**的关键之一。
 
 ---
 
 ## 5. 练习题
 
-1. **手推形状**：设 \(B=2, n=128, d=768, H=12\)，写出 \(Q,K,V\) 在拆头前后的形状，以及 \(A = \text{softmax}(QK^\top/\sqrt{d_k})\) 的形状。
-2. **掩码**：\(n=4\) 时，列出位置 \(i=2\) 在因果注意力中可见的 \(j\) 集合。
-3. **参数量**：\(d=4096, L=32, d_{\text{ff}}=16384, V=32000\)，在 **embedding 与 lm_head 共享** 时，估算 **\(12Ld^2\) 量级** 与 **\(Vd\)** 谁更大？
-4. **复杂度**：解释为何上下文从 \(2K\) 增到 \(32K\) 时，**注意力**部分近似按 **\(n^2\)** 放大。
+1. **手推形状**：设 $B=2, n=128, d=768, H=12$，写出 $Q,K,V$ 在拆头前后的形状，以及 $A = \text{softmax}(QK^\top/\sqrt{d_k})$ 的形状。
+2. **掩码**：$n=4$ 时，列出位置 $i=2$ 在因果注意力中可见的 $j$ 集合（位置从 1 开始编号）。
+3. **参数量**：$d=4096, L=32, d_{\text{ff}}=16384, V=32000$，在 **embedding 与 lm_head 共享** 时，估算 **$12Ld^2$ 量级** 与 **$Vd$** 谁更大？
+4. **复杂度**：解释为何上下文从 $2K$ 增到 $32K$ 时，**注意力**部分近似按 **$n^2$** 放大。
 5. **架构选择**：各举一个「更适合 T5 而非纯 GPT」与「更适合 BERT 而非 GPT」的任务。
 6. **对比**：用不超过五句话说明 LLaMA 相对「原版 GPT-2 风格」在常见实现上的两点差异（提示：RoPE、Norm、FFN）。
-7. **缩放因子**：若错误地使用 \(\sqrt{d}\)（模型宽度）而非 \(\sqrt{d_k}\)（每头维度）做缩放，当 \(H>1\) 时会对训练产生什么影响？
+7. **缩放因子**：若错误地使用 $\sqrt{d}$（模型宽度）而非 $\sqrt{d_k}$（每头维度）做缩放，当 $H>1$ 时会对训练产生什么影响？
 8. **Post-Norm 与 Pre-Norm**：各用一句话写出 Post-Norm 与 Pre-Norm 下「Attention 子层 + 残差 + LayerNorm」的典型顺序差异。
 9. **Cross-Attention**：在 T5 中，Cross-Attention 的 Q、K、V 分别来自哪里？若 K/V 维与 Decoder 隐状态维不一致，通常如何处理？
-10. **权重绑定**：什么是 input embedding 与 LM head 的 weight tying？它如何改变参数量估算中的 \(Vd\) 项？
+10. **权重绑定**：什么是 input embedding 与 LM head 的 weight tying？它如何改变参数量估算中的 $Vd$ 项？
 
 **提示**：题 3 需代入数量级比较；题 6 可查阅 Lesson 05 的 RMSNorm/SwiGLU；题 7 答「缩放过强/过弱导致 softmax 与梯度行为异常」；题 9 答「Q 来自 Decoder，K/V 来自 Encoder；投影矩阵对齐维度」。
 
@@ -2427,9 +3308,9 @@ class TinyDecoderLM(nn.Module):
 
 | 上一课 | 本课 | 下一课 |
 |--------|------|--------|
-| [第02课 - BPE 分词器原理与实现](02-BPE分词器原理与实现.md) | **第03课 - Transformer 架构详解** | [第04课 - 多头注意力与 RoPE](04-多头注意力与RoPE.md) |
+| [第02课 - BPE 分词器原理与实现](../docs/02-BPE%E5%88%86%E8%AF%8D%E5%99%A8%E5%8E%9F%E7%90%86%E4%B8%8E%E5%AE%9E%E7%8E%B0.md) | **第03课 - Transformer 架构详解** | [第04课 - 多头注意力与 RoPE](../docs/04-%E5%A4%9A%E5%A4%B4%E6%B3%A8%E6%84%8F%E5%8A%9B%E4%B8%8ERoPE.md) |
 
-**返回**：[课程总览与学习路线](00-课程总览与学习路线.md)
+**返回**：[课程总览与学习路线](../docs/00-%E8%AF%BE%E7%A8%8B%E6%80%BB%E8%A7%88%E4%B8%8E%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF.md)
 
 ---
 
@@ -2437,11 +3318,11 @@ class TinyDecoderLM(nn.Module):
 
 | 概念 | 一句话 |
 |------|--------|
-| 缩放点积注意力 | \( \text{softmax}(QK^\top/\sqrt{d_k})V \) |
-| 因果掩码 | \(j > i\) 处 logits 为 \(-\infty\) |
+| 缩放点积注意力 | $\text{softmax}(QK^\top/\sqrt{d_k})V$ |
+| 因果掩码 | $j > i$ 处 logits 为 $-\infty$ |
 | 残差 | 恒等路径，利于深层优化 |
-| 参数量主项（\(d_{\text{ff}}=4d\)） | 每层约 \(12d^2\)，共 \(L\) 层 |
-| 长序列瓶颈 | Attention \(O(n^2 d)\) |
+| 参数量主项（$d_{\text{ff}}=4d$） | 每层约 $12d^2$，共 $L$ 层 |
+| 长序列瓶颈 | Attention $O(n^2 d)$ |
 
 ---
 
@@ -2449,7 +3330,7 @@ class TinyDecoderLM(nn.Module):
 
 ---
 
-## 补充 A：用户要求「15+ 道」面试题补全（附简答）
+## 补充 A：面试追问与简答
 
 ### Q：Transformer 的核心创新是什么？
 **答**：以 **Scaled Dot-Product Self-Attention** 替代序列递归结构，使全局依赖可并行计算；配合多头、残差与归一化形成可扩展深度架构。
@@ -2458,13 +3339,13 @@ class TinyDecoderLM(nn.Module):
 **答**：RNN 时间步存在链式依赖；Transformer 主要计算为 **大块矩阵乘**，在 GPU 上对长度与特征维并行度高（Decoder 仍有因果掩码约束可见性，但算子并行）。
 
 ### Q：Causal Mask 是什么？为什么需要？
-**答**：禁止位置 \(i\) attend 到 \(j>i\)；保证训练与自回归推理一致，避免「偷看未来」。
+**答**：禁止位置 $i$ attend 到 $j>i$；保证训练与自回归推理一致，避免「偷看未来」。
 
 ### Q：Embedding 参数量？
-**答**：\(V \times d\)；若与 LM head **权重共享**则不计两次。
+**答**：$V \times d$；若与 LM head **权重共享**则不计两次。
 
 ### Q：FFN 隐层通常多少？为什么？
-**答**：经典 **\(4d\)**；容量与算力折中；现代 SwiGLU 会调整有效宽度（Lesson 05）。
+**答**：经典 **$4d$**；容量与算力折中；现代 SwiGLU 会调整有效宽度（Lesson 05）。
 
 ### Q：Transformer 中 dropout 常见位置？
 **答**：注意力输出/概率、残差后、FFN、embedding 等依实现；`eval()` 关闭。
@@ -2476,10 +3357,10 @@ class TinyDecoderLM(nn.Module):
 **答**：**RMSNorm**、**RoPE**、**SwiGLU**、**GQA** 等（Lesson 04–05）。
 
 ### Q：参数量如何算？
-**答**：Embedding \(Vd\) + 每层 Attention \(4d^2\) 量级 + FFN \(2d\cdot d_{ff}\) + 小项；给假设后估 \(12Ld^2\) 量级。
+**答**：共享 Embedding/LM Head 时计 $Vd$，不共享时计 $2Vd$；再加 $L$ 层的 Attention 与 FFN 参数，即 $L(4d^2+2d\cdot d_{\text{ff}})$ + 小项。标准 MHA 且 $d_{\text{ff}}=4d$ 时，Block 主项为 $12Ld^2$。
 
 ### Q：FLOPs 如何算？
-**答**：Attention \(O(n^2 d)\) 与投影 \(O(n d^2)\) 组合；随 \(n\) 增大平方项主导。
+**答**：Attention $O(n^2 d)$ 与投影 $O(n d^2)$ 组合；随 $n$ 增大平方项主导。
 
 ---
 
@@ -2488,271 +3369,15 @@ class TinyDecoderLM(nn.Module):
 ```python
 # 仅结构示意：Embedding + L × (RMSNorm + Attn + RMSNorm + SwiGLU) + Norm + LM head
 def forward(ids):  # ids: (B,T)
-    x = tok_emb(ids) + pos_info(ids)  # pos_info 可为 RoPE 在 attn 内
+    x = tok_emb(ids)  # 本例采用 RoPE，不额外相加位置向量
+    positions = torch.arange(ids.shape[1], device=ids.device)
     for block in blocks:
-        x = x + block.attn(block.norm1(x))
+        x = x + block.attn(block.norm1(x), positions=positions)  # 内部旋转 Q/K
         x = x + block.ffn(block.norm2(x))
     return lm_head(norm(x))
 ```
 
 ---
-
-## 补充 C：扩展背诵条目（1～250）
-
-1. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-2. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-3. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-4. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-5. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-6. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-7. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-8. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-9. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-10. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-11. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-12. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-13. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-14. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-15. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-16. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-17. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-18. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-19. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-20. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-21. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-22. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-23. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-24. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-25. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-26. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-27. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-28. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-29. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-30. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-31. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-32. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-33. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-34. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-35. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-36. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-37. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-38. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-39. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-40. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-41. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-42. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-43. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-44. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-45. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-46. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-47. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-48. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-49. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-50. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-51. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-52. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-53. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-54. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-55. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-56. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-57. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-58. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-59. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-60. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-61. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-62. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-63. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-64. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-65. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-66. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-67. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-68. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-69. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-70. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-71. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-72. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-73. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-74. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-75. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-76. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-77. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-78. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-79. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-80. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-81. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-82. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-83. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-84. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-85. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-86. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-87. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-88. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-89. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-90. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-91. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-92. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-93. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-94. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-95. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-96. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-97. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-98. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-99. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-100. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-101. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-102. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-103. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-104. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-105. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-106. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-107. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-108. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-109. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-110. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-111. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-112. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-113. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-114. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-115. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-116. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-117. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-118. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-119. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-120. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-121. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-122. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-123. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-124. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-125. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-126. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-127. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-128. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-129. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-130. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-131. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-132. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-133. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-134. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-135. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-136. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-137. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-138. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-139. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-140. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-141. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-142. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-143. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-144. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-145. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-146. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-147. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-148. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-149. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-150. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-151. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-152. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-153. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-154. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-155. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-156. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-157. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-158. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-159. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-160. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-161. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-162. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-163. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-164. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-165. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-166. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-167. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-168. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-169. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-170. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-171. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-172. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-173. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-174. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-175. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-176. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-177. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-178. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-179. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-180. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-181. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-182. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-183. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-184. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-185. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-186. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-187. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-188. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-189. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-190. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-191. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-192. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-193. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-194. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-195. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-196. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-197. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-198. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-199. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-200. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-201. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-202. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-203. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-204. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-205. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-206. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-207. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-208. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-209. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-210. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-211. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-212. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-213. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-214. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-215. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-216. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-217. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-218. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-219. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-220. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-221. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-222. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-223. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-224. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-225. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-226. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-227. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-228. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-229. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-230. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-231. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-232. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-233. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-234. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-235. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-236. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-237. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-238. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-239. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-240. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-241. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-242. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-243. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-244. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-245. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-246. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-247. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-248. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-249. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-250. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-
----
-
-**【Lesson 03 全文完 · 800+ 行】**
 
 
 
@@ -2784,86 +3409,86 @@ def forward(ids):  # ids: (B,T)
 
 ### 1.1 动机：用「查询—键—值」做软检索
 
-给定一层输入 \(\mathbf{X} \in \mathbb{R}^{n \times d}\)（\(n\) 个 token，每维 \(d\)），我们希望对每个位置 \(i\) 计算一个输出向量，该输出能聚合**全序列**的信息，且聚合权重由**内容相似度**动态决定。
+给定一层输入 $\mathbf{X} \in \mathbb{R}^{n \times d}$（$n$ 个 token，每维 $d$），我们希望对每个位置 $i$ 计算一个输出向量，该输出能聚合**全序列**的信息，且聚合权重由**内容相似度**动态决定。
 
 为此引入三个可学习线性投影：
 
-\[
+$$
 \mathbf{Q} = \mathbf{X}\mathbf{W}_Q,\quad
 \mathbf{K} = \mathbf{X}\mathbf{W}_K,\quad
 \mathbf{V} = \mathbf{X}\mathbf{W}_V
-\]
+$$
 
-其中 \(\mathbf{W}_Q,\mathbf{W}_K,\mathbf{W}_V \in \mathbb{R}^{d \times d_k}\)（单头简化记号；多头时通常 \(d_k = d/h\)）。
+其中 $\mathbf{W}_Q,\mathbf{W}_K,\mathbf{W}_V \in \mathbb{R}^{d \times d_k}$（单头简化记号；多头时通常 $d_k = d/h$）。
 
 **直觉**：
 
-- **Query \(\mathbf{q}_i\)**：「我当前在找什么信息？」
-- **Key \(\mathbf{k}_j\)**：「位置 \(j\) 提供的内容标签是什么？」
-- **Value \(\mathbf{v}_j\)**：「若选中位置 \(j\)，实际取走的信息向量。」
+- **Query $\mathbf{q}_i$**：「我当前在找什么信息？」
+- **Key $\mathbf{k}_j$**：「位置 $j$ 提供的内容标签是什么？」
+- **Value $\mathbf{v}_j$**：「若选中位置 $j$，实际取走的信息向量。」
 
-### 1.2 注意力分数：\(\mathbf{Q}\mathbf{K}^\top\)
+### 1.2 注意力分数：$\mathbf{Q}\mathbf{K}^\top$
 
-对位置 \(i\) 与 \(j\)，未归一化的相似度常取点积：
+对位置 $i$ 与 $j$，未归一化的相似度常取点积：
 
-\[
+$$
 s_{ij} = \mathbf{q}_i^\top \mathbf{k}_j
-\]
+$$
 
-矩阵形式：\(\mathbf{S} = \mathbf{Q}\mathbf{K}^\top \in \mathbb{R}^{n \times n}\)。
+矩阵形式：$\mathbf{S} = \mathbf{Q}\mathbf{K}^\top \in \mathbb{R}^{n \times n}$。
 
-### 1.3 缩放：除以 \(\sqrt{d_k}\)
+### 1.3 缩放：除以 $\sqrt{d_k}$
 
 定义 **Scaled Dot-Product Attention**：
 
-\[
+$$
 \mathbf{A} = \mathrm{softmax}\left(\frac{\mathbf{Q}\mathbf{K}^\top}{\sqrt{d_k}}\right) \in \mathbb{R}^{n \times n}
-\]
+$$
 
-其中 softmax **对最后一维（key 维）**做：每一行 \(i\) 对应「位置 \(i\) 对所有 \(j\) 的注意力分布」。
+其中 softmax **对最后一维（key 维）**做：每一行 $i$ 对应「位置 $i$ 对所有 $j$ 的注意力分布」。
 
 ### 1.4 加权求和得到输出
 
-\[
+$$
 \mathrm{Attention}(\mathbf{Q},\mathbf{K},\mathbf{V}) = \mathbf{A}\mathbf{V} = \mathbf{O} \in \mathbb{R}^{n \times d_k}
-\]
+$$
 
-再经输出投影 \(\mathbf{W}_O\) 回到 \(d\) 维（单头）或与多头拼接后投影。
+再经输出投影 $\mathbf{W}_O$ 回到 $d$ 维（单头）或与多头拼接后投影。
 
 ### 1.5 完整公式（背诵版）
 
-\[
+$$
 \boxed{
 \mathrm{Attention}(\mathbf{Q},\mathbf{K},\mathbf{V}) =
 \mathrm{softmax}\left(\frac{\mathbf{Q}\mathbf{K}^\top}{\sqrt{d_k}}\right)\mathbf{V}
 }
-\]
+$$
 
-**Decoder 因果掩码**：在 softmax **之前**，对非法位置 \((i,j), j>i\) 将 logits 置为 \(-\infty\)，使 \(\mathbf{A}_{ij}=0\)。
+**Decoder 因果掩码**：在 softmax **之前**，对非法位置 $(i,j), j>i$ 将 logits 置为 $-\infty$，使 $\mathbf{A}_{ij}=0$。
 
 ---
 
-## 二、为什么要除以 \(\sqrt{d_k}\)？
+## 二、为什么要除以 $\sqrt{d_k}$？
 
 ### 2.1 方差稳定直觉
 
-设 \(\mathbf{q},\mathbf{k}\) 的分量近似独立、零均值、方差 1，则 \(q^\top k = \sum_{r=1}^{d_k} q_r k_r\) 的方差随 \(d_k\) **线性增长**（独立项方差相加）。因此点积幅度约为 **\(\sqrt{d_k}\)** 量级。
+设 $\mathbf{q},\mathbf{k}$ 的分量近似独立、零均值、方差 1，则 $q^\top k = \sum_{r=1}^{d_k} q_r k_r$ 的方差随 $d_k$ **线性增长**（独立项方差相加）。因此点积幅度约为 **$\sqrt{d_k}$** 量级。
 
-若不缩放，softmax 输入过大 → **近似 one-hot** → 梯度消失；过小 → **近似均匀** → 梯度信号弱。**除以 \(\sqrt{d_k}\)** 使点积方差回到 \(O(1)\)，softmax 温度适中。
+若不缩放，较大的点积分数差异可能使 softmax **接近 one-hot**，其对输入分数的导数趋小，妨碍注意力中的梯度传播。分数差异很小时，注意力可能**接近均匀分布**，表示位置间区分性较弱，但**不能仅据此推断梯度弱或消失**；梯度大小还取决于序列长度、温度缩放与上游梯度。**除以 $\sqrt{d_k}$** 使点积方差回到 $O(1)$，降低因尺度过大而饱和的风险。
 
 ### 2.2 简化的数学推导（面试够用）
 
-假设 \(q_r, k_r\) 独立，\(\mathbb{E}[q_r]=\mathbb{E}[k_r]=0\)，\(\mathrm{Var}(q_r)=\mathrm{Var}(k_r)=1\)。
+假设 $q_r, k_r$ 独立，$\mathbb{E}[q_r]=\mathbb{E}[k_r]=0$，$\mathrm{Var}(q_r)=\mathrm{Var}(k_r)=1$。
 
-\[
+$$
 \mathbb{E}[q_r k_r] = 0,\quad \mathrm{Var}(q_r k_r) = \mathbb{E}[q_r^2]\mathbb{E}[k_r^2] = 1
-\]
+$$
 
-和 \(S = \sum_{r=1}^{d_k} q_r k_r\) 的方差为 \(d_k\)，标准差 \(\sqrt{d_k}\)。故将 \(S\) 除以 \(\sqrt{d_k}\)，使 **标准化** 到 \(O(1)\) 波动。
+和 $S = \sum_{r=1}^{d_k} q_r k_r$ 的方差为 $d_k$，标准差 $\sqrt{d_k}$。故将 $S$ 除以 $\sqrt{d_k}$，使 **标准化** 到 $O(1)$ 波动。
 
 ### 2.3 与「温度」的关系
 
-有时把 \(\alpha\) 写作温度：\(\mathrm{softmax}(\mathbf{S}/T)\)。\(\sqrt{d_k}\) 相当于**隐式**设定温度，使训练稳定。
+有时把 $\alpha$ 写作温度：$\mathrm{softmax}(\mathbf{S}/T)$。$\sqrt{d_k}$ 相当于**隐式**设定温度，使训练稳定。
 
 ---
 
@@ -2871,7 +3496,7 @@ s_{ij} = \mathbf{q}_i^\top \mathbf{k}_j
 
 ### 3.1 为什么要多头？
 
-单头注意力只学习**一种**相似度模式；多头将 \(d\) 切为 \(h\) 份，每份在独立子空间做 Attention，再拼接/投影，能同时捕获：
+单头注意力只学习**一种**相似度模式；多头将 $d$ 切为 $h$ 份，每份在独立子空间做 Attention，再拼接/投影，能同时捕获：
 
 - 句法局部模式  
 - 语义依赖  
@@ -2881,15 +3506,15 @@ s_{ij} = \mathbf{q}_i^\top \mathbf{k}_j
 
 ### 3.2 头数与维度关系
 
-常见设定：\(d_k = d_h = d/h\)，每头维度 \(d_h\)。总参数量：\(4 d^2\)（QKV O）或按实现拆分为多头低秩形式。
+常见设定：$d_k = d_h = d/h$，每头维度 $d_h$。总参数量：$4 d^2$（QKV O）或按实现拆分为多头低秩形式。
 
 ### 3.3 拼接与输出投影
 
-\[
+$$
 \mathrm{MultiHead}(\mathbf{X}) = \mathrm{Concat}(\mathrm{head}_1,\ldots,\mathrm{head}_h)\mathbf{W}_O
-\]
+$$
 
-其中 \(\mathbf{W}_O \in \mathbb{R}^{d \times d}\)。
+其中 $\mathbf{W}_O \in \mathbb{R}^{d \times d}$。
 
 ### 3.4 PyTorch 风格代码（单头示意 + 多头拼接）
 
@@ -2934,26 +3559,26 @@ class MultiHeadSelfAttention(nn.Module):
 
 ### 4.1 为什么 Transformer 需要位置编码？
 
-Self-Attention 对输入置换**等变**（不含位置时）：打乱 token 顺序若同步打乱 QKV，则注意力结构不变。因此必须**显式注入**位置信息。
+**无位置编码、也无固定因果掩码**的 Self-Attention 对输入置换等变：置换矩阵为 $P$ 时，$A'=PAP^\top$、$O'=PO$，不是矩阵元素原地不变。它不能仅凭内容分辨顺序，因此通常需加入位置信息；因果掩码本身也引入顺序约束。
 
 ### 4.2 正弦绝对位置编码（Sinusoidal）
 
 原始 Transformer 使用：
 
-\[
+$$
 PE_{(pos,2i)} = \sin(pos / 10000^{2i/d}),\quad
 PE_{(pos,2i+1)} = \cos(pos / 10000^{2i/d})
-\]
+$$
 
 **特点**：固定、可外推性讨论多；现代 LLM 较少用，但面试常考。
 
 ### 4.3 可学习绝对位置编码
 
-直接学习 \(\mathbf{E}_{pos} \in \mathbb{R}^{n_{\max} \times d}\)。简单、长外推弱。
+直接学习 $\mathbf{E}_{pos} \in \mathbb{R}^{n_{\max} \times d}$。简单、长外推弱。
 
 ### 4.4 相对位置编码（概念）
 
-相对编码强调 \(i-j\) 而非绝对 \(i\)，如 T5、Transformer-XL 等。利于归纳长度外推相关性质。
+相对编码强调 $i-j$ 而非绝对 $i$，如 T5、Transformer-XL 等。利于归纳长度外推相关性质。
 
 ### 4.5 位置编码演进对比表
 
@@ -2970,27 +3595,27 @@ PE_{(pos,2i+1)} = \cos(pos / 10000^{2i/d})
 
 ### 5.1 核心思想
 
-**RoPE（Rotary Position Embedding）** 在 **二维子空间**上对 \(q,k\) 施加与位置 \(m\) 相关的**旋转变换**，使得点积 \(\langle R_m q, R_n k\rangle\) 仅依赖 **相对位置 \(m-n\)**。
+**RoPE（Rotary Position Embedding）** 在二维子空间对 $q,k$ 施加位置相关旋转。对固定内容向量，有 $(R_mq)^\top(R_nk)=q^\top R_{n-m}k$，位置因子只依赖相对位移；内积仍依赖内容，不是只由位置决定。
 
 ### 5.2 复数与旋转（推导骨架）
 
-将两维 \((q_{2i}, q_{2i+1})\) 视作复数 \(q_i\)，乘以 \(e^{im\theta_i}\) 等价于旋转 \(\theta_i\) 角。
+将两维 $(q_{2i},q_{2i+1})$ 视作复数 $q_i$，乘以 $e^{im\theta_i}$ 等价于旋转 **$m\theta_i$** 角，其中 $\theta_i$ 是该二维子空间的频率。
 
-对位置 \(m\) 的旋转：
+对位置 $m$ 的旋转：
 
-\[
+$$
 f(q, m) = R_m q,\quad f(k, n) = R_n k
-\]
+$$
 
-适当构造 \(R_m\) 使得 \(q_m^\top k_n\) 依赖 **\(m-n\)**。
+适当构造 $R_m$ 使得 $q_m^\top k_n$ 依赖 **$m-n$**。
 
 ### 5.3 为什么 RoPE 能表达相对位置？
 
-点积在旋转下保持某种「配对」结构：当 \(q,k\) 同受旋转作用时，内积可表示为 \(\sum g_i(m-n)\) 形式（示意），从而**自然编码相对位移**。
+点积在旋转下保持某种「配对」结构：当 $q,k$ 同受旋转作用时，内积可表示为 $\sum g_i(m-n)$ 形式（示意），从而**自然编码相对位移**。
 
 ### 5.4 长序列外推
 
-训练时见长度 \(L_{\mathrm{train}}\)，推理更长时，RoPE 的 **基频** \(\theta_i\) 与插值（如 NTK、Linear RoPE scaling）是常见工程技巧；面试可答「与旋转基、位置插值有关，详见推理优化课」。
+训练时见长度 $L_{\mathrm{train}}$，推理更长时，RoPE 的 **基频** $\theta_i$ 与插值（如 NTK、Linear RoPE scaling）是常见工程技巧；面试可答「与旋转基、位置插值有关，详见推理优化课」。
 
 ### 5.5 代码实现（简化版，与主流实现一致的思想）
 
@@ -2998,6 +3623,7 @@ f(q, m) = R_m q,\quad f(k, n) = R_n k
 import torch
 
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
+    assert dim > 0 and dim % 2 == 0
     # dim: head dimension (must be even)
     freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
     t = torch.arange(end, device=freqs.device)
@@ -3006,22 +3632,27 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Te
     return freqs_cis
 
 def apply_rotary_emb(xq: torch.Tensor, xk: torch.Tensor, freqs_cis: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-    # xq, xk: (B, T, nh, dh) — 需 reshape 为复数对；此处为概念示意
-    # 工程实现见 LLaMA / Hugging Face 源码
-    return xq, xk
+    # xq/xk: (B, T, n_heads, d_head)，Q/K 头数可以不同
+    def rotate(x):
+        B, T, H, D = x.shape
+        assert D % 2 == 0 and freqs_cis.shape == (T, D // 2)
+        z = torch.view_as_complex(x.float().reshape(B, T, H, D // 2, 2).contiguous())
+        freqs = freqs_cis.to(x.device).view(1, T, 1, D // 2)
+        return torch.view_as_real(z * freqs).flatten(-2).to(x.dtype)
+    return rotate(xq), rotate(xk)
 ```
 
-> **面试**：能口述「对 \(q,k\) 成对二维旋转 + 点积体现相对位置」即可；手写代码常考 `triu` mask 而非 RoPE 内核。
+> **面试**：能口述「对 $q,k$ 成对二维旋转 + 点积体现相对位置」即可；手写代码常考 `triu` mask 而非 RoPE 内核。
 
 ---
 
 ## 六、KV Cache 基础概念
 
-**问题**：自回归生成第 \(t\) 步时，前 \(1..t-1\) 的 Key/Value 与第 \(t\) 步的 Q 计算注意力时，**历史 K/V 可复用**，不必每步重算。
+**问题**：自回归生成第 $t$ 步时，前 $1..t-1$ 的 Key/Value 与第 $t$ 步的 Q 计算注意力时，**历史 K/V 可复用**，不必每步重算。
 
 **KV Cache**：缓存每层、每头已算好的 **K、V** 张量，新 token 只追加当前 K/V。
 
-**显存**：约 \(2 \times L \times B \times h \times T \times d_h\)（FP16 等），与序列长度 \(T\) 线性；因此长上下文推理显存压力大（Lesson 20 详讲）。
+**显存**：MHA 下缓存元素数约为 $2 \times L \times B \times h \times T \times d_h$；换算为字节还需乘每元素字节数 $b_{\text{elem}}$（FP16/BF16 为 2），即 $2 L B h T d_h b_{\text{elem}}$。它与序列长度 $T$ 线性增长；GQA/MQA 应改用 KV 头数（Lesson 20 详讲）。
 
 ---
 
@@ -3029,11 +3660,11 @@ def apply_rotary_emb(xq: torch.Tensor, xk: torch.Tensor, freqs_cis: torch.Tensor
 
 ### Q1：Self-Attention 的计算步骤？
 
-**答**：① 线性投影得 Q、K、V；② 算 \(\mathbf{S}=\mathbf{Q}\mathbf{K}^\top/\sqrt{d_k}\)；③（Decoder）加因果掩码；④ softmax 得 \(\mathbf{A}\)；⑤ \(\mathbf{O}=\mathbf{A}\mathbf{V}\)；⑥ 多头拼接/输出投影。
+**答**：① 线性投影得 Q、K、V；② 算 $\mathbf{S}=\mathbf{Q}\mathbf{K}^\top/\sqrt{d_k}$；③（Decoder）加因果掩码；④ softmax 得 $\mathbf{A}$；⑤ $\mathbf{O}=\mathbf{A}\mathbf{V}$；⑥ 多头拼接/输出投影。
 
-### Q2：为什么除以 \(\sqrt{d_k}\)？（要能推导）
+### Q2：为什么除以 $\sqrt{d_k}$？（要能推导）
 
-**答**：点积维度 \(d_k\) 增大时方差线性增大，幅度约 \(\sqrt{d_k}\)；除以 \(\sqrt{d_k}\) 使 softmax 输入稳定在 \(O(1)\)，避免饱和与梯度问题。见第二节推导。
+**答**：点积维度 $d_k$ 增大时方差线性增大，幅度约 $\sqrt{d_k}$；除以 $\sqrt{d_k}$ 使 softmax 输入稳定在 $O(1)$，避免饱和与梯度问题。见第二节推导。
 
 ### Q3：多头注意力的优势？
 
@@ -3041,7 +3672,7 @@ def apply_rotary_emb(xq: torch.Tensor, xk: torch.Tensor, freqs_cis: torch.Tensor
 
 ### Q4：头数和维度的关系？
 
-**答**：常设 \(d = h \times d_h\)，每头维度 \(d_h = d/h\)；总投影参数规模由 \(d,h\) 共同决定。
+**答**：常设 $d = h \times d_h$，每头维度 $d_h = d/h$；在标准 MHA、固定 $d$ 且 $d_h=d/h$ 时，Q/K/V/O 的投影权重总数为 $4d^2$，不会仅因头数 $h$ 改变而增减（忽略 bias）。
 
 ### Q5：RoPE 的核心思想是什么？
 
@@ -3049,7 +3680,7 @@ def apply_rotary_emb(xq: torch.Tensor, xk: torch.Tensor, freqs_cis: torch.Tensor
 
 ### Q6：RoPE vs 绝对位置编码 vs 相对位置编码？
 
-**答**：RoPE 通过旋转实现**相对性**与实现优雅；绝对编码直接加向量；相对编码显式建模 \(i-j\)（多种形式）。现代 LLM 常用 RoPE。
+**答**：RoPE 通过旋转实现**相对性**与实现优雅；绝对编码直接加向量；相对编码显式建模 $i-j$（多种形式）。现代 LLM 常用 RoPE。
 
 ### Q7：RoPE 如何实现长序列外推？
 
@@ -3057,7 +3688,7 @@ def apply_rotary_emb(xq: torch.Tensor, xk: torch.Tensor, freqs_cis: torch.Tensor
 
 ### Q8：Self-Attention 的时间与空间复杂度？
 
-**答**：时间 \(O(n^2 d)\)（主导项常是 \(n^2 d_k\) 与 \(n d^2\) 的组合）；空间存注意力矩阵 \(O(n^2)\) 若显式物化（FlashAttention 等减少 HBM）。
+**答**：标准 MHA 中，单头注意力混合为 $O(n^2 d_k)$，全部头合计为 $O(hn^2d_k)=O(n^2d)$；计入 Q/K/V/O 投影后的总时间为 $O(n^2d+nd^2)$。若显式物化全部头的注意力矩阵，空间为 $O(hn^2)$（忽略 batch）；FlashAttention 可避免完整物化。
 
 ### Q9：为什么用 Q、K、V 三个矩阵而不是一个？
 
@@ -3065,7 +3696,7 @@ def apply_rotary_emb(xq: torch.Tensor, xk: torch.Tensor, freqs_cis: torch.Tensor
 
 ### Q10：Attention 矩阵的物理含义是什么？
 
-**答**：行 \(i\) 表示位置 \(i\) 对各个位置 \(j\) 的**依赖权重**；可理解为动态路由/软对齐。
+**答**：行 $i$ 表示位置 $i$ 对各个位置 $j$ 的**依赖权重**；可理解为动态路由/软对齐。
 
 ### Q11：MQA 和 GQA 是什么？（简要）
 
@@ -3073,17 +3704,17 @@ def apply_rotary_emb(xq: torch.Tensor, xk: torch.Tensor, freqs_cis: torch.Tensor
 
 ### Q12：注意力分数的 softmax 在哪个维度做？
 
-**答**：对 **key 维**（最后一维，即对每个固定 query 位置 \(i\)，对 \(j\) 归一化）。
+**答**：对 **key 维**（最后一维，即对每个固定 query 位置 $i$，对 $j$ 归一化）。
 
 ---
 
 ## 八、练习题
 
-1. 手算 \(n=3,d_k=2\) 的 \(\mathbf{Q}\mathbf{K}^\top\) 与因果 mask 后 softmax（用小型矩阵）。  
-2. 解释为何 \(\mathbf{A}\mathbf{V}\) 是「加权求和」。  
-3. 若 \(h=8,d=512\)，每头维度多少？  
+1. 手算 $n=3,d_k=2$ 的 $\mathbf{Q}\mathbf{K}^\top$ 与因果 mask 后 softmax（用小型矩阵）。  
+2. 解释为何 $\mathbf{A}\mathbf{V}$ 是「加权求和」。  
+3. 若 $h=8,d=512$，每头维度多少？  
 4. RoPE 与「加性位置向量」本质差异？  
-5. 推导：若 \(q,k\) 方差为 1，点积方差为何 \(\approx d_k\)？  
+5. 推导：若 $q,k$ 方差为 1，点积方差为何 $\approx d_k$？  
 6. 实现：用 `torch.triu` 构造因果 mask。  
 7. 对比：FlashAttention 不改变数学输出，只改什么？  
 8. 思考：KV Cache 为何不缓存 Q？  
@@ -3100,20 +3731,20 @@ att_max = att.max(dim=-1, keepdim=True).values
 att = torch.softmax(att - att_max, dim=-1)  # 等价，更稳
 ```
 
-### 附录 B：扩展阅读条目 1～100（行数扩展 · 扫读）
+### 附录 B：扩展阅读关键词
 
 1. Attention 名字来自认知科学类比。  
 2. Scaled dot-product 是最常见实现。  
 3. Additive attention（Bahdanau）不同公式。  
 4. 点积比加法注意力更省算。  
-5. \(n^2\) 是长上下文瓶颈。  
-6. 稀疏注意力降低 \(n^2)\)。  
+5. $n^2$ 是长上下文瓶颈。  
+6. 稀疏注意力可减少相对于稠密 $n^2$ 的注意力连接数。
 7. Linear Attention 近似 softmax。  
 8. Performer 用随机特征。  
 9. FlashAttention 分块 softmax。  
 10. 内存层次影响实际速度。  
 11. 头数不是越多越好。  
-12. 头数需整除 \(d\)。  
+12. 头数需整除 $d$。  
 13. GQA 折中 MHA 与 MQA。  
 14. MQA 推理快。  
 15. RoPE 来自论文 RoFormer。  
@@ -3205,7 +3836,7 @@ att = torch.softmax(att - att_max, dim=-1)  # 等价，更稳
 
 ---
 
-### 附录 C：用户要求清单自检
+### 附录 C：学习内容自检
 
 | 要求 | 状态 |
 |------|------|
@@ -3228,33 +3859,33 @@ att = torch.softmax(att - att_max, dim=-1)  # 等价，更稳
 
 ### D.1 从标量到矩阵：一行一行看
 
-设 batch 忽略，序列矩阵 \(\mathbf{X} \in \mathbb{R}^{n \times d}\)。第 \(i\) 行 \(\mathbf{x}_i^\top\) 是 token \(i\) 的向量。
+设 batch 忽略，序列矩阵 $\mathbf{X} \in \mathbb{R}^{n \times d}$。第 $i$ 行 $\mathbf{x}_i^\top$ 是 token $i$ 的向量。
 
-\[
+$$
 \mathbf{q}_i = \mathbf{W}_Q^\top \mathbf{x}_i,\quad
 \mathbf{k}_j = \mathbf{W}_K^\top \mathbf{x}_j,\quad
 \mathbf{v}_j = \mathbf{W}_V^\top \mathbf{x}_j
-\]
+$$
 
 注意力权重：
 
-\[
+$$
 \alpha_{ij} = \frac{\exp(\mathbf{q}_i^\top \mathbf{k}_j / \sqrt{d_k})}{\sum_{j'}\exp(\mathbf{q}_i^\top \mathbf{k}_{j'} / \sqrt{d_k})}
-\]
+$$
 
 输出：
 
-\[
+$$
 \mathbf{o}_i = \sum_j \alpha_{ij} \mathbf{v}_j
-\]
+$$
 
 ### D.2 矩阵形式一次性写完
 
-\[
+$$
 \mathbf{O} = \mathrm{softmax}\left(\frac{\mathbf{Q}\mathbf{K}^\top}{\sqrt{d_k}}\right)\mathbf{V}
-\]
+$$
 
-**softmax 行方向**：对固定的 \(i\)，对所有 \(j\) 归一化。
+**softmax 行方向**：对固定的 $i$，对所有 $j$ 归一化。
 
 ### D.3 参考实现：显式循环版（仅教学，勿用于生产）
 
@@ -3285,51 +3916,51 @@ assert torch.allclose(y.sum(dim=-1), torch.ones(2, 5))
 
 ### E.1 旋转矩阵为何是「成对」二维？
 
-偶数维 \(d_h\) 拆成 \(d_h/2\) 个二维平面，每平面独立旋转，频率 \(\theta_i\) 随 \(i\) 递减，兼顾短程与长程模式。
+偶数维 $d_h$ 拆成 $d_h/2$ 个二维平面，每平面独立旋转，频率 $\theta_i$ 随 $i$ 递减，兼顾短程与长程模式。
 
 ### E.2 与相对位置编码的异同
 
-RoPE 在**内积里**编码相对位置；经典相对偏置在 logits 上加 \(b_{i-j}\)。二者目标相近，形式不同。
+RoPE 在**内积里**编码相对位置；经典相对偏置在 logits 上加 $b_{i-j}$。二者目标相近，形式不同。
 
 ### E.3 外推为何困难？
 
-训练分布上位置 \(m\) 有界；推理超过时旋转角度进入**未充分训练**区域，注意力模式偏移；故需插值或微调。
+训练分布上位置 $m$ 有界；推理超过时旋转角度进入**未充分训练**区域，注意力模式偏移；故需插值或微调。
 
 ---
 
 ## 附录 F：扩展练习题 50 道（简答提示）
 
-1. \( \mathbf{A}\mathbf{V}\) 每行是否是凸组合？→ 是（非负且行和为 1）。  
+1. $\mathbf{A}\mathbf{V}$ 每行是否是凸组合？→ 是（非负且行和为 1）。  
 2. 因果 mask 后每行是否仍和为 1？→ 在可见集合上归一化，仍和为 1。  
-3. 自注意力是否对称？→ \(\mathbf{A}\) 一般不对称。  
+3. 自注意力是否对称？→ $\mathbf{A}$ 一般不对称。  
 4. 双向注意力矩阵可否对称？→ 一般不保证。  
 5. 点积 vs 欧氏距离？→ 点积等价于余弦相似当范数固定。  
 6. 缩放是否等价于 LayerNorm？→ 不等价，作用在不同位置。  
-7. 多头拼接后维数？→ \(h \cdot d_h = d\)。  
-8. \(\mathbf{W}_O\) 作用？→ 混合头信息并映射回 \(d\)。  
+7. 多头拼接后维数？→ $h \cdot d_h = d$。  
+8. $\mathbf{W}_O$ 作用？→ 混合头信息并映射回 $d$。  
 9. bias 在 QKV？→ 可选，LLaMA 常无 bias。  
 10. 位置信息进 V 吗？→ RoPE 在 QK；若加性位置可进输入 embedding。  
 11. ALiBi 放哪？→ attention logits bias。  
-12. 长度 \(n=1\) 时注意力？→ 退化为自身权重 1。  
-13. 全零 mask 会怎样？→ 非法；需至少一个可见位置。  
-14. 温度 \(T>1\)？→ 分布更平。  
-15. \(T<1\)？→ 更尖。  
+12. 长度 $n=1$ 时注意力？→ 退化为自身权重 1。  
+13. 全部位置被屏蔽会怎样？→ 常导致 softmax 的 NaN；每个有效 query 至少需一个可见 key。加性 mask 全为 0 表示不屏蔽，不能与布尔 mask 混淆。
+14. 温度 $T>1$？→ 分布更平。  
+15. $T<1$？→ 更尖。  
 16. Gumbel-softmax？→ 可微离散（了解）。  
 17. 注意力作为核？→ 有研究与 kernel 联系。  
 18. Nyströmformer？→ 近似（了解）。  
 19. Performer 复杂度？→ 线性近似（了解）。  
 20. 为什么工业界仍多用标准 attention？→ 硬件成熟、稳定。  
 21. FlashAttention 版本？→ 1/2/3（了解）。  
-22. 显存 \(n^2\) 来自？→ 存 logits 或 softmax 中间。  
+22. 显存 $n^2$ 来自？→ 存 logits 或 softmax 中间。  
 23. checkpoint 不存？→ 重算。  
 24. 逆注意力？→ 非主流。  
-25. 局部窗口限制 \(j\) 范围？→ 降复杂度。  
+25. 局部窗口限制 $j$ 范围？→ 降复杂度。  
 26. 膨胀窗口？→ 扩大感受野。  
 27. 分层注意力？→ 多阶段（了解）。  
 28. 与图注意力 GAT？→ 类似加权邻居。  
 29. 与胶囊网络？→ 不同机制。  
-30. Transformer 深度 \(L\) 典型？→ 几十层。  
-31. 宽度 \(d\) 典型？→ 几百到几万。  
+30. Transformer 深度 $L$ 典型？→ 几十层。  
+31. 宽度 $d$ 典型？→ 几百到几万。  
 32. 头数典型？→ 32、40 等。  
 33. GQA 分组数？→ 如 8 query 组 1 KV（示例）。  
 34. MQA 头数？→ 多 query 共享 K/V。  
@@ -3339,7 +3970,7 @@ RoPE 在**内积里**编码相对位置；经典相对偏置在 logits 上加 \(
 38. half 精度旋转？→ 需注意数值。  
 39. 静态图 batch？→ 变长 mask。  
 40. ONNX export attention？→ 支持因版本而异。  
-41. 量化 QAT？→ 训练后量化。  
+41. 量化 QAT？→ 量化感知训练；训练后量化称为 PTQ。
 42. 注意力蒸馏？→ 小模型学大模型（了解）。  
 43. 稀疏专家 MoE？→ 不同路由（了解）。  
 44. 对比学习 SimCLR？→ 不用 LM attention。  
@@ -3347,7 +3978,7 @@ RoPE 在**内积里**编码相对位置；经典相对偏置在 logits 上加 \(
 46. 恶意触发高注意力？→ 安全研究。  
 47. 长上下文法律/RAG？→ 应用。  
 48. 注意力与检索？→ 类比。  
-49. 本附录目的？→ 行数与刷题。  
+49. 注意力凸组合的结论适用条件？→ softmax 后、未施加 attention dropout 的权重。
 50. 掌握 D.1–D.4 可应付大部分一面。  
 
 ---
@@ -3356,11 +3987,11 @@ RoPE 在**内积里**编码相对位置；经典相对偏置在 logits 上加 \(
 
 | 符号 | 含义 |
 |------|------|
-| \(n\) | 序列长度 |
-| \(d\) | 模型维 |
-| \(h\) | 头数 |
-| \(d_h\) | 每头维 |
-| \(\mathbf{A}\) | 注意力权重 |
+| $n$ | 序列长度 |
+| $d$ | 模型维 |
+| $h$ | 头数 |
+| $d_h$ | 每头维 |
+| $\mathbf{A}$ | 注意力权重 |
 
 ---
 
@@ -3378,96 +4009,11 @@ RoPE 在**内积里**编码相对位置；经典相对偏置在 logits 上加 \(
 
 ---
 
-## 附录 J：长文扩展段落（1～80 行独立句）
-
-1. Self-Attention 是 Transformer 的心脏。  
-2. 没有注意力就没有现代 LLM 的主干。  
-3. 点积注意力实现简单。  
-4. 缩放是训练稳定性的关键。  
-5. Softmax 产生概率分布。  
-6. 概率分布对值向量加权。  
-7. 输出是上下文相关的表示。  
-8. 堆叠多层提取抽象特征。  
-9. 残差保留底层信息。  
-10. LayerNorm 稳定每层的尺度。  
-11. FFN 提供逐点非线性。  
-12. 三者配合形成 Block。  
-13. Decoder-only 堆叠多个 Block。  
-14. 因果掩码保证自回归。  
-15. 训练与推理一致。  
-16. 推理用 KV Cache 加速。  
-17. 缓存每层 K 和 V。  
-18. Q 只算当前步。  
-19. 注意力矩阵不必全存（Flash）。  
-20. 显存仍随上下文增长。  
-21. 长文本贵。  
-22. 短文本便宜。  
-23. 批处理摊薄开销。  
-24. 多轮对话复用前缀 KV。  
-25. 系统提示可缓存。  
-26. RoPE 在开源模型普及。  
-27. 论文 RoFormer 提出。  
-28. LLaMA 验证有效。  
-29. 相对位置利于外推讨论。  
-30. 绝对位置外推弱。  
-31. 插值缓解外推。  
-32. NTK 是关键词。  
-33. 位置编码仍是研究热点。  
-34. 多头帮助多义性。  
-35. 单头可能欠拟合复杂句法。  
-36. 头数过多收益递减。  
-37. 计算量随头数增加。  
-38. GQA 减少 KV。  
-39. MQA 更极端。  
-40. MHA 最标准。  
-41. 面试常让估算参数量。  
-42. 四矩阵投影是主项。  
-43. \(\mathbf{W}_O\) 也是大矩阵。  
-44. 输出投影不可忽视。  
-45. 注意力在层内占比高。  
-46. FFN 在层内占比也高。  
-47. 取决于 \(d_{ff}\) 与 \(n\)。  
-48. 长序列 attention 主导。  
-49. 短序列 FFN 可能主导。  
-50. Profiling 是正确答案。  
-51. PyTorch profiler 可用。  
-52. Nsight Systems 可用。  
-53. 理论复杂度是起点。  
-54. 实际以测试为准。  
-55. 内核融合改变常数因子。  
-56. 读写内存常是瓶颈。  
-57. FlashAttention IO 感知。  
-58. 分块减少 HBM 往返。  
-59. 数值稳定用 online softmax。  
-60. 反向传播也需稳定。  
-61. 混合精度注意溢出。  
-62. loss scale 相关。  
-63. bf16 动态范围大。  
-64. fp16 需小心。  
-65. fp32 稳定训练。  
-66. 推理可量化。  
-67. INT8 权重。  
-68. INT4 权重。  
-69. KV int8。  
-70. 质量与速度权衡。  
-71. 本课聚焦 FP32/BF16 原理。  
-72. 部署课展开。  
-73. 对齐课不展开注意力数学。  
-74. 数据课不展开。  
-75. 缩放课讨论算力与数据。  
-76. 系统课讨论分布式 attention。  
-77. 全栈工程师需都了解。  
-78. 算法工程师重数学。  
-79. 系统工程师重内核。  
-80. 读者按需选读深度。  
-
----
-
 ## 附录 K：「概念讲解 → 代码实现 → 面试考点 → 练习题」四段式总复习
 
 ### K.1 概念讲解（5 分钟口述稿）
 
-Self-Attention 用三个投影 \(\mathbf{Q},\mathbf{K},\mathbf{V}\) 从同一层输入得到查询、键与值。相似度用点积，为控制方差在 \(d_k\) 增大时不爆炸，除以 \(\sqrt{d_k}\)，再对 key 维 softmax 得到权重，对 \(\mathbf{V}\) 加权求和。Decoder 用因果掩码屏蔽未来位置。多头将维度切分，子空间并行，再输出投影融合。RoPE 在 \(\mathbf{Q},\mathbf{K}\) 上施加与位置相关的旋转，使内积编码相对位置。KV Cache 缓存历史 K/V 以加速自回归。
+Self-Attention 用三个投影 $\mathbf{Q},\mathbf{K},\mathbf{V}$ 从同一层输入得到查询、键与值。相似度用点积，为控制方差在 $d_k$ 增大时不爆炸，除以 $\sqrt{d_k}$，再对 key 维 softmax 得到权重，对 $\mathbf{V}$ 加权求和。Decoder 用因果掩码屏蔽未来位置。多头将维度切分，子空间并行，再输出投影融合。RoPE 在 $\mathbf{Q},\mathbf{K}$ 上施加与位置相关的旋转，使内积编码相对位置。KV Cache 缓存历史 K/V 以加速自回归。
 
 ### K.2 代码实现（最小可运行骨架）
 
@@ -3477,12 +4023,12 @@ Self-Attention 用三个投影 \(\mathbf{Q},\mathbf{K},\mathbf{V}\) 从同一层
 
 | 考点 | 关键词 |
 |------|--------|
-| 缩放 | 方差 \(\sqrt{d_k}\) |
+| 缩放 | 独立、零均值、单位方差假设下，未缩放点积方差为 $d_k$，标准差为 $\sqrt{d_k}$；除以 $\sqrt{d_k}$ 后方差为 1 |
 | softmax 维 | 最后一维（key） |
-| 因果 | \(j>i\) 为 \(-\infty\) |
-| 多头 | \(d/h\) |
+| 因果 | $j>i$ 为 $-\infty$ |
+| 多头 | $d/h$ |
 | RoPE | 旋转、相对位置 |
-| 复杂度 | \(O(n^2 d)\) |
+| 复杂度 | $O(n^2 d)$ |
 | KV Cache | 存 K/V，不重复算历史 |
 
 ### K.4 练习题加量（10 道）
@@ -3490,62 +4036,19 @@ Self-Attention 用三个投影 \(\mathbf{Q},\mathbf{K},\mathbf{V}\) 从同一层
 1. 证明 softmax 行和为 1。  
 2. 若 K=V，Attention 退化成什么形式？（讨论）  
 3. 若 Q 为常数，权重如何？  
-4. 写出 \(\mathbf{A}\mathbf{1}\) 的含义。  
-5. 因果注意力第 \(t\) 行非零列范围？  
-6. RoPE 是否改变 \(\|q\|\)？（旋转保范）  
+4. 写出 $\mathbf{A}\mathbf{1}$ 的含义。  
+5. 因果注意力第 $t$ 行非零列范围？  
+6. RoPE 是否改变 $\|q\|$？（旋转保范）  
 7. 为何旋转保范对稳定有帮助？  
-8. 比较 \(\mathbf{O}\mathbf{1}\) 与 \(\mathbf{V}\) 行均值关系。  
-9. 多头拼接后为何还要 \(\mathbf{W}_O\)？  
+8. 比较 $\mathbf{O}\mathbf{1}$ 与 $\mathbf{V}$ 行均值关系。  
+9. 多头拼接后为何还要 $\mathbf{W}_O$？  
 10. 解释「注意力是动态路由」。
-
-### K.5 扩展单行条目 81～120（背诵用）
-
-81. Attention 权重非负。  
-82. 每行权重和为一。  
-83. 因果 mask 使上三角为 0。  
-84. Softmax 前加 mask 等价设 \(-\infty\)。  
-85. 数值用 `-1e9` 有时替代。  
-86. Half 精度 mask 要小心。  
-87. FlashAttention 数值与朴素一致（理想）。  
-88. 变长序列用 pad mask。  
-89. Pad 位置不应贡献注意力。  
-90. 合并 pad 与 causal 用 `masked_fill`。  
-91. 多头实现可融合投影。  
-92. fused QKV 线性层。  
-93. 一次矩阵乘输出 3d。  
-94. 节省内存带宽。  
-95. 推理优化常用。  
-96. 训练亦常用。  
-97. 权重布局影响 kernel。  
-98. cuBLASLt 自动调优。  
-99. 张量并行切分 head。  
-100. 列切分行切分不同。  
-101. 分布式 attention All-to-all。  
-102. Ring 减少通信。  
-103. 序列并行沿 T 切。  
-104. 长上下文训练难。  
-105. 数据并行复制模型。  
-106. ZeRO 分片优化器。  
-107. 本附录覆盖工程延伸。  
-108. 面试答核心即可。  
-109. 延伸问再展开。  
-110. 保持冷静。  
-111. 白板先写公式。  
-112. 再画矩阵形状。  
-113. B T D 标注。  
-114. B H T Dh 标注。  
-115. softmax 箭头指向 key 维。  
-116. 掩码画叉。  
-117. 残差画旁路。  
-118. Norm 画在子层前后。  
-119. Pre-Norm 先 Norm。  
-120. 与 Lesson 05 衔接现代块。  
 
 ### K.6 结语
 
 当你能在白板上 **同时写出** Attention 公式、因果 mask 示意图与 RoPE 的一句话动机，本节目标即已达成。
 
-**行数说明**：本文档为「面试导向超长版」，附录含大量可扫读条目，便于考前快速过一遍关键词。
+**复习建议**：先掌握主干公式与张量形状，再按需阅读附录。
 
 ---
 
@@ -3553,9 +4056,9 @@ Self-Attention 用三个投影 \(\mathbf{Q},\mathbf{K},\mathbf{V}\) 从同一层
 
 | 上一课 | 下一课 |
 |--------|--------|
-| [Lesson 03 - Transformer 架构详解](03-Transformer架构详解.md) | [Lesson 05 - RMSNorm / SwiGLU / GQA](05-RMSNorm-SwiGLU-GQA.md) |
+| [Lesson 03 - Transformer 架构详解](../docs/03-Transformer%E6%9E%B6%E6%9E%84%E8%AF%A6%E8%A7%A3.md) | [Lesson 05 - RMSNorm / SwiGLU / GQA](../docs/05-RMSNorm-SwiGLU-GQA.md) |
 
-[返回课程总览](00-课程总览与学习路线.md)
+[返回课程总览](../docs/00-%E8%AF%BE%E7%A8%8B%E6%80%BB%E8%A7%88%E4%B8%8E%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF.md)
 
 **文档结束**
 
@@ -3569,7 +4072,7 @@ Self-Attention 用三个投影 \(\mathbf{Q},\mathbf{K},\mathbf{V}\) 从同一层
 # Lesson 05：RMSNorm、SwiGLU 与 GQA
 
 > Stanford CS336 面试导向学习指南 · **概念讲解 → 代码实现 → 面试考点 → 练习题**  
-> 本节聚焦现代开源 LLM（尤其 **LLaMA** 系）相对原始 Transformer 的「标配三件套」：**RMSNorm**、**SwiGLU FFN**、**GQA**。
+> 本节聚焦 LLaMA 系常见的 RMSNorm、SwiGLU 与 RoPE，以及较新模型采用的 GQA。并非所有 LLaMA 版本/规模都使用 GQA，例如初代采用 MHA。
 
 ---
 
@@ -3578,7 +4081,7 @@ Self-Attention 用三个投影 \(\mathbf{Q},\mathbf{K},\mathbf{V}\) 从同一层
 1. [为什么现代 LLM 替换原始组件](#一为什么现代-llm-替换原始组件)
 2. [RMSNorm](#二rmsnorm)
 3. [SwiGLU 激活与 FFN](#三swiglu-激活与-ffn)
-4. [GQA：分组查询注意力](#四gqa分组查询注意力)
+4. [GQA：分组查询注意力](#四gqagrouped-query-attention)
 5. [现代 LLM「四件套」总结表](#五现代-llm四件套总结表)
 6. [面试高频题（10 题详解）](#六面试高频题10-题详解)
 7. [练习题](#七练习题)
@@ -3609,32 +4112,32 @@ Self-Attention 用三个投影 \(\mathbf{Q},\mathbf{K},\mathbf{V}\) 从同一层
 
 ### 2.1 LayerNorm 回顾
 
-对 \(\mathbf{x} \in \mathbb{R}^d\)（单 token），LayerNorm：
+对 $\mathbf{x} \in \mathbb{R}^d$（单 token），LayerNorm：
 
-\[
-\mathrm{LN}(\mathbf{x}) = \gamma \odot \frac{\mathbf{x} - \mu}{\sigma + \epsilon} + \beta
-\]
+$$
+\mathrm{LN}(\mathbf{x}) = \gamma \odot \frac{\mathbf{x} - \mu}{\sqrt{\sigma^2 + \epsilon}} + \beta
+$$
 
-其中 \(\mu = \frac{1}{d}\sum_i x_i\)，\(\sigma^2 = \frac{1}{d}\sum_i (x_i-\mu)^2\)。
+其中 $\mu = \frac{1}{d}\sum_i x_i$，$\sigma^2 = \frac{1}{d}\sum_i (x_i-\mu)^2$；这里采用 [PyTorch LayerNorm](https://docs.pytorch.org/docs/stable/generated/torch.nn.LayerNorm.html) 的写法，$\epsilon$ 加在方差上、位于平方根内。
 
 ### 2.2 RMSNorm 公式
 
-**RMSNorm（Root Mean Square Layer Normalization）** 去掉**中心化**（不减均值），通常也**去掉 \(\beta\)**，只保留缩放：
+**RMSNorm（Root Mean Square Layer Normalization）** 去掉**中心化**（不减均值），通常也**去掉 $\beta$**，只保留缩放：
 
-\[
+$$
 \mathrm{RMSNorm}(\mathbf{x}) = \alpha \odot \frac{\mathbf{x}}{\mathrm{RMS}(\mathbf{x})},\quad
 \mathrm{RMS}(\mathbf{x}) = \sqrt{\frac{1}{d}\sum_{i=1}^d x_i^2 + \epsilon}
-\]
+$$
 
-\(\alpha \in \mathbb{R}^d\) 为可学习缩放（类比 \(\gamma\)）。
+$\alpha \in \mathbb{R}^d$ 为可学习缩放（类比 $\gamma$）。
 
 ### 2.3 与 LayerNorm 对比
 
 | 项目 | LayerNorm | RMSNorm |
 |------|-----------|---------|
 | 减均值 | 是 | 否 |
-| 除以 RMS | 是（经方差） | 是 |
-| 偏置 \(\beta\) | 常有 | 常无 |
+| 归一化分母 | 标准差（含稳定项） | 均方根（含稳定项） |
+| 偏置 $\beta$ | 常有 | 常无 |
 | 计算量 | 略高 | 略低 |
 
 ### 2.4 为什么 RMSNorm「足够好」？
@@ -3643,8 +4146,8 @@ Self-Attention 用三个投影 \(\mathbf{Q},\mathbf{K},\mathbf{V}\) 从同一层
 
 ### 2.5 Pre-Norm vs Post-Norm（再述）
 
-- **Pre-Norm**：\(\mathbf{x} \leftarrow \mathbf{x} + \mathrm{Sublayer}(\mathrm{Norm}(\mathbf{x}))\)  
-- **Post-Norm**：\(\mathbf{x} \leftarrow \mathrm{Norm}(\mathbf{x} + \mathrm{Sublayer}(\mathbf{x}))\)  
+- **Pre-Norm**：$\mathbf{x} \leftarrow \mathbf{x} + \mathrm{Sublayer}(\mathrm{Norm}(\mathbf{x}))$  
+- **Post-Norm**：$\mathbf{x} \leftarrow \mathrm{Norm}(\mathbf{x} + \mathrm{Sublayer}(\mathbf{x}))$  
 
 现代大模型 **Pre-Norm + RMSNorm** 极常见，训练更稳、易加深。
 
@@ -3662,8 +4165,10 @@ class RMSNorm(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (..., dim)
-        rms = torch.rsqrt(x.pow(2).mean(dim=-1, keepdim=True) + self.eps)
-        return x * rms * self.weight
+        dtype = x.dtype
+        x_float = x.float()  # 半精度输入用 FP32 计算平方和
+        inv_rms = torch.rsqrt(x_float.pow(2).mean(dim=-1, keepdim=True) + self.eps)
+        return ((x_float * inv_rms) * self.weight.float()).to(dtype)
 ```
 
 ---
@@ -3672,29 +4177,29 @@ class RMSNorm(nn.Module):
 
 ### 3.1 从 ReLU 到 GELU 到 SwiGLU
 
-- **ReLU**：\(\max(0,x)\)，简单但不平滑。  
+- **ReLU**：$\max(0,x)$，简单但不平滑。  
 - **GELU**：平滑，Transformer 常用。  
 - **GLU（Gated Linear Unit）**：把一路当门控。
 
 ### 3.2 SwiGLU 公式
 
-**Swish** 激活：\(\sigma(x) = x \cdot \mathrm{sigmoid}(\beta x)\)，常取 \(\beta=1\)。
+**Swish** 激活：$\sigma(x) = x \cdot \mathrm{sigmoid}(\beta x)$，常取 $\beta=1$。
 
 **SwiGLU** FFN 常写作：
 
-\[
+$$
 \mathrm{FFN}_{\mathrm{SwiGLU}}(\mathbf{x}) = \big(\mathrm{Swish}(\mathbf{x}\mathbf{W}_1) \odot \mathbf{x}\mathbf{V}\big)\mathbf{W}_2
-\]
+$$
 
-其中 \(\odot\) 为逐元素乘，\(\mathbf{W}_1,\mathbf{V}\) 将 \(\mathbf{x}\) 映到中间维（常取 \(2/3\) 或按实现调整相对 \(4d\) 的配比），\(\mathbf{W}_2\) 映回 \(d\)。
+其中 $\odot$ 为逐元素乘，$\mathbf{W}_1,\mathbf{V}$ 将 $\mathbf{x}$ 映到中间维（常取 $2/3$ 或按实现调整相对 $4d$ 的配比），$\mathbf{W}_2$ 映回 $d$。
 
-**直觉**：门控 \(\sigma(\mathbf{x}\mathbf{W}_1)\) 控制 \(\mathbf{x}\mathbf{V}\) 哪些通道通过，**表达能力**强于单路 MLP。
+**直觉**：门控 $\sigma(\mathbf{x}\mathbf{W}_1)$ 控制 $\mathbf{x}\mathbf{V}$ 哪些通道通过，**表达能力**强于单路 MLP。
 
-### 3.3 对隐层维度的影响（\(8d/3\) 梗）
+### 3.3 对隐层维度的影响（$8d/3$ 梗）
 
-若经典 FFN 用两层 \(d \to 4d \to d\)，参数量约 \(2 \cdot 4d^2 = 8d^2\)。
+若经典 FFN 用两层 $d \to 4d \to d$，参数量约 $2 \cdot 4d^2 = 8d^2$。
 
-SwiGLU 有 **三路线性**（\(\mathbf{W}_1,\mathbf{V},\mathbf{W}_2\)），若仍将「总参数」控制在相近量级，常把中间维从 \(4d\) 调到约 **\(\frac{8}{3}d\)**，使总参数量级与 \(8d^2\) 可比（**面试说法**：「为补偿三矩阵，缩中间宽」；精确常数依实现）。
+SwiGLU 有 **三路线性**（$\mathbf{W}_1,\mathbf{V},\mathbf{W}_2$），若仍将「总参数」控制在相近量级，常把中间维从 $4d$ 调到约 **$\frac{8}{3}d$**，使总参数量级与 $8d^2$ 可比（**面试说法**：「为补偿三矩阵，缩中间宽」；精确常数依实现）。
 
 ### 3.4 代码实现（示意）
 
@@ -3714,7 +4219,7 @@ class SwiGLU(nn.Module):
         return self.w2(F.silu(self.w1(x)) * self.v(x))
 ```
 
-`F.silu` 即 Swish（\(\beta=1\)）。
+`F.silu` 即 Swish（$\beta=1$）。
 
 ---
 
@@ -3732,8 +4237,8 @@ class SwiGLU(nn.Module):
 
 ### 4.3 KV Cache 显存直觉
 
-每层缓存 \(\mathbf{K},\mathbf{V}\)，形状 roughly \((B, n_{\mathrm{kv}}, T, d_h)\)。  
-从 MHA 到 GQA：\(n_{\mathrm{kv}} = h\) 降为 \(n_{\mathrm{groups}}\) 或等价更小的 KV 头数 → **线性**减少 KV 张量大小。
+每层缓存 $\mathbf{K},\mathbf{V}$，形状 roughly $(B, n_{\mathrm{kv}}, T, d_h)$。  
+从 MHA 到 GQA：$n_{\mathrm{kv}} = h$ 降为 $n_{\mathrm{groups}}$ 或等价更小的 KV 头数 → **线性**减少 KV 张量大小。
 
 ### 4.4 代码骨架（概念）
 
@@ -3744,7 +4249,8 @@ import torch.nn as nn
 class GQAProjection(nn.Module):
     def __init__(self, d_model: int, n_q_heads: int, n_kv_heads: int):
         super().__init__()
-        assert n_q_heads % n_kv_heads == 0
+        assert n_q_heads > 0 and n_kv_heads > 0
+        assert d_model % n_q_heads == 0 and n_q_heads % n_kv_heads == 0
         self.n_q_heads = n_q_heads
         self.n_kv_heads = n_kv_heads
         self.n_rep = n_q_heads // n_kv_heads
@@ -3794,19 +4300,19 @@ class GQAProjection(nn.Module):
 
 ### Q5：MHA / MQA / GQA 的参数量与 KV 对比？
 
-**答**：MHA：K/V 投影参数量随头数满配；MQA：K/V **最小**；GQA：**介于中间**。KV Cache 与 K/V 头数成正比（同 \(d_h,T,L\) 下）。
+**答**：固定 $d$、$h_q$ 且 $d_h=d/h_q$ 时，Q/O 共 $2d^2$ 个权重，K/V 共 $2d h_{kv}d_h$；MHA 取 $h_{kv}=h_q$，总计 $4d^2$，GQA/MQA 减少 K/V 参数。KV Cache 与 $h_{kv}$ 成正比（同 $d_h,T,L$ 下）。
 
 ### Q6：为什么 LLaMA 选择这些组件？
 
-**答**：在**开源可复现**前提下，追求 **训练稳定（RMSNorm+Pre-Norm）**、**推理可扩展（GQA）**、**效果（SwiGLU+RoPE）** 的综合最优。
+**答**：RMSNorm+Pre-Norm 用于稳定优化，SwiGLU 提供门控非线性，RoPE 编码位置；部分较新 LLaMA 型号采用 GQA 以减少 KV 缓存。不能把这些组件或权重共享归为所有 LLaMA 型号一致的配置。
 
 ### Q7：RMSNorm 的计算复杂度？
 
-**答**：相对 LN **略低**（少均值）；主项仍是 \(O(d)\) 每 token；相对整体 \(O(n^2 d)\) attention 常可忽略。
+**答**：相对 LN **略低**（少均值）；主项仍是 $O(d)$ 每 token；相对整体 $O(n^2 d)$ attention 常可忽略。
 
 ### Q8：SwiGLU 对 FFN 隐层维度有什么影响？
 
-**答**：三矩阵结构下为控制总参数，常把中间维从经典 \(4d\) 调整为约 **\(8d/3\)** 量级（经验值，依实现）。
+**答**：三矩阵结构下为控制总参数，常把中间维从经典 $4d$ 调整为约 **$8d/3$** 量级（经验值，依实现）。
 
 ### Q9：GQA 如何减少 KV Cache 显存？
 
@@ -3820,10 +4326,10 @@ class GQAProjection(nn.Module):
 
 ## 七、练习题
 
-1. 手算 \(\mathbf{x}=(3,4)\) 的 RMS（加 \(\epsilon=0\)）与 RMSNorm（\(\alpha=(1,1)\)）。  
+1. 手算 $\mathbf{x}=(3,4)$ 的 RMS（加 $\epsilon=0$）与 RMSNorm（$\alpha=(1,1)$）。  
 2. 对比 LN 与 RMSNorm 的 Python 行数差异。  
 3. 为什么 SwiGLU 用 `silu` 而非 `relu`？  
-4. 若 \(n_q=32, n_{kv}=8\)，每组重复几次 K/V？  
+4. 若 $n_q=32, n_{kv}=8$，每组重复几次 K/V？  
 5. 解释「门控」与 LSTM 门控异同（口头）。  
 6. 为什么推理比训练更在意 KV？  
 7. 写一行：RMS 的 `torch` 实现。  
@@ -3840,11 +4346,12 @@ import torch
 from typing import Optional
 
 def rms_norm(x: torch.Tensor, weight: Optional[torch.Tensor], eps: float = 1e-6) -> torch.Tensor:
-    rms = torch.rsqrt(x.pow(2).mean(dim=-1, keepdim=True) + eps)
-    out = x * rms
+    x_float = x.float()
+    rms = torch.rsqrt(x_float.pow(2).mean(dim=-1, keepdim=True) + eps)
+    out = x_float * rms
     if weight is not None:
-        out = out * weight
-    return out
+        out = out * weight.float()
+    return out.to(x.dtype)
 ```
 
 ### 附录 B：LayerNorm 对照实现（复习）
@@ -3870,7 +4377,7 @@ RMSNorm 保留 **按特征维缩放** 的核心作用，使每 token 向量范�
 
 ### C.2 SwiGLU 概念深化
 
-GLU 形式 \(\mathrm{GLU}(x) = \sigma(xW+V) \odot xU\) 将一半通道作门、一半作内容；SwiGLU 用 Swish 替代 sigmoid，**平滑且非饱和区更宽**，利于深层优化。
+忽略偏置时，GLU 为 $\mathrm{GLU}(x)=(xW)\odot\mathrm{sigmoid}(xV)$：两路线性投影分别提供内容与门控。SwiGLU 将 sigmoid 门替换为 Swish/SiLU，不必通过把输入张量直接切成两半实现。
 
 ### C.3 GQA 概念深化
 
@@ -3889,11 +4396,15 @@ def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
         return x
     return x.repeat_interleave(n_rep, dim=1)
 
-def gqa_attention(q, k, v, n_rep: int):
+def gqa_attention(q, k, v, n_rep: int, causal: bool = False):
     # q: (B, n_q, T, dh); k,v: (B, n_kv, T, dh)
     k = repeat_kv(k, n_rep)
     v = repeat_kv(v, n_rep)
     att = (q @ k.transpose(-2, -1)) / math.sqrt(q.size(-1))
+    if causal:
+        assert q.size(-2) == k.size(-2)  # 全序列 self-attention；KV 增量 mask 另处理
+        mask = torch.triu(torch.ones(q.size(-2), k.size(-2), device=q.device, dtype=torch.bool), diagonal=1)
+        att = att.masked_fill(mask, float("-inf"))
     att = torch.softmax(att, dim=-1)
     return att @ v
 ```
@@ -3903,12 +4414,12 @@ def gqa_attention(q, k, v, n_rep: int):
 | 主题 | 答法关键词 |
 |------|------------|
 | RMS vs LN | 无去均值、无偏置、RMS 缩放 |
-| SwiGLU | 三矩阵、门控、中间宽 \(8d/3\) |
+| SwiGLU | 三矩阵、门控、中间宽 $8d/3$ |
 | GQA | 少 KV 头、repeat KV、Cache↓ |
 
 ### C.6 练习题加量（15 道）
 
-1. RMSNorm 是否等价于 LN 当 \(\mu=0\)？讨论。  
+1. RMSNorm 是否等价于 LN 当 $\mu=0$？讨论。  
 2. 写出 RMS 与 L2 范数关系。  
 3. SwiGLU 参数量相对两层 MLP 如何估算？  
 4. 为何推理吞吐用「tokens/s」衡量？  
@@ -3926,124 +4437,19 @@ def gqa_attention(q, k, v, n_rep: int):
 
 ---
 
-## 附录 D：现代 LLM 相对 2017 Transformer 改动清单（扩展 100 条）
-
-1. RMSNorm 替代 LN。  
-2. Pre-Norm 为主。  
-3. RoPE 位置编码。  
-4. SwiGLU FFN。  
-5. GQA 注意力。  
-6. 去除部分 bias。  
-7. 大词表 embedding。  
-8. 旋转嵌入在 QK。  
-9. 上下文长度扩展技术。  
-10. NTK 插值。  
-11. YaRN。  
-12. 动态缩放。  
-13. 滑动窗口（部分）。  
-14. 稀疏注意力（部分）。  
-15. MoE FFN（部分）。  
-16. 数据混合比例。  
-17. 学习率调度。  
-18. Warmup。  
-19. Cosine decay。  
-20. Weight decay AdamW。  
-21. 梯度裁剪。  
-22. 混合精度 bf16。  
-23. FlashAttention。  
-24. 序列并行。  
-25. 张量并行。  
-26. 流水线并行。  
-27. 激活重计算。  
-28. Checkpointing。  
-29. 数据并行。  
-30. ZeRO-1/2/3。  
-31. 模型并行切分 embedding。  
-32. 输出层大矩阵。  
-33. Tie embedding 省参数。  
-34. 词表 128k。  
-35. 多语言数据。  
-36. 代码数据。  
-37. 数学数据。  
-38. 指令微调。  
-39. RLHF。  
-40. DPO。  
-41. 本课只讲架构块。  
-42. RMSNorm 论文 2019。  
-43. SwiGLU 来自 Google 工作。  
-44. GQA 论文阐述分组。  
-45. LLaMA 1 发布引发开源潮。  
-46. LLaMA 2 商用许可。  
-47. LLaMA 3 多模态扩展。  
-48. Mistral 用滑动窗口。  
-49. Mixtral MoE。  
-50. 面试常问 LLaMA 块。  
-51. 对比 GPT-3 细节未公开。  
-52. 开源可复现重要。  
-53. 读代码 llama_modeling。  
-54. HuggingFace 实现。  
-55. vLLM 推理。  
-56. 量化 AWQ GPTQ。  
-57. KV 量化。  
-58. 投机解码。  
-59. 并行采样。  
-60. 本附录帮助行数。  
-61. 读者可跳过条目。  
-62. 抓住四件套即可。  
-63. RMS 公式背。  
-64. SwiGLU 公式背。  
-65. GQA 图示背。  
-66. 白板画 block。  
-67. 标 Pre-Norm。  
-68. 标残差。  
-69. 标 RMS。  
-70. 标 Attn。  
-71. 标 SwiGLU。  
-72. 标第二次 RMS。  
-73. 标 FFN。  
-74. 与 GPT-2 block 对比。  
-75. 参数量估算。  
-76. FLOPs 估算。  
-77. 推理显存估算。  
-78. KV 为主。  
-79. 权重次之。  
-80. 激活训练大。  
-81. 推理激活小。  
-82. Batch 大则激活大。  
-83. 长上下文 KV 主导。  
-84. GQA 缓解。  
-85. MQA 更狠。  
-86. MHA 最纯。  
-87. 精度 MHA 高。  
-88. 速度 MQA 高。  
-89. GQA 折中。  
-90. 工业界爱 GQA。  
-91. 手机端更爱 MQA。  
-92. 云端长文本 GQA。  
-93. 研究仍试 MHA。  
-94. 缩放点积不变。  
-95. RoPE 与 RMS 独立。  
-96. 可组合。  
-97. 无冲突。  
-98. 训练稳定第一。  
-99. 推理成本第二。  
-100. 效果第三。  
-
----
-
 ## 附录 E：SwiGLU 参数量推导草稿
 
-设模型维 \(d\)，中间维 \(d_{\mathrm{ff}}\)。SwiGLU 三矩阵：\(\mathbf{W}_1,\mathbf{V} \in \mathbb{R}^{d \times d_{\mathrm{ff}}}\)，\(\mathbf{W}_2 \in \mathbb{R}^{d_{\mathrm{ff}} \times d}\)。
+设模型维 $d$，中间维 $d_{\mathrm{ff}}$。SwiGLU 三矩阵：$\mathbf{W}_1,\mathbf{V} \in \mathbb{R}^{d \times d_{\mathrm{ff}}}$，$\mathbf{W}_2 \in \mathbb{R}^{d_{\mathrm{ff}} \times d}$。
 
-参数量近似：\(2 d d_{\mathrm{ff}} + d_{\mathrm{ff}} d = d_{\mathrm{ff}} (2d + d) = 3 d d_{\mathrm{ff}}\)（忽略 bias）。
+参数量近似：$2 d d_{\mathrm{ff}} + d_{\mathrm{ff}} d = d_{\mathrm{ff}} (2d + d) = 3 d d_{\mathrm{ff}}$（忽略 bias）。
 
-令与经典 \(8d^2\)（\(d_{\mathrm{ff}}=4d\) 时 \(2\cdot d \cdot 4d=8d^2\)）可比，解 \(d_{\mathrm{ff}}\) 得约 \(\frac{8}{3}d\) 量级（**示意**，常数依是否含 bias、是否融合而定）。
+令与经典 $8d^2$（$d_{\mathrm{ff}}=4d$ 时 $2\cdot d \cdot 4d=8d^2$）可比，解 $d_{\mathrm{ff}}$ 得约 $\frac{8}{3}d$ 量级（**示意**，常数依是否含 bias、是否融合而定）。
 
 ---
 
 ## 附录 F：RMSNorm 反向传播直觉（了解）
 
-RMSNorm 对 \(\mathbf{x}\) 的梯度涉及 RMS 分母；实现需数值稳定；PyTorch `autograd` 已处理。
+RMSNorm 对 $\mathbf{x}$ 的梯度涉及 RMS 分母；实现需数值稳定；PyTorch `autograd` 已处理。
 
 ---
 
@@ -4056,118 +4462,13 @@ RMSNorm 对 \(\mathbf{x}\) 的梯度涉及 RMS 分母；实现需数值稳定；
 
 ## 附录 H：英文面试段落
 
-"LLaMA uses RMSNorm instead of LayerNorm for slightly cheaper normalization without mean centering; SwiGLU replaces the vanilla FFN with a gated structure using SiLU; GQA reduces the number of KV heads and repeats them to match query heads, cutting KV cache and memory bandwidth during autoregressive decoding."
+“LLaMA-family models use RMSNorm, RoPE and SwiGLU. GQA in newer models reduces KV heads and cache traffic; the exact attention type depends on model generation and size.”
 
 ---
 
-## 附录 I：扩展单行句 101～200
+## 附录 J：学习内容自检
 
-101. Pre-Norm 让梯度更直接。  
-102. Post-Norm 论文原始。  
-103. 后来 Pre-Norm 流行。  
-104. RMSNorm 计算少一次均值。  
-105. 硬件友好。  
-106. LayerNorm 在 CV 仍常用。  
-107. BatchNorm 在 LM 少用。  
-108. GroupNorm 在 LM 少用。  
-109. InstanceNorm 不相关。  
-110. RMS 是 L2 按维均。  
-111. 与向量范数相关。  
-112. 缩放防止爆炸。  
-113. 残差提供路径。  
-114. 二者叠加。  
-115. 初始化仍重要。  
-116. 深度缩放法则。  
-117. 宽度缩放。  
-118. 深度宽度权衡。  
-119. Chinchilla。  
-120. 数据量重要。  
-121. 本附录不展开缩放。  
-122. SwiGLU 来自门控思想。  
-123. LSTM 三门。  
-124. GRU 两门。  
-125. FFN 两门线性加门。  
-126. 更简单。  
-127. 并行度高。  
-128. 适合 GPU。  
-129. 与 Attention 配合。  
-130. 交替堆叠。  
-131. 信息混合与变换分工。  
-132. Attention 混合。  
-133. FFN 变换。  
-134. 类比路由与 MLP 记忆。  
-135. 只是类比。  
-136. 严谨表述看论文。  
-137. GQA 分组数常整除。  
-138. 否则实现复杂。  
-139. repeat 最简单。  
-140. 广播要小心。  
-141. 形状对齐。  
-142. head 维一致。  
-143. dh 一致。  
-144. broadcast 在 batch。  
-145. 多卡切分 head。  
-146. GQA 切分更细。  
-147. 通信模式不同。  
-148. 推理 batch=1。  
-149. 带宽敏感。  
-150. 量化缓解。  
-151. 投机解码缓解延迟。  
-152. 本课不讲投机。  
-153. 部署课讲。  
-154. 对齐课不讲 Norm。  
-155. 数据课不讲。  
-156. 系统课讲带宽。  
-157. FlashAttention 讲 IO。  
-158. GQA 讲 KV 小。  
-159. 合力解决长文本。  
-160. 仍是活跃领域。  
-161. 读者保持学习。  
-162. 论文更新快。  
-163. 跟踪 arXiv。  
-164. 跟踪开源。  
-165. LLaMA 代码易读。  
-166. 推荐精读。  
-167. 对照本文。  
-168. 画流程图。  
-169. 写伪代码。  
-170. 模拟张量形状。  
-171. 打印模块。  
-172. 单步 forward。  
-173. 对齐论文图。  
-174. 面试自信。  
-175. STAR 项目经历。  
-176. 描述替换组件动机。  
-177. 体现系统性。  
-178. 薪资加分。  
-179. 本附录结束句 200。  
-180. 继续到 200。  
-181. 行数填充完成。  
-182. 复习愉快。  
-183. 做题愉快。  
-184. 面试愉快。  
-185. 拿到 offer。  
-186. 回馈社区。  
-187. 写博客。  
-188. 教后辈。  
-189. 知识循环。  
-190. CS336 好书。  
-191. Stanford 质量。  
-192. 作业难但值。  
-193. 坚持写完。  
-194. 你很强。  
-195. 下一课优化器。  
-196. AdamW 重要。  
-197. 学习率重要。  
-198. 损失函数重要。  
-199. 采样重要。  
-200. 本节完。  
-
----
-
-## 附录 J：用户要求覆盖自检
-
-| 用户要求 | 章节 |
+| 学习内容 | 章节 |
 |----------|------|
 | 为何替换原始组件 | 第一节 |
 | RMSNorm 公式与对比 | 第二节 |
@@ -4190,14 +4491,14 @@ RMSNorm 对 \(\mathbf{x}\) 的梯度涉及 RMS 分母；实现需数值稳定；
 ## 附录 L：面试追问 20 条（极简答案）
 
 1. RMSNorm 有 bias 吗？→ 通常无。  
-2. RMSNorm 可学习参数？→ `weight` \(\alpha\)。  
+2. RMSNorm 可学习参数？→ `weight` $\alpha$。  
 3. SwiGLU 几个 Linear？→ 常三个。  
-4. SiLU 与 Swish？→ 常等价（\(\beta=1\)）。  
-5. GQA 谁提出？→ 多篇工作，LLaMA2 推广。  
+4. SiLU 与 Swish？→ 常等价（$\beta=1$）。  
+5. GQA 论文？→ Ainslie et al.（2023）；并非所有 LLaMA 型号都使用 GQA。
 6. MQA 论文？→ Shazeer 等。  
 7. 为何不叫 MHA-GQA？→ 命名习惯。  
 8. KV 头数能任意吗？→ 需整除 Q 头数。  
-9. \(d_h\) 会变吗？→ 通常 \(d/h\) 固定。  
+9. $d_h$ 会变吗？→ 通常 $d/h$ 固定。  
 10. SwiGLU 中间宽谁定？→ 架构搜索/经验。  
 11. 还能用 GELU FFN 吗？→ 可以，效果权衡。  
 12. RMSNorm 用于输出？→ 视实现，常在子层前。  
@@ -4216,9 +4517,9 @@ RMSNorm 对 \(\mathbf{x}\) 的梯度涉及 RMS 分母；实现需数值稳定；
 
 | 子模块 | 经典 Decoder Block | LLaMA 风格 |
 |--------|---------------------|------------|
-| 子层前 Norm | LayerNorm / Pre-LN | **RMSNorm** |
-| Self-Attn | MHA | **GQA** + **RoPE** |
-| FFN | GELU MLP | **SwiGLU** |
+| Norm 位置与类型 | 原始 Transformer 为 Post-LN + LayerNorm | **Pre-Norm + RMSNorm** |
+| Self-Attn | MHA | **GQA**（较新/部分型号）+ **RoPE** |
+| FFN | 原始 Transformer 为 ReLU MLP，后续也常用 GELU | **SwiGLU** |
 | 偏置 | 常有 | **常无** |
 
 ---
@@ -4232,144 +4533,13 @@ RMSNorm 对 \(\mathbf{x}\) 的梯度涉及 RMS 分母；实现需数值稳定；
 
 ---
 
-## 附录 O：单行扩展 201～320（背诵与行数）
-
-201. Norm 稳定前向激活。  
-202. 深层网络必备。  
-203. 无 Norm 难训练。  
-204. 残差也需 Norm。  
-205. 二者不同功能。  
-206. 缩放因子学习。  
-207. RMS 可学习。  
-208. LN gamma beta。  
-209. RMS 仅 gamma。  
-210. 参数略少。  
-211. 显存略省。  
-212. 计算略快。  
-213. 大模型累加显著。  
-214. 千亿参数省一点是一点。  
-215. FLOPs 亦略降。  
-216. 带宽亦略降。  
-217. 推理延迟略降。  
-218. 用户体验提升。  
-219. 工程细节决定产品。  
-220. 算法工程师要懂。  
-221. 系统工程师也要懂。  
-222. 协作沟通顺畅。  
-223. 本课程培养全栈。  
-224. CS336 设计好。  
-225. 作业驱动学习。  
-226. 痛苦但值得。  
-227. 面试有故事。  
-228. STAR 法则。  
-229. Situation Task Action Result。  
-230. 讲清 RMSNorm 动机。  
-231. 讲清 SwiGLU 动机。  
-232. 讲清 GQA 动机。  
-233. 面试官点头。  
-234. 拿到面试通过。  
-235. 薪资谈判。  
-236. 职业规划。  
-237. 回到技术。  
-238. 公式再写一遍。  
-239. RMS 分母。  
-240. SwiGLU 三门。  
-241. GQA repeat。  
-242. 白板结束。  
-243. 握手。  
-244. 谢谢。  
-245. 下一位候选人。  
-246. 你已准备充分。  
-247. 继续学 Lesson 06。  
-248. AdamW 权重衰减。  
-249. 学习率调度。  
-250. Warmup 步数。  
-251. 梯度累积。  
-252. 混合精度。  
-253. 梯度裁剪。  
-254. 一切为稳定训练。  
-255. 架构是骨架。  
-256. 优化是血液。  
-257. 数据是食物。  
-258. 算力是氧气。  
-259. 四者缺一不可。  
-260. 本节架构完结。  
-261. 优化下节见。  
-262. 数据后见。  
-263. 系统后见。  
-264. 对齐后见。  
-265. 部署终见。  
-266. 全流程打通。  
-267. Offer 到手。  
-268. 入职大厂。  
-269. 做有趣的事。  
-270. 回馈开源。  
-271. 写中文笔记。  
-272. 帮助后来者。  
-273. 知识传承。  
-274. 技术向善。  
-275. AI 安全。  
-276. 对齐重要。  
-277. 责任重要。  
-278. 伦理重要。  
-279. 本附录略跑题。  
-280. 回到 RMSNorm。  
-281. 公式默念。  
-282. 代码默写。  
-283. 面试不慌。  
-284. 手写 SwiGLU。  
-285. 手写 repeat_kv。  
-286. 手写 RMSNorm。  
-287. 计时五分钟。  
-288. 超时再练。  
-289. 熟练为止。  
-290. 自信上场。  
-291. 白板清晰。  
-292. 逻辑清楚。  
-293. 声音稳定。  
-294. 互动良好。  
-295. 反问环节问团队。  
-296. 问技术栈。  
-297. 问业务场景。  
-298. 问成长路径。  
-299. 双向选择。  
-300. 合适最重要。  
-301. 技术匹配。  
-302. 文化匹配。  
-303. 节奏匹配。  
-304. 薪资匹配。  
-305. 四匹配。  
-306. 祝你好运。  
-307. 本节附录真长。  
-308. 读者辛苦了。  
-309. 休息一下。  
-310. 喝水。  
-311. 伸展。  
-312. 继续。  
-313. 学习快乐。  
-314. 代码无 bug。  
-315. loss 下降。  
-316. perplexity 降。  
-317. eval 涨。  
-318. 模型好用。  
-319. 用户满意。  
-320. 附录 O 完。  
-
----
-
-### 附录 P：文档结束标记
-
-本文档 **≥800 行** 目标用于「小白 + 面试」双场景：主干读透，附录扫读抓关键词即可。
-
----
-
 ## 导航
 
 | 上一课 | 下一课 |
 |--------|--------|
-| [Lesson 04 - 多头注意力与 RoPE](04-多头注意力与RoPE.md) | [Lesson 06 - AdamW 优化器实现](06-AdamW优化器实现.md)（若已创建） |
+| [Lesson 04 - 多头注意力与 RoPE](../docs/04-%E5%A4%9A%E5%A4%B4%E6%B3%A8%E6%84%8F%E5%8A%9B%E4%B8%8ERoPE.md) | [Lesson 06 - AdamW 优化器实现](../docs/06-AdamW%E4%BC%98%E5%8C%96%E5%99%A8%E5%AE%9E%E7%8E%B0.md)（若已创建） |
 
-[返回课程总览](00-课程总览与学习路线.md)
+[返回课程总览](../docs/00-%E8%AF%BE%E7%A8%8B%E6%80%BB%E8%A7%88%E4%B8%8E%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF.md)
 
 ---
 
@@ -4394,11 +4564,11 @@ RMSNorm 对 \(\mathbf{x}\) 的梯度涉及 RMS 分母；实现需数值稳定；
 
 ### 优化器在训练里做什么？
 
-语言模型训练本质是：给定损失 \(L(\theta)\)，在极高维参数空间 \(\theta\) 上**迭代减小损失**。每一步典型流程为：
+语言模型训练本质是：给定损失 $L(\theta)$，在极高维参数空间 $\theta$ 上**迭代减小损失**。每一步典型流程为：
 
 1. **前向**计算 loss；  
-2. **反向**得到梯度 \(\mathbf{g}_t = \nabla_\theta L(\theta_{t-1})\)；  
-3. **优化器**根据 \(\mathbf{g}_t\) 与历史统计，更新 \(\theta_t\)。
+2. **反向**得到梯度 $\mathbf{g}_t = \nabla_\theta L(\theta_{t-1})$；  
+3. **优化器**根据 $\mathbf{g}_t$ 与历史统计，更新 $\theta_t$。
 
 **AdamW** 是当前 **Decoder-only LLM 预训练** 的主流选择之一（常与 **cosine + warmup**、**全局梯度范数裁剪**、**混合精度** 一起出现）。理解它，等于理解「现代 LM 训练脚本里一半的超参」。
 
@@ -4408,13 +4578,13 @@ RMSNorm 对 \(\mathbf{x}\) 的梯度涉及 RMS 分母；实现需数值稳定；
 
 **全批量梯度下降**使用**整个数据集**上的平均梯度：
 
-\[
+$$
 \theta_{t+1} = \theta_t - \eta \cdot \frac{1}{N}\sum_{i=1}^{N} \nabla_\theta L_i(\theta_t)
-\]
+$$
 
-- \(\eta\)：**学习率（learning rate）**，控制每步沿负梯度方向走多远。  
+- $\eta$：**学习率（learning rate）**，控制每步沿负梯度方向走多远。  
 - **优点**：梯度方向是「真实」的期望方向，更新稳定。  
-- **缺点**：\(N\) 很大时每一步都扫全数据，**太慢**；且只有大 batch 才近似稳定。
+- **缺点**：$N$ 很大时每一步都扫全数据，**太慢**；且只有大 batch 才近似稳定。
 
 **直觉**：站在损失曲面上，每一步朝「最陡下坡」的方向走一小步。
 
@@ -4422,13 +4592,13 @@ RMSNorm 对 \(\mathbf{x}\) 的梯度涉及 RMS 分母；实现需数值稳定；
 
 ### 2. 随机梯度下降（SGD）
 
-对每个 **mini-batch**（大小 \(B \ll N\)）用样本梯度近似：
+对每个 **mini-batch**（大小 $B \ll N$）用样本梯度近似：
 
-\[
+$$
 \theta_{t+1} = \theta_t - \eta \cdot \mathbf{g}_t
-\]
+$$
 
-其中 \(\mathbf{g}_t\) 是当前 batch 的梯度（是总体梯度的无偏估计，但**方差大**）。
+其中 $\mathbf{g}_t$ 是当前 batch 的梯度（是总体梯度的无偏估计，但**方差大**）。
 
 - **优点**：每步计算量小，可在海量数据上迭代。  
 - **缺点**：噪声大，损失曲面抖动；在狭长「峡谷」里易**之字形**震荡，收敛慢。  
@@ -4440,19 +4610,20 @@ RMSNorm 对 \(\mathbf{x}\) 的梯度涉及 RMS 分母；实现需数值稳定；
 
 ### 3. 带动量的 SGD（Momentum）
 
-引入 **速度** \(\mathbf{v}_t\)，把历史梯度做指数滑动平均，阻尼震荡、加速一致方向：
+引入 **速度** $\mathbf{v}_t$，把历史梯度做指数滑动平均，阻尼震荡、加速一致方向：
 
-\[
+$$
 \mathbf{v}_t = \beta \mathbf{v}_{t-1} + \mathbf{g}_t
-\]
-\[
-\theta_{t+1} = \theta_t - \eta \cdot \mathbf{v}_t
-\]
+$$
 
-常见变体也会写成 \(\mathbf{v}_t = \beta \mathbf{v}_{t-1} + (1-\beta)\mathbf{g}_t\)，与 Adam 中一阶矩形式统一，本质是 **对梯度的 EMA（指数滑动平均）**。
+$$
+\theta_{t+1} = \theta_t - \eta \cdot \mathbf{v}_t
+$$
+
+常见变体也会写成 $\mathbf{v}_t = \beta \mathbf{v}_{t-1} + (1-\beta)\mathbf{g}_t$，与 Adam 中一阶矩形式统一，本质是 **对梯度的 EMA（指数滑动平均）**。
 
 - **直觉**：以前几步的「惯性」冲过平坦区、减少直角弯折。  
-- \(\beta\)：典型 **0.9**。  
+- $\beta$：典型 **0.9**。  
 - **局限**：仍只有**一个全局学习率**缩放整向量；各参数维度的梯度尺度差异大时，不如自适应方法省心。
 
 ---
@@ -4461,53 +4632,54 @@ RMSNorm 对 \(\mathbf{x}\) 的梯度涉及 RMS 分母；实现需数值稳定；
 
 **Adam**（Adaptive Moment Estimation）同时维护：
 
-- **一阶矩** \(\mathbf{m}_t\)：梯度的指数滑动平均（可理解为梯度方向的「平滑估计」，与 momentum 思想相通）；  
-- **二阶矩** \(\mathbf{v}_t\)：梯度**逐元素平方**的指数滑动平均（刻画各维梯度的**尺度**，用于自适应归一化）。
+- **一阶矩** $\mathbf{m}_t$：梯度的指数滑动平均（可理解为梯度方向的「平滑估计」，与 momentum 思想相通）；  
+- **二阶矩** $\mathbf{v}_t$：梯度**逐元素平方**的指数滑动平均（刻画各维梯度的**尺度**，用于自适应归一化）。
 
 **递推（与 PyTorch / 论文常见写法一致）**：
 
-\[
+$$
 \mathbf{m}_t = \beta_1 \mathbf{m}_{t-1} + (1-\beta_1)\mathbf{g}_t
-\]
-\[
+$$
+
+$$
 \mathbf{v}_t = \beta_2 \mathbf{v}_{t-1} + (1-\beta_2)\mathbf{g}_t^2
-\]
+$$
 
-其中 \(\mathbf{g}_t^2\) 表示 **Hadamard 逐元素平方**（每个参数位置独立）。
+其中 $\mathbf{g}_t^2$ 表示 **Hadamard 逐元素平方**（每个参数位置独立）。
 
-**偏差修正（bias correction）**：初始化 \(\mathbf{m}_0=\mathbf{0}\)、\(\mathbf{v}_0=\mathbf{0}\)，导致初期 \(\mathbf{m}_t,\mathbf{v}_t\) **系统性偏小**（尤其 \(t\) 很小时）。定义：
+**偏差修正（bias correction）**：初始化 $\mathbf{m}_0=\mathbf{0}$、$\mathbf{v}_0=\mathbf{0}$，导致初期 $\mathbf{m}_t,\mathbf{v}_t$ **系统性偏小**（尤其 $t$ 很小时）。定义：
 
-\[
+$$
 \hat{\mathbf{m}}_t = \frac{\mathbf{m}_t}{1-\beta_1^t}, \quad
 \hat{\mathbf{v}}_t = \frac{\mathbf{v}_t}{1-\beta_2^t}
-\]
+$$
 
 **参数更新（Adam 核心步）**：
 
-\[
+$$
 \theta_{t+1} = \theta_t - \eta \cdot \frac{\hat{\mathbf{m}}_t}{\sqrt{\hat{\mathbf{v}}_t} + \epsilon}
-\]
+$$
 
-- **\(\epsilon\)**：数值稳定项（典型 **1e-8**），加在 \(\sqrt{\hat{\mathbf{v}}_t}\) 上防止分母过小。  
-- **直觉**：\(\hat{\mathbf{m}}_t\) 定更新方向；\(\sqrt{\hat{\mathbf{v}}_t}\) 做逐维缩放——历史梯度幅度大的维，有效步长自动被压低（**自适应**）。
+- **$\epsilon$**：数值稳定项（典型 **1e-8**），加在 $\sqrt{\hat{\mathbf{v}}_t}$ 上防止分母过小。  
+- **直觉**：$\hat{\mathbf{m}}_t$ 定更新方向；$\sqrt{\hat{\mathbf{v}}_t}$ 做逐维缩放——历史梯度幅度大的维，有效步长自动被压低（**自适应**）。
 
 ---
 
 ### 5. AdamW：解耦权重衰减（Decoupled Weight Decay）
 
-**经典「Adam + L2」** 常在实现上把 L2 项并入梯度（\(\mathbf{g}_t \leftarrow \mathbf{g}_t + \lambda\theta_t\)），该项再进入 \(\mathbf{m}_t,\mathbf{v}_t\) 的 EMA，与 **自适应分母 \(\sqrt{\hat{\mathbf{v}}}\)** 耦合，**权重衰减的有效行为**与「对 \(\theta\) 显式 \(\ell_2\) 惩罚」不一致。
+**Adam + L2 正则**把 $\lambda\theta$ 加入梯度，确实是在优化带 $\frac{\lambda}{2}\|\theta\|_2^2$ 惩罚的目标；该项也进入一阶/二阶矩。但在 Adam 中，它**不等价于参数按固定比例收缩的 weight decay**，因为受到逐维自适应缩放影响。
 
 **AdamW**（Loshchilov & Hutter, 2019）将 **weight decay** 与 Adam 的自适应更新**解耦**。常见等价写法之一：
 
-\[
+$$
 \theta_{t+1} = \theta_t - \eta \cdot \frac{\hat{\mathbf{m}}_t}{\sqrt{\hat{\mathbf{v}}_t} + \epsilon} - \eta \lambda \theta_t
-\]
+$$
 
-即：先做标准 Adam 步，再对权重做 **与二阶矩无关** 的衰减（实现上常写作在自适应步之后执行 `θ ← θ - η·λ·θ`）。
+此式使用更新前的权重：先执行 `θ ← (1 - η·λ)·θ`，再减去 Adam 自适应更新量。若先做 Adam 步、再缩放已经更新的权重，会额外缩放该更新量，**并不与上式严格等价**。不同讲义可能采用后一种顺序，应明确约定并与测试一致；本节采用 [PyTorch AdamW](https://docs.pytorch.org/docs/stable/generated/torch.optim.AdamW.html) 的先衰减顺序。
 
 | 维度 | L2 并入梯度（与 Adam 耦合） | AdamW（解耦） |
 |------|---------------------------|---------------|
-| 正则如何作用 | 进入 \(\mathbf{m},\mathbf{v}\)，与 \(\sqrt{\hat{\mathbf{v}}}\) 纠缠 | **不**进入矩估计，单独衰减 \(\theta\) |
+| 正则如何作用 | 进入 $\mathbf{m},\mathbf{v}$，与 $\sqrt{\hat{\mathbf{v}}}$ 纠缠 | **不**进入矩估计，单独衰减 $\theta$ |
 | 与自适应关系 | 衰减强度受二阶缩放影响 | 衰减与自适应步长 **独立** |
 | LLM 实践 | 较少作为主配置 | **预训练常用** |
 
@@ -4519,27 +4691,27 @@ RMSNorm 对 \(\mathbf{x}\) 的梯度涉及 RMS 分母；实现需数值稳定；
 
 | 符号 | 含义 | 典型值 / 说明 |
 |------|------|----------------|
-| \(\eta\) / `lr` | 学习率 | 与调度器配合；base 常见 \(10^{-4}\sim 3\times 10^{-4}\)（视模型与 batch 而定） |
-| \(\beta_1\) | 一阶矩 EMA 衰减 | **0.9** |
-| \(\beta_2\) | 二阶矩 EMA 衰减 | **0.999**（通用）；部分 **LLM** 用 **0.95** 等更短窗口 |
-| \(\epsilon\) | 分母稳定项 | **1e-8**（FP32）；半精度下有时需略调 |
-| `weight_decay` | \(\lambda\) | **0.01** 量级常见于 Transformer（需任务验证） |
+| $\eta$ / `lr` | 学习率 | 与调度器配合；base 常见 $10^{-4}\sim 3\times 10^{-4}$（视模型与 batch 而定） |
+| $\beta_1$ | 一阶矩 EMA 衰减 | **0.9** |
+| $\beta_2$ | 二阶矩 EMA 衰减 | **0.999**（通用）；部分 **LLM** 用 **0.95** 等更短窗口 |
+| $\epsilon$ | 分母稳定项 | **1e-8**（FP32）；半精度下有时需略调 |
+| `weight_decay` | $\lambda$ | **0.01** 量级常见于 Transformer（需任务验证） |
 
 ---
 
 ### 7. 学习率调度：warmup、余弦、线性衰减、阶梯衰减
 
-**Warmup**：训练前若干 step 将 \(\eta\) 从 0（或很小）**爬升**到目标 base lr。动机：初期 \(\mathbf{m},\mathbf{v}\) 估计不稳定；大 batch / 大 lr 下易数值爆炸；**Transformer** 类模型尤其依赖 warmup。
+**Warmup**：训练前若干 step 将 $\eta$ 从 0（或很小）**爬升**到目标 base lr。动机：初期 $\mathbf{m},\mathbf{v}$ 估计不稳定；大 batch / 大 lr 下易数值爆炸；**Transformer** 类模型尤其依赖 warmup。
 
-**Cosine decay**：在 warmup 结束后，学习率按余弦从 \(\eta_{\max}\) 平滑降到 \(\eta_{\min}\)（接近 0 或某一 floor）。典型形式（示意）：
+**Cosine decay**：在 warmup 结束后，学习率按余弦从 $\eta_{\max}$ 平滑降到 $\eta_{\min}$（接近 0 或某一 floor）。典型形式（示意）：
 
-\[
+$$
 \eta_t = \eta_{\min} + \frac{1}{2}(\eta_{\max}-\eta_{\min})\left(1 + \cos\frac{\pi (t - T_{\mathrm{warm}})}{T_{\mathrm{decay}}}\right)
-\]
+$$
 
-**Linear decay**：从某步起 \(\eta\) **线性**降至 \(\eta_{\min}\)，形式简单，部分基线与课程作业采用。
+**Linear decay**：从某步起 $\eta$ **线性**降至 $\eta_{\min}$，形式简单，部分基线与课程作业采用。
 
-**Step decay（阶梯衰减）**：每隔固定 epoch 或 step 将 \(\eta\) 乘以常数 \(\gamma\in(0,1)\)（如每 30 epoch ×0.1）。边界处 lr **突变**，可能带来 loss 抖动，但在 CV 传统任务中很常见。
+**Step decay（阶梯衰减）**：每隔固定 epoch 或 step 将 $\eta$ 乘以常数 $\gamma\in(0,1)$（如每 30 epoch ×0.1）。边界处 lr **突变**，可能带来 loss 抖动，但在 CV 传统任务中很常见。
 
 **常见组合**：**linear warmup + cosine decay** 是 LLM 预训练标配之一。
 
@@ -4549,9 +4721,9 @@ RMSNorm 对 \(\mathbf{x}\) 的梯度涉及 RMS 分母；实现需数值稳定；
 
 **动机**：长序列、大模型或半精度下可能出现 **梯度爆炸**，单步更新过大导致 loss 发散。
 
-**按全局范数裁剪（clip by global norm）**：先算所有参数梯度的整体 \(\ell_2\) 范数 \(G = \|\text{concat}(\mathbf{g}_i)\|_2\)。若 \(G > c\)，则所有梯度乘以 \(c/G\)，**方向不变、只缩小模长**。
+**按全局范数裁剪（clip by global norm）**：先算所有参数梯度的整体 $\ell_2$ 范数 $G = \|\text{concat}(\mathbf{g}_i)\|_2$。若 $G > c$，则所有梯度乘以 $c/G$，**方向不变、只缩小模长**。
 
-**按值裁剪（clip by value）**：逐元素将 \(g_{ij}\) 限制在 \([-c, c]\)，**会改变方向**。
+**按值裁剪（clip by value）**：逐元素将 $g_{ij}$ 限制在 $[-c, c]$，**会改变方向**。
 
 **LLM 训练更常用 global norm**：保留梯度方向，抑制极端大更新。
 
@@ -4567,9 +4739,9 @@ RMSNorm 对 \(\mathbf{x}\) 的梯度涉及 RMS 分母；实现需数值稳定；
 | FP16 | 5 | 10 | 动态范围小，易 underflow/overflow |
 | BF16 | 8 | 7 | 与 FP32 同指数宽度，**动态范围大**，尾数少 |
 
-- **Loss scaling（FP16 常用）**：前向得到 loss 后先乘以较大因子 \(S\)（如 \(2^{16}\)），反传梯度同比例放大，避免梯度过小在 FP16 中下溢为 0；`optimizer.step()` 前再 **unscale**，最后用 `scaler.update()` 根据是否出现 inf 调整 \(S\)。  
+- **Loss scaling（FP16 常用）**：前向得到 loss 后先乘以较大因子 $S$（如 $2^{16}$），反传梯度同比例放大，避免梯度过小在 FP16 中下溢为 0；`optimizer.step()` 前再 **unscale**，最后用 `scaler.update()` 根据是否出现 inf 调整 $S$。  
 - **BF16**：许多场景下**不需要** loss scaling（梯度不易下溢），实现更简单。  
-- **Master weights**：半精度前向，FP32 存 \(\theta\) 做 `step`，再写回半精度权重（具体 API 因 `autocast` / FSDP 等而异）。
+- **Master weights**：半精度前向，FP32 存 $\theta$ 做 `step`，再写回半精度权重（具体 API 因 `autocast` / FSDP 等而异）。
 
 **为何大模型训练常用 BF16 而非 FP16？** 核心原因是 **动态范围**：BF16 与 FP32 **相同的 8 位指数**，对大激活/大梯度更宽容；FP16 指数位少，即便有 loss scaling，仍可能在某些层或长训练中出现 **数值不稳定**。在 A100/H100 等硬件上 BF16 吞吐高，已成为 LLM 预训练默认选项之一。但 **FP16 + loss scaling** 在成熟框架下同样广泛使用，最终以硬件支持与实测为准。
 
@@ -4580,7 +4752,7 @@ RMSNorm 对 \(\mathbf{x}\) 的梯度涉及 RMS 分母；实现需数值稳定；
 Assignment 1（Basics）通常要求 **BPE + Decoder-only Transformer LM + 手写优化器 + 训练循环**。与优化器直接相关的要点（**以当年官方 README/PDF 为准**）：
 
 1. **手写 AdamW，且不直接 `import` 使用 `torch.optim.AdamW`**：需实现 **bias correction** 与 **decoupled weight decay**。  
-2. **公式对齐**：\(\theta \leftarrow \theta - \eta \left( \hat{\mathbf{m}}_t / (\sqrt{\hat{\mathbf{v}}_t} + \epsilon) + \lambda \theta \right)\)（与先 Adam 步再 decay 等价）。  
+2. **公式与版本**：本节按更新前权重写 $\theta \leftarrow (1-\eta\lambda)\theta-\eta\hat{m}/(\sqrt{\hat{v}}+\epsilon)$，与 [PyTorch AdamW](https://docs.pytorch.org/docs/stable/generated/torch.optim.AdamW.html) 一致。2025 版作业曾使用先自适应步、后衰减的顺序，[官方变更记录](https://github.com/stanford-cs336/assignment1-basics/blob/main/CHANGELOG.md) 在 2026-03-30 修正；复现旧测试时核对年份，两顺序不严格等价。
 3. **`param_groups`**：支持不同组不同 `lr` / `weight_decay`（例如 **bias 不衰减**）。  
 4. **`state`**：每个参数存 `step`、`exp_avg`、`exp_avg_sq`，且在 **`model.to(device)` 之后** 创建，保证与参数 **同设备**。  
 5. **训练循环**：`zero_grad` → `forward` → `loss` → `backward` →（可选）`clip` → `optimizer.step()` → `scheduler.step()`。  
@@ -4610,7 +4782,7 @@ class AdamW:
     """
     纯 PyTorch 张量实现 AdamW，不依赖 torch.optim.AdamW。
     更新: θ ← θ - η * ( m_hat / (sqrt(v_hat) + ε) + λ * θ )
-    等价于先 Adam 步，再 θ ← θ - η*λ*θ（decoupled weight decay）。
+    先衰减更新前的权重，再执行自适应步，与 PyTorch AdamW 顺序一致。
     """
 
     def __init__(
@@ -4694,9 +4866,9 @@ class AdamW:
                 v_hat = v / (1.0 - beta2**t)
 
                 denom = v_hat.sqrt().add_(eps)
-                p.add_(m_hat.div_(denom), alpha=-lr)
                 if wd != 0.0:
-                    p.add_(p, alpha=-lr * wd)
+                    p.mul_(1.0 - lr * wd)
+                p.add_(m_hat.div_(denom), alpha=-lr)
 
         return loss
 
@@ -4720,6 +4892,8 @@ def build_optimizer(model: nn.Module, lr: float = 3e-4, wd: float = 0.1) -> Adam
 ```
 
 > **说明**：`param_groups` 为 **字典列表** 时，每组可单独指定 `lr` / `weight_decay`；`build_optimizer` 将 **bias 等一维参数** 与 **权重矩阵** 分组，符合 Assignment 1 常见写法。
+
+这个极简类只展示密集梯度更新，没有实现完整 `Optimizer` 接口（如 `state_dict/load_state_dict`、稀疏梯度和参数校验）。接入 checkpoint/scheduler 前需补齐对应接口，或使用下节继承 `Optimizer` 的版本；不能直接当成生产优化器替换。
 
 ---
 
@@ -4763,9 +4937,9 @@ class AdamWRef(Optimizer):
                 v.mul_(b2).addcmul_(g, g, value=1 - b2)
                 m_hat = m / (1 - b1**t)
                 v_hat = v / (1 - b2**t)
-                p.add_(m_hat / (v_hat.sqrt() + eps), alpha=-lr)
                 if wd:
-                    p.add_(p, alpha=-lr * wd)
+                    p.mul_(1.0 - lr * wd)
+                p.add_(m_hat / (v_hat.sqrt() + eps), alpha=-lr)
         return loss
 ```
 
@@ -4840,8 +5014,10 @@ def clip_grad_norm_(parameters, max_norm: float) -> torch.Tensor:
         return torch.tensor(0.0)
     device = params[0].device
     total_norm_sq = torch.stack([p.grad.detach().float().pow(2).sum() for p in params]).sum()
-    total_norm = total_norm_sq.sqrt().clamp_min(1e-6)
-    clip_coef = (max_norm / total_norm).clamp(max=1.0)
+    if max_norm < 0:
+        raise ValueError("max_norm must be nonnegative")
+    total_norm = total_norm_sq.sqrt()
+    clip_coef = (max_norm / (total_norm + 1e-6)).clamp(max=1.0)
     for p in params:
         p.grad.detach().mul_(clip_coef.to(p.grad.dtype))
     return total_norm.to(device)
@@ -4883,13 +5059,13 @@ BF16 路径常用 `autocast(dtype=torch.bfloat16)`，许多硬件上**可不使�
 |------|------|
 | GD → SGD | 全批量 vs mini-batch；方差与速度权衡 |
 | Momentum | 梯度 EMA；减震荡；仍非逐维自适应 |
-| Adam | \(\mathbf{m}_t,\mathbf{v}_t\)；\(\hat{\mathbf{m}}_t,\hat{\mathbf{v}}_t\)；\(\hat{\mathbf{m}}/\sqrt{\hat{\mathbf{v}}}\) |
-| AdamW | weight decay **不**进矩估计；\(-\eta\lambda\theta\) |
-| 超参 | \(\beta_1=0.9,\beta_2=0.999,\epsilon=10^{-8}\)；`weight_decay` 与任务相关 |
+| Adam | $\mathbf{m}_t,\mathbf{v}_t$；$\hat{\mathbf{m}}_t,\hat{\mathbf{v}}_t$；$\hat{\mathbf{m}}/\sqrt{\hat{\mathbf{v}}}$ |
+| AdamW | weight decay **不**进矩估计；$-\eta\lambda\theta$ |
+| 超参 | $\beta_1=0.9,\beta_2=0.999,\epsilon=10^{-8}$；`weight_decay` 与任务相关 |
 | 调度 | warmup；cosine / linear / step decay；LLM 常见 warmup+cosine |
 | 梯度裁剪 | global norm 保方向；clip by value 改方向 |
 | 混合精度 | FP16+scaling；BF16 范围大；FP32 master weights |
-| 显存 | 优化器状态常为 **2× 参数量**（\(m,v\)），dtype 依实现多为 FP32 |
+| 显存 | 优化器状态常为 **2× 参数量**（$m,v$），dtype 依实现多为 FP32 |
 
 ---
 
@@ -4897,37 +5073,37 @@ BF16 路径常用 `autocast(dtype=torch.bfloat16)`，许多硬件上**可不使�
 
 ### Q1：Adam 和 SGD 的区别？
 
-**答**：（1）**SGD**（含 Momentum）对每个参数使用**相同的全局学习率**缩放整个梯度向量；**噪声**来自 mini-batch，方向靠动量平滑。（2）**Adam** 额外维护 **梯度平方的 EMA**（二阶矩），用 \(\sqrt{\hat{\mathbf{v}}_t}\) **逐元素**归一化更新量，相当于 **自适应学习率**，不同参数维度步长比例可不同。（3）**代价**：Adam 需存 **\(m,v\)** 两份状态，**显存与计算**高于 SGD；部分任务上 SGD 泛化讨论较多，但 **LLM 预训练默认**多为 Adam 系（尤其 AdamW）。
+**答**：（1）**SGD**（含 Momentum）对每个参数使用**相同的全局学习率**缩放整个梯度向量；**噪声**来自 mini-batch，方向靠动量平滑。（2）**Adam** 额外维护 **梯度平方的 EMA**（二阶矩），用 $\sqrt{\hat{\mathbf{v}}_t}$ **逐元素**归一化更新量，相当于 **自适应学习率**，不同参数维度步长比例可不同。（3）**代价**：Adam 需存 **$m,v$** 两份状态，**显存与计算**高于 SGD；部分任务上 SGD 泛化讨论较多，但 **LLM 预训练默认**多为 Adam 系（尤其 AdamW）。
 
 ---
 
 ### Q2：AdamW 和 Adam 的区别？为什么要解耦权重衰减？
 
-**答**：**Adam** 若把 **L2 正则**实现为「往梯度里加 \(\lambda\theta\)」，该项会进入 \(\mathbf{m}_t,\mathbf{v}_t\) 的更新，与 **自适应分母 \(\sqrt{\hat{\mathbf{v}}}\)** **耦合**，导致「权重衰减」的强度随自适应缩放变化，**不再等价**于对 \(\theta\) 的显式 \(\ell_2\) 惩罚。**AdamW** 把 **weight decay** 从梯度/矩估计中分离，在自适应更新之后执行 \(\theta \leftarrow \theta - \eta\lambda\theta\)（与 \(\sqrt{\hat{\mathbf{v}}}\) 无关），称为 **解耦权重衰减（decoupled weight decay）**。大模型与 Transformer 上 **经验与可解释性**更好，故预训练常用 AdamW。
+**答**：Adam 中把 $\lambda\theta$ 加入梯度，对应 L2 正则，并会进入矩估计；它不等价于固定比例的参数收缩。AdamW 将衰减与梯度统计解耦，本节先按更新前权重执行 $\theta\leftarrow(1-\eta\lambda)\theta$，再减去自适应更新量。两者的差别是 **L2 正则与解耦 weight decay**，不是“L2 并入梯度不算 L2”。
 
 ---
 
 ### Q3：学习率预热（warmup）的作用？
 
-**答**：训练初期 **\(\mathbf{m},\mathbf{v}\) 从 0 初始化**，\(\hat{\mathbf{m}}/\sqrt{\hat{\mathbf{v}}}\) 在 **前几步可能异常大**；若 **base lr 较大** 或 **batch 很大**，易出现 **loss 尖峰、梯度爆炸、NaN**，混合精度下更明显。Warmup 在若干 step 内将 lr **从低到高**缓慢升到目标值，让矩估计与梯度统计 **稳定下来**。Transformer 类模型几乎**标配** warmup。
+**答**：训练初期 **$\mathbf{m},\mathbf{v}$ 从 0 初始化**，$\hat{\mathbf{m}}/\sqrt{\hat{\mathbf{v}}}$ 在 **前几步可能异常大**；若 **base lr 较大** 或 **batch 很大**，易出现 **loss 尖峰、梯度爆炸、NaN**，混合精度下更明显。Warmup 在若干 step 内将 lr **从低到高**缓慢升到目标值，让矩估计与梯度统计 **稳定下来**。Transformer 类模型几乎**标配** warmup。
 
 ---
 
 ### Q4：为什么要做偏差校正（bias correction）？
 
-**答**：\(\mathbf{m}_t = (1-\beta_1)\sum_{i=1}^{t}\beta_1^{t-i}\mathbf{g}_i\) 在 **\(t\) 较小**时，由于 \(\mathbf{m}_0=\mathbf{0}\)，\(\mathbf{m}_t\) 的期望 **系统性地小于** 真实梯度的一阶矩估计；\(\mathbf{v}_t\) 同理。除以 \(1-\beta_1^t\) 与 \(1-\beta_2^t\) 相当于把 EMA 的 **尺度拉回** 与「真实矩」可比的无偏尺度。**\(t\) 大之后** \(1-\beta^t \to 1\)，修正量可忽略。
+**答**：$\mathbf{m}_t = (1-\beta_1)\sum_{i=1}^{t}\beta_1^{t-i}\mathbf{g}_i$ 在 **$t$ 较小**时，由于 $\mathbf{m}_0=\mathbf{0}$，$\mathbf{m}_t$ 的期望 **系统性地小于** 真实梯度的一阶矩估计；$\mathbf{v}_t$ 同理。除以 $1-\beta_1^t$ 与 $1-\beta_2^t$ 相当于把 EMA 的 **尺度拉回** 与「真实矩」可比的无偏尺度。**$t$ 大之后** $1-\beta^t \to 1$，修正量可忽略。
 
 ---
 
-### Q5：\(\beta_1\) 和 \(\beta_2\) 的物理含义？
+### Q5：$\beta_1$ 和 $\beta_2$ 的物理含义？
 
-**答**：二者都是 **指数滑动平均的衰减系数**。\(\beta_1\) 控制 **一阶矩（梯度方向）** 的历史窗口：越接近 1，方向越平滑、惯性越大，典型 **0.9**。\(\beta_2\) 控制 **二阶矩（梯度平方、逐维幅度）** 的平滑：越接近 1，\(\hat{\mathbf{v}}\) 变化越慢、分母越稳定，典型 **0.999**；若 \(\beta_2\) **偏小**，\(\hat{\mathbf{v}}\) **波动更大**，有效步长更不稳定。部分长训 LLM 会尝试 **略小的 \(\beta_2\)**（如 0.95）以更快适应训练动态。
+**答**：二者都是 **指数滑动平均的衰减系数**。$\beta_1$ 控制 **一阶矩（梯度方向）** 的历史窗口：越接近 1，方向越平滑、惯性越大，典型 **0.9**。$\beta_2$ 控制 **二阶矩（梯度平方、逐维幅度）** 的平滑：越接近 1，$\hat{\mathbf{v}}$ 变化越慢、分母越稳定，典型 **0.999**；若 $\beta_2$ **偏小**，$\hat{\mathbf{v}}$ **波动更大**，有效步长更不稳定。部分长训 LLM 会尝试 **略小的 $\beta_2$**（如 0.95）以更快适应训练动态。
 
 ---
 
 ### Q6：梯度裁剪的两种方式？
 
-**答**：（1）**按全局 \(\ell_2\) 范数（clip by global norm）**：把所有参数的梯度拼成一向量，若范数大于阈值 \(c\)，则整体乘以 \(c/\|\mathbf{g}\|\)，**方向不变**。（2）**按值裁剪（clip by value）**：对每个梯度元素截断到 \([-c,c]\)，**会改变方向**。LLM 训练 **普遍用 global norm**（如 1.0），与 AdamW、大序列更搭。
+**答**：（1）**按全局 $\ell_2$ 范数（clip by global norm）**：把所有参数的梯度拼成一向量，若范数大于阈值 $c$，则整体乘以 $c/\|\mathbf{g}\|$，**方向不变**。（2）**按值裁剪（clip by value）**：对每个梯度元素截断到 $[-c,c]$，**会改变方向**。LLM 训练 **普遍用 global norm**（如 1.0），与 AdamW、大序列更搭。
 
 ---
 
@@ -4951,37 +5127,37 @@ BF16 路径常用 `autocast(dtype=torch.bfloat16)`，许多硬件上**可不使�
 
 ### Q10：AdamW 的参数量开销是多少？
 
-**答**：对每个可训练参数，AdamW 通常维护 **一阶矩 \(\mathbf{m}\)** 与 **二阶矩 \(\mathbf{v}\)**，形状与参数相同，故 **状态张量元素个数约为模型可训练参数数量的 2 倍**。若 \(m,v\) 以 **FP32** 存储（常见），优化器状态显存约为 **\(2 \times 4 \times |\theta|\) 字节**（不计对齐与框架开销）；若与参数同 dtype 则随精度变化。**面试可答**：约为 **2 倍模型参数量的额外状态**（一阶 + 二阶矩）。
+**答**：对每个可训练参数，AdamW 通常维护 **一阶矩 $\mathbf{m}$** 与 **二阶矩 $\mathbf{v}$**，形状与参数相同，故 **状态张量元素个数约为模型可训练参数数量的 2 倍**。若 $m,v$ 以 **FP32** 存储（常见），优化器状态显存约为 **$2 \times 4 \times |\theta|$ 字节**（不计对齐与框架开销）；若与参数同 dtype 则随精度变化。**面试可答**：约为 **2 倍模型参数量的额外状态**（一阶 + 二阶矩）。
 
 ---
 
 ### Q11（加餐）：手写 AdamW 时最容易踩的坑？
 
-**答**：（1）**步数 \(t\)** 未按参数一致更新，导致 bias correction 错误；（2）**把 weight decay 写进梯度**（耦合 L2）；（3）**在 `model.cuda()` 之前创建优化器**，`state` 留在 CPU；（4）**bias 与 weight 共用同一 `weight_decay`**，与论文不一致；（5）**scheduler 与 `optimizer.step` 顺序**与参考实现不一致导致 lr 曲线错位；（6）**原地运算**误改 \(\mathbf{m}_t\) 后再算 \(\hat{\mathbf{m}}_t\) 的依赖关系（需谨慎）。
+**答**：常见问题有：参数自己的步数计数错误；weight decay 混入矩估计；参数与状态设备/dtype 不匹配；更新顺序或 epsilon 约定与参考版本不一致；scheduler 步数错位；原地运算误改状态。bias/Norm 是否衰减是参数组策略，并非 AdamW 论文强制排除。
 
 ---
 
 ## 练习
 
-1. 默写 \(\mathbf{m}_t,\mathbf{v}_t\)、\(\hat{\mathbf{m}}_t,\hat{\mathbf{v}}_t\) 及 Adam 更新式；说明 \(t=1\) 时偏差修正因子分别为多少。  
+1. 默写 $\mathbf{m}_t,\mathbf{v}_t$、$\hat{\mathbf{m}}_t,\hat{\mathbf{v}}_t$ 及 Adam 更新式；说明 $t=1$ 时偏差修正因子分别为多少。  
 2. 用两种表述对比 **AdamW** 与 **Adam + L2 并入梯度**。  
 3. 手写 **linear warmup**：输入 `step`、`warmup_steps`、`base_lr`，返回当前 `lr`。  
-4. 若 global norm 为 \(5\)、阈值为 \(1\)，裁剪后梯度范数是多少？  
+4. 若 global norm 为 $5$、阈值为 $1$，裁剪后梯度范数是多少？  
 5. 画表对比 FP32 / FP16 / BF16 的指数位、尾数位与动态范围直觉。  
-6. \(\beta_2\) 从 \(0.999\) 改为 \(0.99\) 时，\(\hat{\mathbf{v}}_t\) 波动更大还是更小？对有效步长有何影响？  
+6. $\beta_2$ 从 $0.999$ 改为 $0.99$ 时，$\hat{\mathbf{v}}_t$ 波动更大还是更小？对有效步长有何影响？  
 7. 阅读 PyTorch `AdamW` 文档：`amsgrad` 选项与 weight decay 是否独立？  
 8. 设计实验：同一小 MLP，固定种子，对比 SGD 与 AdamW 的 loss 曲线，预期现象是什么？  
-9. 实现 **step decay** 调度，并在三个 `decay_steps` 上打印 lr 是否符合乘以 \(\gamma\) 的预期。  
+9. 实现 **step decay** 调度，并在三个 `decay_steps` 上打印 lr 是否符合乘以 $\gamma$ 的预期。  
 10. 解释为何 FP16 训练常需要 `GradScaler`，而 BF16 常不需要。
 
 ---
 
 ## 导航
 
-- **上一课**：[Lesson 05：RMSNorm、SwiGLU 与 GQA](./05-RMSNorm-SwiGLU-GQA.md)  
-- **下一课**：[Lesson 07：训练循环与损失函数](./07-训练循环与损失函数.md)  
-- **关联**：[Lesson 08：Assignment 1 实战指南](./08-Assignment1实战指南.md)  
-- **总览**：[Lesson 00：课程总览与学习路线](./00-课程总览与学习路线.md)
+- **上一课**：[Lesson 05：RMSNorm、SwiGLU 与 GQA](../docs/05-RMSNorm-SwiGLU-GQA.md)  
+- **下一课**：[Lesson 07：训练循环与损失函数](../docs/07-%E8%AE%AD%E7%BB%83%E5%BE%AA%E7%8E%AF%E4%B8%8E%E6%8D%9F%E5%A4%B1%E5%87%BD%E6%95%B0.md)  
+- **关联**：[Lesson 08：Assignment 1 实战指南](../docs/08-Assignment1%E5%AE%9E%E6%88%98%E6%8C%87%E5%8D%97.md)  
+- **总览**：[Lesson 00：课程总览与学习路线](../docs/00-%E8%AF%BE%E7%A8%8B%E6%80%BB%E8%A7%88%E4%B8%8E%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF.md)
 
 ---
 
@@ -4989,13 +5165,13 @@ BF16 路径常用 `autocast(dtype=torch.bfloat16)`，许多硬件上**可不使�
 
 | 符号 | 含义 |
 |------|------|
-| \(\eta\) | 学习率 |
-| \(\mathbf{g}_t\) | 第 \(t\) 步梯度 |
-| \(\mathbf{m}_t,\mathbf{v}_t\) | 一阶、二阶矩（未修正） |
-| \(\hat{\mathbf{m}}_t,\hat{\mathbf{v}}_t\) | 偏差修正后的矩 |
-| \(\beta_1,\beta_2\) | 一阶、二阶衰减率 |
-| \(\lambda\) | weight decay 系数 |
-| \(\epsilon\) | 数值稳定小常数 |
+| $\eta$ | 学习率 |
+| $\mathbf{g}_t$ | 第 $t$ 步梯度 |
+| $\mathbf{m}_t,\mathbf{v}_t$ | 一阶、二阶矩（未修正） |
+| $\hat{\mathbf{m}}_t,\hat{\mathbf{v}}_t$ | 偏差修正后的矩 |
+| $\beta_1,\beta_2$ | 一阶、二阶衰减率 |
+| $\lambda$ | weight decay 系数 |
+| $\epsilon$ | 数值稳定小常数 |
 
 ---
 
@@ -5018,51 +5194,51 @@ BF16 路径常用 `autocast(dtype=torch.bfloat16)`，许多硬件上**可不使�
 
 ### 1. 语言模型的训练目标：下一词预测（Next-Token Prediction）
 
-自回归（causal）语言模型把长度为 \(T\) 的 token 序列 \(x_1,\ldots,x_T\) 写成链式法则：
+自回归（causal）语言模型把长度为 $T$ 的 token 序列 $x_1,\ldots,x_T$ 写成链式法则：
 
-\[
+$$
 P(x_1,\ldots,x_T)=\prod_{t=1}^{T} P(x_t \mid x_{<t})
-\]
+$$
 
-**训练目标**：在每个位置 \(t\)，在已知前缀 \(x_{<t}\) 的条件下，让模型输出的类别分布接近**真实下一 token** 的 one-hot 标签。对整条序列，通常对所有「有效预测位置」上的负对数似然求平均（或按 token 数加权），等价于在常用设定下**最大化对数似然**（Maximum Likelihood Estimation, MLE）。
+**训练目标**：在每个位置 $t$，在已知前缀 $x_{<t}$ 的条件下，让模型输出的类别分布接近**真实下一 token** 的 one-hot 标签。对整条序列，通常对所有「有效预测位置」上的负对数似然求平均（或按 token 数加权），等价于在常用设定下**最大化对数似然**（Maximum Likelihood Estimation, MLE）。
 
 直观理解：模型在学「读完上文后，下一个词最像什么」。数据越大、分布越覆盖真实使用场景，学出的条件分布越有用。注意：这**不直接**优化「人类觉得好」的文本，只优化概率；对齐、偏好、安全往往要另加 RLHF/DPO 等目标（本课不展开）。
 
 ### 2. 交叉熵损失（Cross-Entropy）用于语言建模：定义、公式与实现要点
 
-设词表大小为 \(V\)。在某一位置，模型输出 logits 经 softmax 得到概率向量 \(\mathbf{p}\in\mathbb{R}^V\)。真实标签为类别 \(c\)（one-hot 仅在第 \(c\) 维为 1）。**交叉熵**为：
+设词表大小为 $V$。在某一位置，模型输出 logits 经 softmax 得到概率向量 $\mathbf{p}\in\mathbb{R}^V$。真实标签为类别 $c$（one-hot 仅在第 $c$ 维为 1）。**交叉熵**为：
 
-\[
+$$
 H(\mathbf{y},\mathbf{p}) = -\sum_{i=1}^{V} y_i \log p_i = -\log p_c
-\]
+$$
 
-对一个 batch，若对 \(N\) 个预测位置独立求和再除以 \(N\)，得到**平均交叉熵**，与「平均负对数似然」在单标签分类下是一致的。
+对一个 batch，若对 $N$ 个预测位置独立求和再除以 $N$，得到**平均交叉熵**，与「平均负对数似然」在单标签分类下是一致的。
 
 **PyTorch 实现**：`F.cross_entropy(logits, target)` 其中 `logits` 形状为 `(N, V)`，`target` 为 `(N,)` 的长整型类别索引。内部使用 **log-softmax + NLL** 的数值稳定融合形式，避免先 `softmax` 再 `log` 带来的下溢与 `log(0)`。
 
-**形状惯例**：语言模型常见 `logits` 为 `(B, T, V)`，`labels` 为 `(B, T)`。需 `reshape` 成 `(B*T, V)` 与 `(B*T,)`，或只对「预测下一 token」的有效时间步对齐（常见做法是 `input_ids` 与 `labels` 错一位：用位置 \(t\) 的 logits 预测 \(t+1\) 的 token）。
+**形状惯例**：语言模型常见 `logits` 为 `(B, T, V)`，`labels` 为 `(B, T)`。需 `reshape` 成 `(B*T, V)` 与 `(B*T,)`，或只对「预测下一 token」的有效时间步对齐（常见做法是 `input_ids` 与 `labels` 错一位：用位置 $t$ 的 logits 预测 $t+1$ 的 token）。
 
 **Padding**：若序列带 pad，务必在 `cross_entropy` 中使用 `ignore_index`（例如 `-100`）或在损失上乘 mask 并只对有效 token 求平均，否则 pad 位置会污染梯度与指标。
 
 ### 3. 困惑度（Perplexity, PPL）：定义、解释与意义
 
-设在某数据集上（按 token 平均的）交叉熵为 \(L\)，且 \(\log\) 与 \(\exp\) 使用**同一底**（深度学习中常为自然对数），定义：
+设在某数据集上（按 token 平均的）交叉熵为 $L$，且 $\log$ 与 $\exp$ 使用**同一底**（深度学习中常为自然对数），定义：
 
-\[
+$$
 \mathrm{PPL} = \exp(L)
-\]
+$$
 
-**解释**：PPL 可理解为模型在「下一步预测」时面对的**有效等效分支数**——分布越尖锐（模型越确定），PPL 越低；越接近均匀，PPL 越高。若词表为 \(V\) 且模型接近均匀随机，\(L\approx \ln V\)，则 \(\mathrm{PPL}\approx V\) 量级。
+**解释**：PPL 是真实 token 概率倒数的几何平均，可类比有效分支数，但它不是预测分布熵。模型只有对**实际出现的 token**给出更高概率时 PPL 才会降低；自信地预测错误反而会增大 PPL，甚至远大于词表大小 $V$。均匀预测时 $L=\ln V$、$\mathrm{PPL}=V$。
 
 **为何重要**：PPL 把「难以直接比较的对数尺度损失」转成更直观的正数尺度，便于在论文与工程里横向对比（前提是 **平均方式、是否含 pad、词表与分词器一致**）。**局限**：PPL 不反映事实性、安全性、指令遵循；验证集 PPL 低也可能过拟合或数据泄漏。
 
-**底数说明**：若损失以 bit 为单位，常用 \(\mathrm{PPL}=2^{L_{\mathrm{bits}}}\)。跨论文比较时必须统一。
+**底数说明**：若损失以 bit 为单位，常用 $\mathrm{PPL}=2^{L_{\mathrm{bits}}}$。跨论文比较时必须统一。
 
 ### 4. 完整训练循环：从数据到一步更新
 
 一次典型迭代包含：
 
-1. **数据加载与 batching**：把 token 序列组织成 `(B, T)`；长语料可切成固定长度块（chunk），得到无 padding 的监督对 \((x, y)\)，其中 \(y\) 为 \(x\) 右移一位的 next-token 标签。
+1. **数据加载与 batching**：把 token 序列组织成 `(B, T)`；长语料可切成固定长度块（chunk），得到无 padding 的监督对 $(x, y)$，例如 `x=tokens[:-1]`、`y=tokens[1:]`，标签是输入各位置之后的 token。
 2. **前向**：`logits = model(x)`。
 3. **损失**：`loss = CE(logits, y)`（注意时间维对齐与 `ignore_index`）。
 4. **反向**：`loss.backward()`（若梯度累积，常对 `loss` 除以累积步数再反传）。
@@ -5072,28 +5248,28 @@ H(\mathbf{y},\mathbf{p}) = -\sum_{i=1}^{V} y_i \log p_i = -\log p_c
 8. **清零梯度**：`optimizer.zero_grad()`。
 9. **日志**：记录标量 loss、可选 PPL、学习率、耗时、**吞吐量**（见下文）。
 
-**梯度累积**：显存不足时，将大 batch 拆成多个 micro-batch，每步只做反传，**累加**若干步后再 `step()`；为保持与「一次性大 batch」等价，通常将每步的 `loss` 除以累积步数再 `backward()`。
+**梯度累积**：把大 batch 拆成 micro-batch，累加梯度后再更新。仅当各 micro-batch 的有效监督 token 数相同时，平均 loss 再除以累积步数才与 token 平均的大 batch 等价；长度/padding 不同时应按有效 token 数加权。还需正确处理 epoch 末尾不足一个完整累积窗口的余量。
 
 ### 5. 序列打包（Sequence Packing）与注意力边界
 
-将多条短样本**首尾相接**拼成一个长序列，可减少 padding、提高 GPU 利用率。此时必须：
+将短样本拼成长序列可减少 padding。若目标是保持样本彼此独立，应：
 
 - 使用 **segment id** 或 **边界 mask**，使注意力**不跨样本**（或采用 FlashAttention 的 varlen API）。
 - 损失仅在真实 token 上计算；拼接处的「假下一词」不能当作标签。
 
-实现错误会导致 **PPL 虚低** 或 **学到跨样本错误依赖**。
+预训练也可明确选择用 EOS 分隔文档而允许跨文档上下文，并非一律禁止；SFT 独立样本打包通常应隔离注意力、屏蔽拼接处标签。segment id 只有被注意力实现用来构造边界 mask 才能起作用。
 
 ### 6. 文本生成与推理：贪心、温度、Top-k、Top-p、重复惩罚
 
-- **贪心（Greedy）**：每步取 \(\arg\max_i p_i\)。快、确定性高，但易重复、多样性差。
-- **温度（Temperature）**：将 logits 除以 \(T>0\) 再 softmax。\(T<1\) 分布更尖（更保守）；\(T>1\) 更平（更随机）。\(T\to 0^+\) 趋近贪心。
-- **Top-k**：只保留概率最高的 \(k\) 个 token，在该集合上重归一化后采样。
-- **Top-p（Nucleus）**：从大到小累加概率，直到累积质量至少为 \(p\)，在该**最小**集合上重归一化后采样；候选集大小随分布形状自适应。
+- **贪心（Greedy）**：每步取 $\arg\max_i p_i$。快、确定性高，但易重复、多样性差。
+- **温度（Temperature）**：将 logits 除以 $T>0$ 再 softmax。$T<1$ 分布更尖（更保守）；$T>1$ 更平（更随机）。$T\to 0^+$ 趋近贪心。
+- **Top-k**：只保留概率最高的 $k$ 个 token，在该集合上重归一化后采样。
+- **Top-p（Nucleus）**：从大到小累加概率，直到累积质量至少为 $p$，在该**最小**集合上重归一化后采样；候选集大小随分布形状自适应。
 - **重复惩罚（Repetition Penalty）**：对已出现 token 的 logits 进行抑制（常见实现：对正 logits 除以惩罚系数，对负 logits 乘以系数），减轻循环复述；需调参，过大可能损伤连贯性。
 
 ### 7. 评估指标：验证损失与验证 PPL
 
-**验证集**上通常 `model.eval()` + `torch.no_grad()`，只做前向，统计 token 平均 CE，再报告 \(\mathrm{PPL}=\exp(\mathrm{val\_loss})\)。应与训练使用**相同的分词器与 mask 规则**，否则不可比。
+**验证集**上通常 `model.eval()` + `torch.no_grad()`，只做前向，统计 token 平均 CE，再报告 $\mathrm{PPL}=\exp(\mathrm{val\_loss})$。应与训练使用**相同的分词器与 mask 规则**，否则不可比。
 
 ### 8. 过拟合与欠拟合：如何察觉
 
@@ -5106,7 +5282,7 @@ H(\mathbf{y},\mathbf{p}) = -\sum_{i=1}^{V} y_i \log p_i = -\log p_c
 
 - **梯度范数**：可记录 `clip_grad_norm_` 返回值或各组梯度范数，用于判断是否在爆炸边缘。
 - **Loss spike**：单步或短期 loss 暴涨。可能原因：学习率过大、异常 batch、梯度爆炸、混合精度溢出、实现 bug（如 mask 错误）。
-- **NaN**：检查是否有 inf/nan logits、是否未做梯度裁剪、Adam 的 \(\epsilon\) 与 lr、fp16 的 loss scale、以及数据异常。
+- **NaN**：检查是否有 inf/nan logits、是否未做梯度裁剪、Adam 的 $\epsilon$ 与 lr、fp16 的 loss scale、以及数据异常。
 
 ### 10. CS336 Assignment 1 与训练配置（与官方 PDF 对齐）
 
@@ -5117,14 +5293,14 @@ Assignment 1（Basics）通常要求：**手写 AdamW（不使用 `torch.optim`�
 | **优化器** | 自实现 AdamW；`param_groups` 区分 bias（常不做 weight decay）与权重 |
 | **损失** | Token 级 `cross_entropy`，`logits` 与 `labels` 时间维对齐（常 shift 一位） |
 | **混合精度** | 部分学期选做；若使用需 `GradScaler` 与 careful clipping |
-| **学习率** | Toy 实验可用 \(10^{-3}\) 量级试起；正式跑可用 warmup + cosine/linear decay |
+| **学习率** | Toy 实验可用 $10^{-3}$ 量级试起；正式跑可用 warmup + cosine/linear decay |
 | **批大小与序列长** | 受显存限制；通过梯度累积增大**有效** batch |
 | **可复现性** | 固定 `seed`（Python/NumPy/Torch/CUDA），记录 `step` 与 checkpoint |
 | **Checkpoint** | 至少保存 `model`、`optimizer`、`scheduler`、全局 `step`，便于断点续训 |
 | **日志** | `loss`、可选 `ppl`、`lr`、`tokens/sec`；验证循环单独写 |
 | **Toy 过拟合检查** | 极小重复语料 + 小模型，使 loss 明显下降，验证管线正确 |
 
-更完整的提交清单与目录组织见 [第 08 课：Assignment 1 实战指南](./08-Assignment1实战指南.md)。
+更完整的提交清单与目录组织见 [第 08 课：Assignment 1 实战指南](../docs/08-Assignment1%E5%AE%9E%E6%88%98%E6%8C%87%E5%8D%97.md)。
 
 ---
 
@@ -5146,10 +5322,12 @@ from torch.utils.data import Dataset, DataLoader
 
 
 class TokenChunkDataset(Dataset):
-    """将长 token 张量切为固定长度块；标签为向右移位一位（next-token prediction）。"""
+    """将长 token 张量切为固定长度块：x=data[s:s+T]，y=data[s+1:s+T+1]。"""
     def __init__(self, token_ids: torch.Tensor, seq_len: int):
         super().__init__()
         self.data = token_ids.long()
+        if seq_len < 1 or self.data.ndim != 1:
+            raise ValueError("need positive seq_len and one-dimensional token_ids")
         self.seq_len = seq_len
         # 需要至少 seq_len+1 个 token 才能形成 seq_len 个 (x,y) 对
         self.n = max((len(self.data) - 1) // seq_len, 0)
@@ -5199,6 +5377,8 @@ class TinyLM(nn.Module):
 def cross_entropy_lm_loss(logits: torch.Tensor, labels: torch.Tensor, ignore_index: int = -100):
     """logits: (B, T, V), labels: (B, T)"""
     b, t, v = logits.shape
+    if not (labels != ignore_index).any():
+        raise ValueError("batch has no supervised tokens")
     return F.cross_entropy(logits.reshape(-1, v), labels.reshape(-1), ignore_index=ignore_index)
 
 
@@ -5221,22 +5401,33 @@ def train_one_epoch(
     total_loss_sum = 0.0
     n_tokens = 0
     t0 = time.time()
+    window_tokens = 0
     micro_step = 0
+    if grad_accum_steps < 1:
+        raise ValueError("grad_accum_steps must be positive")
     global_step = 0
 
     for batch_idx, (x, y) in enumerate(loader):
         x, y = x.to(device), y.to(device)
         logits = model(x)
         loss = cross_entropy_lm_loss(logits, y)
-        loss = loss / grad_accum_steps
-        loss.backward()
+        valid_tokens = int((y != -100).sum().item())
+        if valid_tokens == 0:
+            raise ValueError("batch has no supervised tokens")
+        # 先反传 token 总损失，再在窗口结束时除以总有效 token 数
+        (loss * valid_tokens).backward()
+        window_tokens += valid_tokens
 
         with torch.no_grad():
-            total_loss_sum += loss.item() * grad_accum_steps * x.numel()
-            n_tokens += x.numel()
+            total_loss_sum += loss.item() * valid_tokens
+            n_tokens += valid_tokens
 
         micro_step += 1
-        if micro_step % grad_accum_steps == 0:
+        if micro_step % grad_accum_steps == 0 or batch_idx + 1 == len(loader):
+            for param in model.parameters():
+                if param.grad is not None:
+                    param.grad.div_(window_tokens)
+            window_tokens = 0
             grad_norm = None
             if max_grad_norm is not None:
                 grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
@@ -5269,11 +5460,18 @@ def evaluate(model: nn.Module, loader: DataLoader, device: torch.device) -> tupl
     total, ntok = 0.0, 0
     for x, y in loader:
         x, y = x.to(device), y.to(device)
+        valid_tokens = int((y != -100).sum().item())
+        if valid_tokens == 0:
+            continue
         logits = model(x)
         loss = cross_entropy_lm_loss(logits, y)
-        total += loss.item() * x.numel()
-        ntok += x.numel()
-    mean_nll = total / max(ntok, 1)
+        valid_tokens = int((y != -100).sum().item())
+        if valid_tokens:
+            total += loss.item() * valid_tokens
+            ntok += valid_tokens
+    if ntok == 0:
+        raise ValueError("evaluation set has no supervised tokens")
+    mean_nll = total / ntok
     return mean_nll, perplexity_from_mean_nll(mean_nll)
 ```
 
@@ -5334,8 +5532,9 @@ def top_p_filter(logits: torch.Tensor, p: float):
     sorted_logits, sorted_idx = torch.sort(logits, descending=True, dim=-1)
     probs = F.softmax(sorted_logits, dim=-1)
     cumsum = torch.cumsum(probs, dim=-1)
-    # 保留 cumsum - probs <= p 的位置（首次超过 p 的 token 仍保留在核内，常见实现）
-    mask = cumsum - probs > p
+    # 保留达到阈值的最小前缀；至少保留一个 token
+    mask = cumsum - probs >= p
+    mask[..., 0] = False
     sorted_logits = sorted_logits.masked_fill(mask, float("-inf"))
     full = torch.full_like(logits, float("-inf"))
     full.scatter_(-1, sorted_idx, sorted_logits)
@@ -5344,6 +5543,7 @@ def top_p_filter(logits: torch.Tensor, p: float):
 
 @torch.no_grad()
 def greedy_decode(model: nn.Module, prompt_ids: torch.Tensor, max_new_tokens: int):
+    model.eval()
     ids = prompt_ids
     for _ in range(max_new_tokens):
         logits = model(ids)[:, -1, :]
@@ -5362,6 +5562,7 @@ def generate(
     top_p: float = 1.0,
     repetition_penalty: float = 1.0,
 ):
+    model.eval()
     ids = prompt_ids
     for _ in range(max_new_tokens):
         logits = model(ids)[:, -1, :]
@@ -5382,8 +5583,8 @@ def generate(
 ### 速记清单
 
 1. **目标**：下一词预测 = 条件分布学习；token 平均 CE 与 MLE 一致（在标准独立假设下）。
-2. **CE**：\(L=-\log p_{\text{true}}\)；`cross_entropy` 比手写 softmax+log 更稳。
-3. **PPL**：\(\exp(\text{mean NLL})\)；报告时统一「是否 pad、是否按 token 平均、对数底」。
+2. **CE**：$L=-\log p_{\text{true}}$；`cross_entropy` 比手写 softmax+log 更稳。
+3. **PPL**：$\exp(\text{mean NLL})$；报告时统一「是否 pad、是否按 token 平均、对数底」。
 4. **循环**：`forward` → `loss`（÷累积步数）→ `backward` → `clip_grad_norm_` → `optimizer.step` → `scheduler.step` → `zero_grad`。
 5. **吞吐**：`tokens/sec ≈ 已处理 token 数 / 墙钟时间`；多卡需约定是否含数据加载时间。
 6. **采样**：贪心快但易重复；温度调随机性；Top-k 固定分支数；Top-p 自适应核大小；重复惩罚缓解循环。
@@ -5396,15 +5597,15 @@ def generate(
 
 ### Q1：交叉熵损失函数的公式和含义？
 
-**一句话**：衡量模型分布与「真实 one-hot 标签」的差异，单标签下等于 **负对数似然** \(-\log p_{\text{true}}\)。
+**一句话**：衡量模型分布与「真实 one-hot 标签」的差异，单标签下等于 **负对数似然** $-\log p_{\text{true}}$。
 
-**展开**：对类别 \(c\)，\(L=-\log p_c\)，其中 \(p_c=\mathrm{softmax}(\mathrm{logits})_c\)。对整个数据集最小化平均 CE，等价于最大化正确类的对数概率（MLE）。含义：模型给真实下一词的概率越高，损失越小。
+**展开**：对类别 $c$，$L=-\log p_c$，其中 $p_c=\mathrm{softmax}(\mathrm{logits})_c$。对整个数据集最小化平均 CE，等价于最大化正确类的对数概率（MLE）。含义：模型给真实下一词的概率越高，损失越小。
 
 ### Q2：困惑度（Perplexity）是什么？如何计算？
 
-**一句话**：\(\mathrm{PPL}=\exp(L)\)，\(L\) 为与 CE **同底**的按 token 平均负对数似然（自然对数时常用 \(\exp\)）。
+**一句话**：$\mathrm{PPL}=\exp(L)$，$L$ 为与 CE **同底**的按 token 平均负对数似然（自然对数时常用 $\exp$）。
 
-**展开**：若验证平均 NLL 为 \(L\)，则 \(\mathrm{PPL}=e^L\)。直觉是「下一步平均还有多少『等效均匀分支』」。计算步骤：先算 token 平均 CE（注意 mask），再取指数。
+**展开**：若验证平均 NLL 为 $L$，则 $\mathrm{PPL}=e^L$。直觉是「下一步平均还有多少『等效均匀分支』」。计算步骤：先算 token 平均 CE（注意 mask），再取指数。
 
 ### Q3：Top-p 采样和 Top-k 采样的区别？
 
@@ -5414,9 +5615,9 @@ def generate(
 
 ### Q4：Temperature 参数的作用？
 
-**一句话**：对 logits 除以 \(T\) 后再 softmax；调**尖锐度**与**随机性**。
+**一句话**：对 logits 除以 $T$ 后再 softmax；调**尖锐度**与**随机性**。
 
-**展开**：\(T<1\) 放大差异、更保守、更像贪心；\(T>1\)  flatten、更随机。\(T\to 0^+\) 趋近 \(\arg\max\)。不改变排序时相对顺序只改变「 softmax 温度」，但除以 \(T\) 会改变 logits 间距，从而影响采样结果。
+**展开**：$T<1$ 放大差异、更保守、更像贪心；$T>1$  flatten、更随机。$T\to 0^+$ 趋近 $\arg\max$。不改变排序时相对顺序只改变「 softmax 温度」，但除以 $T$ 会改变 logits 间距，从而影响采样结果。
 
 ### Q5：训练中出现 loss spike 怎么处理？
 
@@ -5428,7 +5629,7 @@ def generate(
 
 **一句话**：深层网络与循环结构中，梯度连乘可能指数放大或缩小；用**架构与优化技巧**稳定。
 
-**展开**：**爆炸**：连乘因子 \(>1\) 累积 → 范数裁剪、较小学习率、合理初始化、残差、LayerNorm。**消失**：连乘因子 \(<1\) 累积 → 用 ReLU/GELU、残差、更好的初始化、门控结构；Transformer 中深度与注意力缩放也有关。优化器层面：**Adam/AdamW** 自适应学习率常比纯 SGD 更易调。
+**展开**：**爆炸**：连乘因子 $>1$ 累积 → 范数裁剪、较小学习率、合理初始化、残差、LayerNorm。**消失**：连乘因子 $<1$ 累积 → 用 ReLU/GELU、残差、更好的初始化、门控结构；Transformer 中深度与注意力缩放也有关。优化器层面：**Adam/AdamW** 自适应学习率常比纯 SGD 更易调。
 
 ### Q7：如何判断模型过拟合？
 
@@ -5446,13 +5647,13 @@ def generate(
 
 **一句话**：影响**梯度噪声、收敛速度、泛化、显存与吞吐**；大 batch 常需调 lr（如线性缩放规则，但非绝对）。
 
-**展开**：小 batch 梯度噪声大，有时泛化更好但训练抖；大 batch 估计准、并行友好，但可能陷入尖锐极小。显存不够时用**梯度累积**模拟大 batch。总吞吐量 \(\approx\) batch token 数 × 频率，受内存带宽与算力共同限制。
+**展开**：小 batch 梯度噪声大，有时泛化更好但训练抖；大 batch 估计准、并行友好，但可能陷入尖锐极小。显存不够时用**梯度累积**模拟大 batch。总吞吐量 $\approx$ batch token 数 × 频率，受内存带宽与算力共同限制。
 
 ### Q10：如何计算训练吞吐量（tokens/sec）？
 
 **一句话**：**一段时间内处理的 token 总数 / 墙钟时间**；多卡需约定是否 all-reduce 前后、是否含数据加载。
 
-**展开**：单步 token 数 \(\approx B \times T\)（无 packing 时）；若梯度累积 \(K\) 步再 `step`，日志窗口内用「累积 token 数 / 时间」。对比实验时固定是否计入了 `DataLoader` 与 `cuda synchronize`。
+**展开**：单步 token 数 $\approx B \times T$（无 packing 时）；若梯度累积 $K$ 步再 `step`，日志窗口内用「累积 token 数 / 时间」。对比实验时固定是否计入了 `DataLoader` 与 `cuda synchronize`。
 
 ### Q11：语言建模里交叉熵和负对数似然是什么关系？
 
@@ -5473,7 +5674,7 @@ def generate(
 5. 为何对梯度做 `clip_grad_norm_` 而不是简单把 loss 截断到常数？
 6. 实现 repetition penalty 时，若 penalty 过大，可能出现什么现象？
 
-**提示**：(1) \(e^{2.3}\approx 9.97\)；(2) \(8\times 512=4096\) token/步；有效序列 batch \(=8\times 4=32\)；(3) Top-p 按质量截断；(4) lr、裁剪缺失、溢出；(5) 截断 loss 不改变梯度方向信息，裁剪限制步长；(6) 语义断裂或乱码。
+**提示**：(1) $e^{2.3}\approx 9.97$；(2) $8\times 512=4096$ token/步；有效序列 batch $=8\times 4=32$；(3) Top-p 按质量截断；(4) lr、裁剪缺失、溢出；(5) 将 loss 硬截断到常数会使超阈值区域的梯度为零；梯度裁剪保留方向并限制范数；(6) 语义断裂或乱码。
 
 ---
 
@@ -5481,9 +5682,9 @@ def generate(
 
 | 上一课 | 下一课 |
 |--------|--------|
-| [第 06 课：AdamW 优化器实现](./06-AdamW优化器实现.md) | [第 08 课：Assignment 1 实战指南](./08-Assignment1实战指南.md) |
+| [第 06 课：AdamW 优化器实现](../docs/06-AdamW%E4%BC%98%E5%8C%96%E5%99%A8%E5%AE%9E%E7%8E%B0.md) | [第 08 课：Assignment 1 实战指南](../docs/08-Assignment1%E5%AE%9E%E6%88%98%E6%8C%87%E5%8D%97.md) |
 
-**相关**：课程总览 [00-课程总览与学习路线](./00-课程总览与学习路线.md) · Transformer 架构 [03-Transformer架构详解](./03-Transformer架构详解.md)
+**相关**：课程总览 [00-课程总览与学习路线](../docs/00-%E8%AF%BE%E7%A8%8B%E6%80%BB%E8%A7%88%E4%B8%8E%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF.md) · Transformer 架构 [03-Transformer架构详解](../docs/03-Transformer%E6%9E%B6%E6%9E%84%E8%AF%A6%E8%A7%A3.md)
 
 ---
 
@@ -5539,7 +5740,7 @@ def generate(
 
 ### 2.6 交叉熵在做什么？
 
-对每个位置，模型输出 $V$ 维 logits，与「真实下一个 token」做 **多分类交叉熵**。语言建模通常把 `(B, T, V)` 与右移一位的 `labels` 对齐后 **展平** 成 `(B*(T-1), V)` 与 `(B*(T-1),)` 再计算（忽略 padding 位置时用 `ignore_index`）。
+对每个位置，模型输出 $V$ 维 logits，与「真实下一个 token」做 **多分类交叉熵**。语言建模通常把 `(B, T, V)` 与下一 token 对应的 `labels` 对齐后 **展平** 成 `(B*(T-1), V)` 与 `(B*(T-1),)` 再计算（忽略 padding 位置时用 `ignore_index`）。
 
 ### 2.7 AdamW 与「手写」的意义
 
@@ -5580,12 +5781,12 @@ def generate(
 
 | 前置课 | 本节如何用到 |
 |--------|----------------|
-| [Lesson 02 BPE](02-BPE分词器原理与实现.md) | 预分词、字节、merge、encode/decode |
-| [Lesson 03 Transformer](03-Transformer架构详解.md) | Decoder-only 堆叠、残差与归一化顺序 |
-| [Lesson 04 RoPE/MHA](04-多头注意力与RoPE.md) | 因果注意力、RoPE 施加维度 |
-| [Lesson 05 RMSNorm/SwiGLU](05-RMSNorm-SwiGLU-GQA.md) | 现代 LLM 子层 |
-| [Lesson 06 AdamW](06-AdamW优化器实现.md) | 矩估计、偏差修正、解耦权重衰减 |
-| [Lesson 07 训练与采样](07-训练循环与损失函数.md) | CE、调度、Top-p |
+| [Lesson 02 BPE](../docs/02-BPE%E5%88%86%E8%AF%8D%E5%99%A8%E5%8E%9F%E7%90%86%E4%B8%8E%E5%AE%9E%E7%8E%B0.md) | 预分词、字节、merge、encode/decode |
+| [Lesson 03 Transformer](../docs/03-Transformer%E6%9E%B6%E6%9E%84%E8%AF%A6%E8%A7%A3.md) | Decoder-only 堆叠、残差与归一化顺序 |
+| [Lesson 04 RoPE/MHA](../docs/04-%E5%A4%9A%E5%A4%B4%E6%B3%A8%E6%84%8F%E5%8A%9B%E4%B8%8ERoPE.md) | 因果注意力、RoPE 施加维度 |
+| [Lesson 05 RMSNorm/SwiGLU](../docs/05-RMSNorm-SwiGLU-GQA.md) | 现代 LLM 子层 |
+| [Lesson 06 AdamW](../docs/06-AdamW%E4%BC%98%E5%8C%96%E5%99%A8%E5%AE%9E%E7%8E%B0.md) | 矩估计、偏差修正、解耦权重衰减 |
+| [Lesson 07 训练与采样](../docs/07-%E8%AE%AD%E7%BB%83%E5%BE%AA%E7%8E%AF%E4%B8%8E%E6%8D%9F%E5%A4%B1%E5%87%BD%E6%95%B0.md) | CE、调度、Top-p |
 
 ---
 
@@ -5719,7 +5920,7 @@ assignment1/
 ### 6.3 形状验证
 
 - 在 `forward` 关键处 `assert` 或一次性打印：`embed (B,T,D)`、`attn (B,H,T,T)`、`logits (B,T,V)`。
-- **`cross_entropy`**：`C` 必须在最后一维；否则先 `permute` / `view`。
+- **`cross_entropy`**：PyTorch 的类别维是**第 1 维**（从 0 计数）；本节先将 `(B,T,V)` 展平为 `(B*T,V)`，此时类别维恰好也是最后一维。也可转为 `(B,V,T)`，不能直接把 `(B,T,V)` 当作其多维输入。
 
 ### 6.4 过拟合单 batch
 
@@ -5747,7 +5948,7 @@ uv run pytest -k "bpe"                   # 按名称子串筛选
 | 现象 | 常见原因 |
 |------|-----------|
 | matmul 维度错误 | $QK^\top$ 中 head 维与 `d_head` 混淆；`transpose` 写错 |
-| `cross_entropy` 报错 | logits 与 labels 长度差 1；`V` 不在最后一维 |
+| `cross_entropy` 报错 | logits/labels 未对齐；未展平或未把 `V` 移到类别维（第 1 维） |
 | attention 广播失败 | 未 reshape 为 `(B, H, T, d)`；mask 长度不是 `T` |
 
 **方法**：固定 `B=1`、小 `T`，逐步打印 `tensor.shape`。
@@ -5788,8 +5989,8 @@ uv run pytest -k "bpe"                   # 按名称子串筛选
 |----|----------------|------|
 | $D$（d_model） | 128～384 | 先保证能过拟合小数据 |
 | $L$（层数） | 2～6 | 深模型更难调，先浅后深 |
-| $H$（头数） | $D$ 整除 $d_\text{head}$，如 4～8 | 与 RoPE 实现一起测 |
-| $T$（序列长度） | 128～512 | 显存 $\propto B \cdot T^2$（注意力） |
+| $H$（头数） | 如 4～8，要求 $D$ 可被 $H$ 整除，且 RoPE 的头维为偶数 | 联合验证 reshape 与旋转 |
+| $T$（序列长度） | 128～512 | 朴素注意力矩阵为 $O(BHT^2)$；FlashAttention 不完整物化该矩阵 |
 | $B$（batch） | 从 1～8 起 | OOM 则减 $B$ 或梯度累积 |
 | 学习率 $\eta$ | $1\mathrm{e}{-4}$～$3\mathrm{e}{-4}$ 量级试探 | 配合 warmup |
 | weight decay $\lambda$ | $0.01$～$0.1$（常见范围） | bias/LayerNorm 常不衰减 |
@@ -5920,7 +6121,7 @@ text = tokenizer.decode(ids[0].tolist())
 
 ### Q1：请描述你从零实现语言模型的过程
 
-**参考答案**：我按数据流把任务拆成四块：**分词器、模型、损失与优化、训练与生成**。首先实现 **字节级 BPE**：用课程规定的预分词正则把文本切成片段，在片段内统计相邻字节对，迭代 merge 扩展词表，并严格处理 **平局规则**，保证训练与推理同一套 merge 顺序；`encode` 得到 ID 序列，`decode` 查词表拼回字节再 UTF-8 解码。接着实现 **Decoder-only Transformer**：token embedding、多层 block，每层包含 **RMSNorm**、**多头因果自注意力**（对 $Q,K$ 施加 **RoPE**）、残差与 **SwiGLU FFN**；注意力里用 **causal mask** 禁止看未来位置；最后 **lm_head** 映射到词表 logits。训练时对 logits 与 **右移一位** 的 `input_ids` 做 **交叉熵**。优化器使用 **手写的 AdamW**（含偏差修正与解耦权重衰减），训练循环里配合 **学习率调度**（如 warmup+cosine），并记录 loss。验证无误后用 **top-p** 做文本生成调试。整个过程以 **`pytest`** 与 toy 过拟合实验锁定正确性。
+**参考答案**：我按数据流把任务拆成四块：**分词器、模型、损失与优化、训练与生成**。首先实现 **字节级 BPE**：用课程规定的预分词正则把文本切成片段，在片段内统计相邻字节对，迭代 merge 扩展词表，并严格处理 **平局规则**，保证训练与推理同一套 merge 顺序；`encode` 得到 ID 序列，`decode` 查词表拼回字节再 UTF-8 解码。接着实现 **Decoder-only Transformer**：token embedding、多层 block，每层包含 **RMSNorm**、**多头因果自注意力**（对 $Q,K$ 施加 **RoPE**）、残差与 **SwiGLU FFN**；注意力里用 **causal mask** 禁止看未来位置；最后 **lm_head** 映射到词表 logits。训练时对 logits 与 `input_ids[:, 1:]` 对应的下一 token 标签 做 **交叉熵**。优化器使用 **手写的 AdamW**（含偏差修正与解耦权重衰减），训练循环里配合 **学习率调度**（如 warmup+cosine），并记录 loss。验证无误后用 **top-p** 做文本生成调试。整个过程以 **`pytest`** 与 toy 过拟合实验锁定正确性。
 
 ### Q2：实现过程中遇到的最大挑战是什么？
 
@@ -5982,12 +6183,12 @@ text = tokenizer.decode(ids[0].tolist())
 
 | 链接 | 内容 |
 |------|------|
-| [Lesson 07 训练与采样](07-训练循环与损失函数.md) | CE、Top-p、困惑度 |
-| [Lesson 09 GPU 与内存](09-GPU架构与内存层级.md) | 进入 Assignment 2 系统篇 |
+| [Lesson 07 训练与采样](../docs/07-%E8%AE%AD%E7%BB%83%E5%BE%AA%E7%8E%AF%E4%B8%8E%E6%8D%9F%E5%A4%B1%E5%87%BD%E6%95%B0.md) | CE、Top-p、困惑度 |
+| [Lesson 09 GPU 与内存](../docs/09-GPU%E6%9E%B6%E6%9E%84%E4%B8%8E%E5%86%85%E5%AD%98%E5%B1%82%E7%BA%A7.md) | 进入 Assignment 2 系统篇 |
 | [README 参考实现](https://github.com/Melody-Zhou/stanford-cs336-spring2025-assignments) | 社区作业结构参考 |
 | [Stanford CS336 官网](https://stanford-cs336.github.io/spring2025/) | 课程主页 |
 
-**下一课**：[Lesson 09：GPU 架构与内存层级](09-GPU架构与内存层级.md) — 为 FlashAttention 与分布式训练打基础。
+**下一课**：[Lesson 09：GPU 架构与内存层级](../docs/09-GPU%E6%9E%B6%E6%9E%84%E4%B8%8E%E5%86%85%E5%AD%98%E5%B1%82%E7%BA%A7.md) — 为 FlashAttention 与分布式训练打基础。
 
 ---
 
@@ -6080,7 +6281,7 @@ NVIDIA CUDA 设备上，**同一时刻、同一指令** 往往由 **一组线程
 #### 3.2 共享内存 Shared Memory / 片上 SRAM
 
 - **同一线程块（block）内可见**，速度 **远快于 HBM**，带宽可达 **约 10～20 TB/s 量级**（教学中常记 **~19 TB/s** 作为 **片上 SRAM 路径** 的峰值锚点）。
-- **单 SM 可用容量** 常见 **约 128～228 KB 量级**（依架构与配置而定，且与 L1 划分有关——面试说 **「一百多 KB / SM 量级」** 即可）。
+- **单 SM 可用容量** 常见 **约 164～228 KB 量级**（依架构与配置而定，且与 L1 划分有关——面试说 **「一百多 KB / SM 量级」** 即可）。
 - **用途**：CUDA 手写分块 GEMM、规约、FlashAttention 类 **tile 数据驻留**，以及 **融合 kernel** 的中间结果。
 
 #### 3.3 L1 / L2 Cache
@@ -6097,14 +6298,14 @@ NVIDIA CUDA 设备上，**同一时刻、同一指令** 往往由 **一组线程
 #### 3.5 CPU DRAM（主机内存）
 
 - **容量**：服务器常见 **512 GB～2 TB** 等（视配置）。
-- **带宽**：内存本身 **数十～数百 GB/s**；但 **GPU 与 CPU 之间** 经 **PCIe** 或 **NVLink**，**有效端到端带宽** 常见讨论量级 **约 50～400 GB/s**（强依赖链路代际、是否 pinned、是否异步流水线重叠）。
+- **带宽**：CPU 内存与 CPU↔GPU 链路是不同指标。常规独立 GPU 主要通过 PCIe；GPU↔GPU NVLink 带宽不能套用到主机传输。Grace Hopper 等专用平台另有 NVLink-C2C，应分别核对单向/双向与有效/峰值口径。
 
 ### 4. 内存层级对照表（容量与带宽）
 
 | 层级 | 典型容量量级 | 典型带宽量级 | 延迟直觉 |
 |------|----------------|----------------|----------|
 | **寄存器** | 每线程 **极少量（KB 级以下/线程）** | **极高（随执行单元）** | **最低** |
-| **Shared Memory / SRAM** | **~128～228 KB / SM**；全卡合计 **~十 MB 量级** | **~10～20 TB/s（如 ~19 TB/s 锚点）** | **很低** |
+| **Shared Memory / SRAM** | **~164～228 KB / SM**；全卡合计 **~十 MB 量级** | **~10～20 TB/s（如 ~19 TB/s 锚点）** | **很低** |
 | **L1** | **每 SM 较小** | **高** | **低** |
 | **L2 Cache** | **~数十 MB（全卡）** | **介于 Shared 与 HBM 之间** | **低～中** |
 | **HBM（全局显存）** | **~40～80 GB（常见）；更大 SKU 如 ~141 GB** | **~1.5～3.35 TB/s（依代际）** | **相对片上更高** |
@@ -6116,9 +6317,9 @@ NVIDIA CUDA 设备上，**同一时刻、同一指令** 往往由 **一组线程
 
 #### 5.1 算术强度（Arithmetic Intensity）
 
-\[
+$$
 \text{Arithmetic Intensity} = \frac{\text{FLOPs（或有效计算量）}}{\text{Bytes Transferred（与实现相关的内存流量）}}
-\]
+$$
 
 单位常用 **FLOPs/Byte**：含义是 **每从内存体系搬运 1 字节，平均做多少次浮点运算**。  
 **强度越高**，越可能 **吃满算力**；**强度越低**，越可能 **吃满内存带宽**。
@@ -6133,7 +6334,7 @@ NVIDIA CUDA 设备上，**同一时刻、同一指令** 往往由 **一组线程
 
 #### 5.3 为什么 Attention（朴素实现）常是 memory-bound
 
-- **朴素 Attention** 往往产生 **大尺寸中间张量**（如 \(O(B \cdot H \cdot T^2)\) 量级），并多次 **读写 HBM**。
+- **朴素 Attention** 往往产生 **大尺寸中间张量**（如 $O(B \cdot H \cdot T^2)$ 量级），并多次 **读写 HBM**。
 - 相对 **GEMM**，**每字节对应的有效 FLOPs** 不够高，或 **实现上 IO 次数过多**，容易 **先触及 HBM 带宽** 而非 Tensor Core 峰值。
 - **FlashAttention** 通过 **分块、融合、重算**，**减少 HBM 往返**，把瓶颈向 **计算** 方向推——这是 Lesson 10 的核心动机之一。
 
@@ -6143,7 +6344,7 @@ NVIDIA CUDA 设备上，**同一时刻、同一指令** 往往由 **一组线程
 |------|---------------------------|----------------------------|------------------|
 | **架构** | Ampere | Hopper | Hopper 系（更大 HBM） |
 | **显存** | **80GB HBM2e**（常见讨论） | **80GB HBM3** | **更大容量（如 ~141GB 级 SKU）** |
-| **显存带宽** | **~2 TB/s 量级** | **~3.35 TB/s 量级** | **更高（代际提升）** |
+| **显存带宽** | **~2 TB/s 量级** | **~3.35 TB/s 量级** | **4.8 TB/s（141 GB H200 SKU）** |
 | **Tensor Core** | 第三代 | **第四代**（FP8 等） | 在 H100 基础上强化大模型/长上下文场景 |
 | **面试表述** | 上一代训练主力 | **算力 + HBM 带宽** 相对 A100 全面提升 | **更大显存 + 更高带宽**，显存敏感 workload 友好 |
 
@@ -6162,7 +6363,7 @@ NVIDIA CUDA 设备上，**同一时刻、同一指令** 往往由 **一组线程
 
 #### 8.1 FLOPS 利用率与 MFU（Model FLOPS Utilization）
 
-- **MFU** 定义为：**模型一次前向+反向（或指定步）的实际 achieved FLOPS** 与 **GPU 峰值 FLOPS** 的比值（有时按 **理论模型 FLOPs/步** 与 **墙钟时间** 估算 achieved）。
+- **MFU** 用有效模型训练 FLOPs/步 ÷ 步时 ÷ 所用 GPU 的合计峰值 FLOP/s 估算。通常不把 activation checkpointing 的额外重算计入有效模型 FLOPs；包含硬件实际重算的利用率更接近 HFU。需注明 dtype、是否稀疏峰值和 FLOPs 口径。
 - **意义**：衡量 **算法+实现** 是否 **吃满硬件算力**；大模型训练中 **MFU 低** 可能来自 **访存、通信、小 kernel launch、低 occupancy** 等。
 
 #### 8.2 内存带宽利用率
@@ -6197,7 +6398,7 @@ NVIDIA CUDA 设备上，**同一时刻、同一指令** 往往由 **一组线程
 | **Adam m** | 4 B |
 | **Adam v** | 4 B |
 
-**合计约 16 B/参数**（仅权重相关静态张量）。再加上 **框架 buffer、梯度聚合、碎片**，教学常记 **约 16～20× 参数字节数** 为 **粗算上界量级**。
+**合计约 16 B/参数**（参数、梯度、Adam 两份状态均为 FP32），即 FP32 权重文件大小的约 4 倍。激活、通信缓冲和分配器开销另计；不能说是“16～20 倍参数字节数”，也不能当作总显存上界。
 
 **（2）激活（Activations）**  
 与 **batch、序列长度、隐藏维、层数、是否 checkpoint、是否重计算 attention** 强相关；常占 **大头**，且 **梯度检查点（activation checkpointing）** 用 **重算前向** 换 **存更少的激活**，是 **用计算换显存**。
@@ -6296,7 +6497,7 @@ def roofline_hint(flops, bytes_moved, peak_tflops=300, peak_tbs=3.0):
     """
     intensity = flops / max(bytes_moved, 1e-9)
     roof_compute = peak_tflops
-    roof_mem = intensity * peak_tbs * 1000
+    roof_mem = intensity * peak_tbs  # FLOP/byte × TB/s = TFLOP/s，无需乘 1000
     attainable = min(roof_compute, roof_mem)
     return {
         "intensity_flops_per_byte": intensity,
@@ -6337,7 +6538,7 @@ y.sum().backward()
 2. **SM / Warp**：**SM** 为执行集群；**Warp=32 线程** 为调度粒度；**分支发散** 降效。
 3. **CUDA Core vs Tensor Core**：**CUDA Core** 通用浮点；**Tensor Core** 专吃 **GEMM 类** 峰值。
 4. **层级顺序**：寄存器 → Shared → L1 → L2 → HBM →（跨设备）CPU DRAM；**片上远快于 HBM**。
-5. **锚点（量级）**：Shared **~128～228KB/SM**，片上带宽 **~19 TB/s 量级**；H100 **HBM ~80GB、~3.35 TB/s**；CPU↔GPU **~50～400 GB/s 有效**。
+5. **锚点（量级）**：Shared **~164～228KB/SM**，片上带宽 **~19 TB/s 量级**；H100 **HBM ~80GB、~3.35 TB/s**；CPU↔GPU 带宽取决于 PCIe 或专用互连，需实测。
 6. **强度与 Roofline**：**FLOPs/Byte**；**min(算力顶, 带宽顶)**。
 7. **算子**：**大 GEMM → compute-bound**；**逐元素 → memory-bound**；**朴素 Attention → memory-bound**；**FlashAttention → 减 HBM IO**。
 8. **代际**：**A100** Ampere；**H100** Hopper；**H200** 更大 HBM/带宽。
@@ -6361,7 +6562,7 @@ y.sum().backward()
 **答**：三步走：**（1）** 估算或测量 **算术强度 FLOPs/Byte**；**（2）** 用 **Roofline** 看 **min(算力顶, 强度×带宽)**；**（3）** 用 **profiler**（`torch.profiler`、Nsight）观察 **kernel 是否接近带宽顶**、**是否大量 memory stall**。若 **大 GEMM** 且 Tensor Core 活跃、**MFU 高**，多 **compute-bound**；若 **逐元素链**、**朴素 Attention** 且 **内存事务占比高**，多 **memory-bound**。
 
 **5. 训练一个模型需要多少 GPU 显存？如何估算？**  
-**答**：分块估算：**静态** = **参数 + 梯度 + 优化器状态**（Adam 常用 **FP32 下约 16 B/参数** 粗算）+ **框架开销（常记 16～20× 参数量字节为量级）**；**动态** = **激活**，与 **batch、T、d、层数、checkpoint** 有关；再加上 **分布式** 下的 **分片、通信缓冲**。实操可用 **`torch.cuda.max_memory_allocated()`** 与 **逐步打开**（无 checkpoint → 有 checkpoint → ZeRO）观测。
+**答**：分块估算：**静态** = **参数 + 梯度 + 优化器状态**（Adam 常用 **FP32 下约 16 B/参数** 粗算）+ **框架开销（另计，不是固定倍率）**；**动态** = **激活**，与 **batch、T、d、层数、checkpoint** 有关；再加上 **分布式** 下的 **分片、通信缓冲**。实操可用 **`torch.cuda.max_memory_allocated()`** 与 **逐步打开**（无 checkpoint → 有 checkpoint → ZeRO）观测。
 
 **6. Tensor Core 的作用是什么？**  
 **答**：**Tensor Core** 是 **矩阵乘累加** 专用单元，在 **FP16/BF16/TF32/FP8** 等格式上对 **GEMM** 提供 **远高于 CUDA Core 标量乘加** 的 **峰值吞吐**。大模型训练 **主力算力** 来自 Tensor Core；**小矩阵、不规则访存** 可能无法充分发挥。
@@ -6370,7 +6571,7 @@ y.sum().backward()
 **答**：**MFU** 衡量 **模型在真实步进中 achieved FLOPS** 相对 **硬件峰值 FLOPS** 的比例，反映 **实现与调度** 是否 **吃满算力**。**MFU 低** 时需结合 **访存、通信、kernel 粒度、Python 开销** 排查；与 **仅看 GPU-Util** 相比，更贴近 **有效训练吞吐** 讨论。
 
 **8. H100 相比 A100 的主要提升？**  
-**答**：**同代际 Hopper vs Ampere**：**H100** 在 **第四代 Tensor Core**、**峰值算力**、**HBM3 带宽（常见 ~3.35 TB/s 量级）**、**新数据类型（如 FP8）与系统特性** 上整体强于 **A100（~2 TB/s 量级带宽的常见讨论）**；具体数值以 **官方规格** 为准。面试答 **算力 + 内存带宽 + 新特性** 三类即可。
+**答**：**不同架构代际：Hopper vs Ampere**：**H100** 在 **第四代 Tensor Core**、**峰值算力**、**HBM3 带宽（常见 ~3.35 TB/s 量级）**、**新数据类型（如 FP8）与系统特性** 上整体强于 **A100（~2 TB/s 量级带宽的常见讨论）**；具体数值以 **官方规格** 为准。面试答 **算力 + 内存带宽 + 新特性** 三类即可。
 
 **9. 如何使用 profiler 分析性能瓶颈？**  
 **答**：**（1）** 先 **`torch.cuda.synchronize()`** 保证计时正确；**（2）** 用 **`torch.profiler`** 找 **Top CUDA ops** 与 **Python 热点**；**（3）** 用 **Nsight Systems** 看 **DataLoader、H2D、计算是否重叠**；**（4）** 对关键 kernel 用 **Nsight Compute** 看 **occupancy 与内存**；**（5）** 若怀疑 **GIL/Python**，用 **py-spy** 采样。最终把结论映射到 **Roofline：算力顶还是带宽顶**。
@@ -6388,7 +6589,7 @@ y.sum().backward()
 
 ## 练习
 
-1. **推导**：对 \(A\in\mathbb{R}^{M\times K}, B\in\mathbb{R}^{K\times N}\)，FP32 GEMM 的 **FLOPs** 与 **朴素读写字节上界**；写出 **算术强度** 表达式；当 \(M=N=K\to\infty\) 时强度趋势？
+1. **推导**：对 $A\in\mathbb{R}^{M\times K}, B\in\mathbb{R}^{K\times N}$，FP32 GEMM 的 **FLOPs** 与 **朴素读写字节上界**；写出 **算术强度** 表达式；当 $M=N=K\to\infty$ 时强度趋势？
 
 2. **对比**：**LayerNorm → Dropout → MatMul** 中，哪段更可能 **memory-bound**？为什么？
 
@@ -6433,7 +6634,7 @@ y.sum().backward()
 
 - **CPU vs GPU**：**少而强、低延迟** 对比 **多而简、高吞吐**；**SIMT + Warp** 是调度核心。
 - **硬件**：**SM** 为执行集群；**CUDA Core** 通用、**Tensor Core** 专吃 **GEMM**。
-- **内存层级**：**寄存器 → Shared（~128～228KB/SM，~19TB/s 量级锚点）→ L1/L2 → HBM（~40～80GB+，~1.5～3.35TB/s）→ CPU DRAM（跨设备 ~50～400GB/s 有效）**。
+- **内存层级**：**寄存器 → Shared（~164～228KB/SM，~19TB/s 量级锚点）→ L1/L2 → HBM（~40～80GB+，~1.5～3.35TB/s）→ CPU DRAM（跨设备带宽依链路而定）**。
 - **性能模型**：**算术强度** + **Roofline**；**GEMM 偏 compute-bound**，**逐元素与朴素 Attention 偏 memory-bound**。
 - **代际**：**A100 → H100 → H200** 算力与 **HBM 容量/带宽** 递进。
 - **工具**：**torch.profiler**、**Nsight Systems/Compute**、**py-spy**；**synchronize** 正确计时。
@@ -6442,13 +6643,13 @@ y.sum().backward()
 
 ### 相关链接
 
-- **下一节**：[Lesson 10：FlashAttention 原理与 Triton](./10-FlashAttention原理与Triton.md)
-- **相关复习**：[Lesson 03：Transformer 架构详解](./03-Transformer架构详解.md)、[Lesson 04：多头注意力与 RoPE](./04-多头注意力与RoPE.md)
-- **总览**：[Lesson 00：课程总览与学习路线](./00-课程总览与学习路线.md)
+- **下一节**：[Lesson 10：FlashAttention 原理与 Triton](../docs/10-FlashAttention%E5%8E%9F%E7%90%86%E4%B8%8ETriton.md)
+- **相关复习**：[Lesson 03：Transformer 架构详解](../docs/03-Transformer%E6%9E%B6%E6%9E%84%E8%AF%A6%E8%A7%A3.md)、[Lesson 04：多头注意力与 RoPE](../docs/04-%E5%A4%9A%E5%A4%B4%E6%B3%A8%E6%84%8F%E5%8A%9B%E4%B8%8ERoPE.md)
+- **总览**：[Lesson 00：课程总览与学习路线](../docs/00-%E8%AF%BE%E7%A8%8B%E6%80%BB%E8%A7%88%E4%B8%8E%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF.md)
 
 ---
 
-**版本说明**：文中 **容量、带宽、延迟** 均为 **教学量级**；生产环境请以 **NVIDIA 官方规格** 与 **实测 profiling** 为准。
+**规格来源与口径**：Shared Memory 的 SM 容量可查 [Ampere 指南](https://docs.nvidia.com/cuda/ampere-tuning-guide/index.html)（A100 164 KB）与 [Hopper 指南](https://docs.nvidia.com/cuda/hopper-tuning-guide/index.html)（H100 228 KB）；显存带宽查 [H100](https://www.nvidia.com/en-us/data-center/h100/) 与 [H200](https://www.nvidia.com/en-us/data-center/h200/) 官方 SKU 表。片上带宽锚点是整卡路径的量级，不能视为单 SM 带宽或统一硬件规格。
 
 **延伸阅读（非面试必答）**：Hopper **TMA（Tensor Memory Accelerator）**、**异步拷贝** 等特性进一步降低 **访存与计算流水** 之间的空隙；若投递 **CUDA / 推理引擎** 方向，可结合 **Nsight Compute** 的 **memory workload analysis** 做深挖。
 
@@ -6461,7 +6662,7 @@ y.sum().backward()
 
 > **Stanford CS336**：Language Modeling from Scratch — 面试导向学习指南（第 10 节）
 
-**先修**：[Lesson 09：GPU 架构与内存层级](./09-GPU架构与内存层级.md)（HBM / SRAM、算术强度）、[Lesson 04：多头注意力与 RoPE](./04-多头注意力与RoPE.md)。
+**先修**：[Lesson 09：GPU 架构与内存层级](../docs/09-GPU%E6%9E%B6%E6%9E%84%E4%B8%8E%E5%86%85%E5%AD%98%E5%B1%82%E7%BA%A7.md)（HBM / SRAM、算术强度）、[Lesson 04：多头注意力与 RoPE](../docs/04-%E5%A4%9A%E5%A4%B4%E6%B3%A8%E6%84%8F%E5%8A%9B%E4%B8%8ERoPE.md)。
 
 **面试热度**：★★★★★（系统岗 / 大模型工程岗极高频）
 
@@ -6469,7 +6670,7 @@ y.sum().backward()
 
 ## 导读
 
-本节从 **标准 Scaled Dot-Product Attention** 的 **\(O(N^2)\) 峰值显存** 与 **HBM 访存瓶颈** 出发，讲清 **FlashAttention** 的 **IO 感知（IO-aware）** 设计：**分块（tiling）**、**在线 Softmax（online softmax）** 与 **融合内核**；给出 **显存复杂度 \(O(N)\)**、**IO 复杂度 \(O(N^2 d / M)\)**（\(M\) 为片上 SRAM / tile 相关规模）、**FlashAttention-2** 的工程改进；介绍 **Triton** 块级编程模型与 **PyTorch `F.scaled_dot_product_attention`**；并对接 **CS336 Assignment 2（Systems：Triton 实现 FlashAttention-2 等）**。
+本节从 **标准 Scaled Dot-Product Attention** 的 **$O(N^2)$ 峰值显存** 与 **HBM 访存瓶颈** 出发，讲清 **FlashAttention** 的 **IO 感知（IO-aware）** 设计：**分块（tiling）**、**在线 Softmax（online softmax）** 与 **融合内核**；给出 **额外显存复杂度 $O(N)$**、**IO 复杂度 $O(N^2 d^2 / M)$**（$d$ 为头维，$M$ 为片上 SRAM 可容纳的标量元素数）、**FlashAttention-2** 的工程改进；介绍 **Triton** 块级编程模型与 **PyTorch `F.scaled_dot_product_attention`**；并对接 **CS336 Assignment 2（Systems：Triton 实现 FlashAttention-2 等）**。
 
 ---
 
@@ -6477,26 +6678,26 @@ y.sum().backward()
 
 ### 1.1 标准 Attention 在算什么？
 
-对单头、省略 batch 与 head 下标，设 \(\mathbf{Q},\mathbf{K},\mathbf{V} \in \mathbb{R}^{N\times d}\)，缩放因子 \(s = 1/\sqrt{d}\)。标准前向为：
+对单头、省略 batch 与 head 下标，设 $\mathbf{Q},\mathbf{K},\mathbf{V} \in \mathbb{R}^{N\times d}$，缩放因子 $s = 1/\sqrt{d}$。标准前向为：
 
-\[
+$$
 \mathbf{S} = s \cdot \mathbf{Q}\mathbf{K}^\top \in \mathbb{R}^{N\times N}, \quad
 \mathbf{P} = \mathrm{softmax}_{\mathrm{row}}(\mathbf{S}), \quad
 \mathbf{O} = \mathbf{P}\mathbf{V} \in \mathbb{R}^{N\times d}.
-\]
+$$
 
-**直觉**：每个 query 位置与 **所有** key 位置做点积得到一行 logits，经 softmax 得到权重，再对 value 行加权求和。复杂度上，主导项常写作 **\(O(N^2 d)\)** 次乘加（QK\(^\top\) 与 PV），但 **实现方式** 决定了你是 **算得快** 还是 **卡在搬运数据上**。
+**直觉**：每个 query 位置与 **所有** key 位置做点积得到一行 logits，经 softmax 得到权重，再对 value 行加权求和。复杂度上，主导项常写作 **$O(N^2 d)$** 次乘加（QK$^\top$ 与 PV），但 **实现方式** 决定了你是 **算得快** 还是 **卡在搬运数据上**。
 
 ---
 
-### 1.2 瓶颈一：\(O(N^2)\) 显存（物化注意力矩阵）
+### 1.2 瓶颈一：$O(N^2)$ 显存（物化注意力矩阵）
 
-若 **显式物化** \(\mathbf{S}\)（未 softmax 的 logits）或 \(\mathbf{P}\)（概率矩阵），需要 **\(N \times N\)** 个浮点数。
+若 **显式物化** $\mathbf{S}$（未 softmax 的 logits）或 $\mathbf{P}$（概率矩阵），需要 **$N \times N$** 个浮点数。
 
-- 当 \(N\) 从 2K 增到 32K、128K 时，**\(N^2\)** 项主导峰值显存，往往比 **\(N \times d\)** 的 Q/K/V 存储更「致命」。
-- **反向传播** 若需长期保留完整 \(\mathbf{P}\) 或等价大张量，压力进一步放大。
+- 当 $N$ 从 2K 增到 32K、128K 时，**$N^2$** 项主导峰值显存，往往比 **$N \times d$** 的 Q/K/V 存储更「致命」。
+- **反向传播** 若需长期保留完整 $\mathbf{P}$ 或等价大张量，压力进一步放大。
 
-**面试一句话**：朴素实现把 **完整 \(N \times N\) 注意力矩阵** 放在 **HBM**，峰值显存 **至少 \(\Theta(N^2)\)** 量级（常数与精度、是否存多份中间结果有关）。
+**面试一句话**：朴素实现把 **完整 $N \times N$ 注意力矩阵** 放在 **HBM**，峰值显存 **至少 $\Theta(N^2)$** 量级（常数与精度、是否存多份中间结果有关）。
 
 ---
 
@@ -6507,28 +6708,28 @@ GPU 存储层次（详见 Lesson 09）可粗分为：
 | 层级 | 典型特征 |
 |------|----------|
 | **HBM** | 容量大（数十 GB），带宽相对算力 **仍常成为瓶颈** |
-| **片上 SRAM（如 Shared Memory）** | 容量小，记教学分析中的 **\(M\)**（与 **tile 大小** 同阶），**有效带宽远高于 HBM** |
+| **片上 SRAM（如 Shared Memory）** | 容量小，记教学分析中的 **$M$**（与 **tile 大小** 同阶），**有效带宽远高于 HBM** |
 
 标准「多阶段」实现典型路径是：
 
-1. 算 \(\mathbf{Q}\mathbf{K}^\top\) → **写 \(\mathbf{S}\) 到 HBM**；
-2. 读 \(\mathbf{S}\) → softmax → **写 \(\mathbf{P}\) 到 HBM**；
-3. 读 \(\mathbf{P}\)、\(\mathbf{V}\) → 算 \(\mathbf{P}\mathbf{V}\)。
+1. 算 $\mathbf{Q}\mathbf{K}^\top$ → **写 $\mathbf{S}$ 到 HBM**；
+2. 读 $\mathbf{S}$ → softmax → **写 $\mathbf{P}$ 到 HBM**；
+3. 读 $\mathbf{P}$、$\mathbf{V}$ → 算 $\mathbf{P}\mathbf{V}$。
 
 每一步都把 **大块中间张量** 在 **HBM 与计算单元之间来回搬运**。当 **算术强度（FLOPs / Byte）** 偏低时，算子表现为 **访存受限（memory-bound）**：算力没跑满，时间花在 **等数据**。
 
-**直觉**：Transformer 里 Attention 常常是 **「算得动但搬不动」** —— 优化目标之一是 **减少 HBM 访问量**，并 **避免把 \(N \times N\) 整块长期驻留**。
+**直觉**：Transformer 里 Attention 常常是 **「算得动但搬不动」** —— 优化目标之一是 **减少 HBM 访问量**，并 **避免把 $N \times N$ 整块长期驻留**。
 
 ---
 
 ### 1.4 FlashAttention 核心思想：IO 感知（IO-aware）算法设计
 
-**IO-aware** 的含义：不仅看 **渐近 FLOPs**，还把 **内存层级** 纳入设计 —— **尽量减少对慢速存储（HBM）的读写次数与数据量**，让 **热数据** 尽量留在 **片上 SRAM**，在 **一次或少数几次 kernel 启动** 内完成 **QK\(^\top\) → 稳定 softmax → PV** 的 **融合**。
+**IO-aware** 的含义：不仅看 **渐近 FLOPs**，还把 **内存层级** 纳入设计 —— **尽量减少对慢速存储（HBM）的读写次数与数据量**，让 **热数据** 尽量留在 **片上 SRAM**，在 **一次或少数几次 kernel 启动** 内完成 **QK$^\top$ → 稳定 softmax → PV** 的 **融合**。
 
 三条主线：
 
-1. **Tiling / Blocking**：把 \(\mathbf{Q},\mathbf{K},\mathbf{V}\) 沿序列维切成 **小块**，使每一步的中间结果 **能放进 SRAM 可容纳的 tile**。
-2. **Online Softmax**：对每一行 softmax **不一次性看到整行 logits**，用 **递推统计量** 合并各子块贡献，从而 **无需完整 \(N \times N\) 的 \(\mathbf{S}\) 或 \(\mathbf{P}\)**。
+1. **Tiling / Blocking**：把 $\mathbf{Q},\mathbf{K},\mathbf{V}$ 沿序列维切成 **小块**，使每一步的中间结果 **能放进 SRAM 可容纳的 tile**。
+2. **Online Softmax**：对每一行 softmax **不一次性看到整行 logits**，用 **递推统计量** 合并各子块贡献，从而 **无需完整 $N \times N$ 的 $\mathbf{S}$ 或 $\mathbf{P}$**。
 3. **Kernel 融合**：在 **融合内核** 内完成矩阵乘与 softmax 规约，显著减少 **全局内存往返**。
 
 **与「近似注意力」的区别**：FlashAttention 是 **精确（exact）** 的 softmax attention（在同一实数运算模型下与朴素实现 **数学等价**），不是稀疏近似或低秩近似。
@@ -6537,37 +6738,37 @@ GPU 存储层次（详见 Lesson 09）可粗分为：
 
 ### 1.5 分块计算（Tiling）：把 Q、K、V 切成能放进 SRAM 的块
 
-**目标**：任何时刻 **不在 HBM 上持有完整 \(N \times N\) 矩阵**；在 **片上** 只保留 **当前 query 块 × 当前 key/value 块** 相关的中间量。
+**目标**：任何时刻 **不在 HBM 上持有完整 $N \times N$ 矩阵**；在 **片上** 只保留 **当前 query 块 × 当前 key/value 块** 相关的中间量。
 
-沿序列维分块。为便于理解，先看 **单个 query 行** \(\mathbf{q} \in \mathbb{R}^{d}\)。第 \(j\) 个 K/V 块（块长 \(B_K\)）：
+沿序列维分块。为便于理解，先看 **单个 query 行** $\mathbf{q} \in \mathbb{R}^{d}$。第 $j$ 个 K/V 块（块长 $B_K$）：
 
-\[
+$$
 \mathbf{K}_j \in \mathbb{R}^{B_K \times d}, \quad \mathbf{V}_j \in \mathbb{R}^{B_K \times d}.
-\]
+$$
 
-该 query 与第 \(j\) 块对应的 **局部 logits**（列向量）为：
+该 query 与第 $j$ 块对应的 **局部 logits**（列向量）为：
 
-\[
+$$
 \mathbf{s}_j = s \cdot \mathbf{K}_j \mathbf{q} \in \mathbb{R}^{B_K}.
-\]
+$$
 
 **真实 GPU kernel** 通常以 **query 块 × key 块** 的矩阵乘组织（便于走 **Tensor Core** 的 `tl.dot`），与上面 **行向量形式** 数学等价。
 
 **处理顺序**：
 
-- 对 **外层** query 块：固定一块 \(\mathbf{Q}\) 在片上（或寄存器/共享内存能覆盖的范围）；
-- **内层** 沿 K/V 序列维 **依次** 扫过各个 key 块：每步计算局部 \(\mathbf{s}_j\)，用 **在线 softmax** 更新全局统计，并累积对 \(\mathbf{V}_j\) 的加权贡献；
-- **绝不** 分配形状为 \((N,N)\) 的完整注意力矩阵。
+- 对 **外层** query 块：固定一块 $\mathbf{Q}$ 在片上（或寄存器/共享内存能覆盖的范围）；
+- **内层** 沿 K/V 序列维 **依次** 扫过各个 key 块：每步计算局部 $\mathbf{s}_j$，用 **在线 softmax** 更新全局统计，并累积对 $\mathbf{V}_j$ 的加权贡献；
+- **绝不** 分配形状为 $(N,N)$ 的完整注意力矩阵。
 
 ---
 
 ### 1.6 Online Softmax：为什么不能「一块一块 softmax」再拼起来？
 
-**问题**：标准 softmax 对一行 \(\mathbf{s} \in \mathbb{R}^{N}\) 需要 **全局最大值** 与 **全局求和**：
+**问题**：标准 softmax 对一行 $\mathbf{s} \in \mathbb{R}^{N}$ 需要 **全局最大值** 与 **全局求和**：
 
-\[
+$$
 p_i = \frac{e^{s_i - m}}{\sum_{k=1}^{N} e^{s_k - m}}, \quad m = \max_k s_k.
-\]
+$$
 
 若对每个块 **单独** 做 softmax 再拼接，**分母与基准最大值都错了** ——  softmax 是 **全局归一化**，不是各块独立归一化。
 
@@ -6575,82 +6776,82 @@ p_i = \frac{e^{s_i - m}}{\sum_{k=1}^{N} e^{s_k - m}}, \quad m = \max_k s_k.
 
 ---
 
-### 1.7 三个运行统计量：\(m\)（max）、\(\ell\)（exp-sum）、\(\mathbf{o}\)（输出累加器）
+### 1.7 三个运行统计量：$m$（max）、$\ell$（exp-sum）、$\mathbf{o}$（输出累加器）
 
 对 **单个 query 行**（向量记法）：
 
 | 符号 | 含义 |
 |------|------|
-| \(m\) / \(M\) | **截至目前** 该行 logits 的 **全局最大值**（running max） |
-| \(\ell\) / \(L\) | 在 **当前 \(m\) 为参考基准** 时，\(\sum_i \exp(s_i - m)\)（running sum of exponentials） |
-| \(\mathbf{o}\) / \(\mathbf{O}\) | **未归一化** 的加权输出；处理完所有块后 **\(\mathbf{o} / \ell\)** 为最终 attention 输出 |
+| $m$ / $M$ | **截至目前** 该行 logits 的 **全局最大值**（running max） |
+| $\ell$ / $L$ | 在 **当前 $m$ 为参考基准** 时，$\sum_i \exp(s_i - m)$（running sum of exponentials） |
+| $\mathbf{o}$ / $\mathbf{O}$ | **未归一化** 的加权输出；处理完所有块后 **$\mathbf{o} / \ell$** 为最终 attention 输出 |
 
-处理第 \(j\) 个 K/V 块前，记 **旧状态** 为 \(M_{\mathrm{old}}, L_{\mathrm{old}}, \mathbf{O}_{\mathrm{old}}\)；本块算出局部 \(m_j, \ell_j\) 及与 \(\mathbf{V}_j\) 的结合项。
+处理第 $j$ 个 K/V 块前，记 **旧状态** 为 $M_{\mathrm{old}}, L_{\mathrm{old}}, \mathbf{O}_{\mathrm{old}}$；本块算出局部 $m_j, \ell_j$ 及与 $\mathbf{V}_j$ 的结合项。
 
 ---
 
 ### 1.8 块更新公式与重标度
 
-对第 \(j\) 块，设：
+对第 $j$ 块，设：
 
-\[
+$$
 \mathbf{s}_j = s \cdot \mathbf{K}_j \mathbf{q}, \quad
 m_j = \max(\mathbf{s}_j), \quad
 \ell_j = \sum_{i \in \mathrm{block}_j} \exp(s_i - m_j).
-\]
+$$
 
 **合并后的新最大值**：
 
-\[
+$$
 M_{\mathrm{new}} = \max(M_{\mathrm{old}}, m_j).
-\]
+$$
 
-**重标度因子**（把「旧基准」和「新块局部基准」统一到 \(M_{\mathrm{new}}\)）：
+**重标度因子**（把「旧基准」和「新块局部基准」统一到 $M_{\mathrm{new}}$）：
 
-\[
+$$
 \mathrm{exp\_old} = \exp(M_{\mathrm{old}} - M_{\mathrm{new}}), \quad
 \mathrm{exp\_new} = \exp(m_j - M_{\mathrm{new}}).
-\]
+$$
 
-**更新指数和（全局，基准为 \(M_{\mathrm{new}}\)）**：
+**更新指数和（全局，基准为 $M_{\mathrm{new}}$）**：
 
-\[
+$$
 L_{\mathrm{new}} = L_{\mathrm{old}} \cdot \mathrm{exp\_old} + \ell_j \cdot \mathrm{exp\_new}.
-\]
+$$
 
-**更新未归一化输出**。记对块 \(j\) 在基准 \(M_{\mathrm{new}}\) 下的权重与 \(\mathbf{V}_j\) 的乘积为一块贡献，则：
+**更新未归一化输出**。记对块 $j$ 在基准 $M_{\mathrm{new}}$ 下的权重与 $\mathbf{V}_j$ 的乘积为一块贡献，则：
 
-\[
+$$
 \mathbf{O}_{\mathrm{new}} =
 \mathbf{O}_{\mathrm{old}} \cdot \mathrm{exp\_old}
 +
 (\mathrm{weights}_j \mathbf{V}_j),
-\]
+$$
 
-其中 \(\mathrm{weights}_j = \exp(\mathbf{s}_j - M_{\mathrm{new}})\)（逐元素），**工程上通常不先物化完整 \(\mathbf{P}\)**。
+其中 $\mathrm{weights}_j = \exp(\mathbf{s}_j - M_{\mathrm{new}})$（逐元素），**工程上通常不先物化完整 $\mathbf{P}$**。
 
 **该行全部块处理完毕后**：
 
-\[
+$$
 \mathbf{o}_{\mathrm{final}} = \mathbf{O}_{\mathrm{final}} \;/\; L_{\mathrm{final}}.
-\]
+$$
 
 ---
 
 ### 1.9 数学正确性证明（为何与标准 softmax 一致）
 
-设整行 logits 为 \(\mathbf{s}\)，全局最大值 \(M^\star = \max_i s_i\)。标准 softmax 权重 \(p_i = \exp(s_i - M^\star) / \sum_k \exp(s_k - M^\star)\)。
+设整行 logits 为 $\mathbf{s}$，全局最大值 $M^\star = \max_i s_i$。标准 softmax 权重 $p_i = \exp(s_i - M^\star) / \sum_k \exp(s_k - M^\star)$。
 
-**归纳思路**：假设处理完前若干个块后，\((M_{\mathrm{old}}, L_{\mathrm{old}}, \mathbf{O}_{\mathrm{old}})\) 满足：
+**归纳思路**：假设处理完前若干个块后，$(M_{\mathrm{old}}, L_{\mathrm{old}}, \mathbf{O}_{\mathrm{old}})$ 满足：
 
-- \(M_{\mathrm{old}}\) 等于 **已覆盖下标集合** 上的最大值；
-- \(L_{\mathrm{old}} = \sum_{i \in \mathrm{已覆盖}} \exp(s_i - M_{\mathrm{old}})\)；
-- \(\mathbf{O}_{\mathrm{old}} = \sum_{i \in \mathrm{已覆盖}} \exp(s_i - M_{\mathrm{old}}) \mathbf{V}[i]\)（行向量形式对应 value 行）。
+- $M_{\mathrm{old}}$ 等于 **已覆盖下标集合** 上的最大值；
+- $L_{\mathrm{old}} = \sum_{i \in \mathrm{已覆盖}} \exp(s_i - M_{\mathrm{old}})$；
+- $\mathbf{O}_{\mathrm{old}} = \sum_{i \in \mathrm{已覆盖}} \exp(s_i - M_{\mathrm{old}}) \mathbf{V}[i]$（行向量形式对应 value 行）。
 
-**并入新块** 时，令 \(M_{\mathrm{new}} = \max(M_{\mathrm{old}}, m_j)\)。
+**并入新块** 时，令 $M_{\mathrm{new}} = \max(M_{\mathrm{old}}, m_j)$。
 
-- 对 **旧下标** \(i\)：\(s_i\) 不变，但基准从 \(M_{\mathrm{old}}\) 变为 \(M_{\mathrm{new}}\)，故每个指数项乘以 \(\exp(M_{\mathrm{old}} - M_{\mathrm{new}}) = \mathrm{exp\_old}\)。因此旧贡献整体乘以 \(\mathrm{exp\_old}\)，与更新式一致。
-- 对 **新块下标**：在基准 \(M_{\mathrm{new}}\) 下直接累加 \(\exp(s - M_{\mathrm{new}})\)，相当于 \(\ell_j \cdot \exp(m_j - M_{\mathrm{new}})\) 与 \(\mathbf{V}_j\) 的乘积形式（块内先以 \(m_j\) 为局部基准算出 \(\ell_j\)，再乘 \(\mathrm{exp\_new}\) 统一到 \(M_{\mathrm{new}}\)），与 **先全局 max 再 exp** 的定义 **一致**。
+- 对 **旧下标** $i$：$s_i$ 不变，但基准从 $M_{\mathrm{old}}$ 变为 $M_{\mathrm{new}}$，故每个指数项乘以 $\exp(M_{\mathrm{old}} - M_{\mathrm{new}}) = \mathrm{exp\_old}$。因此旧贡献整体乘以 $\mathrm{exp\_old}$，与更新式一致。
+- 对 **新块下标**：在基准 $M_{\mathrm{new}}$ 下直接累加 $\exp(s - M_{\mathrm{new}})$，相当于 $\ell_j \cdot \exp(m_j - M_{\mathrm{new}})$ 与 $\mathbf{V}_j$ 的乘积形式（块内先以 $m_j$ 为局部基准算出 $\ell_j$，再乘 $\mathrm{exp\_new}$ 统一到 $M_{\mathrm{new}}$），与 **先全局 max 再 exp** 的定义 **一致**。
 
 **结论**：在 **实数精确运算** 下，online softmax 与 **一次性全局 softmax** 等价。**浮点实现** 中因 **舍入顺序**、**非结合律**，可能与朴素实现有 **极小数值差异**。
 
@@ -6686,30 +6887,30 @@ for j = 1 to J:
 return O / L
 ```
 
-**要点**：循环结束后 **\(m\)** 即为该行 **全局 max**；**\(L\)** 为 **\(\sum_i \exp(s_i - m)\)**；**\(O/L\)** 即 \(\sum_i p_i \mathbf{V}[i]\)。
+**要点**：循环结束后 **$m$** 即为该行 **全局 max**；**$L$** 为 **$\sum_i \exp(s_i - m)$**；**$O/L$** 即 $\sum_i p_i \mathbf{V}[i]$。
 
 ---
 
-### 1.11 显存复杂度：由 \(O(N^2)\) 到 \(O(N)\)
+### 1.11 显存复杂度：避免平方级中间矩阵
 
 | 实现 | 主导峰值 |
 |------|----------|
-| 物化 \(\mathbf{S}\) 或 \(\mathbf{P}\) | **\(\Theta(N^2)\)** |
-| FlashAttention（不显式存完整矩阵） | **\(O(N)\)** 量级的 **每行统计**（\(m,\ell\)）与 **\(\mathbf{o} \in \mathbb{R}^d\)**，外加 **小块缓冲**（与 tile 尺寸有关） |
+| 物化 $\mathbf{S}$ 或 $\mathbf{P}$ | **$\Theta(N^2)$** |
+| FlashAttention | Q/K/V 和输出本身为 $O(Nd)$；反向保存的行级统计为 $O(N)$；片上临时 tile 受 SRAM 容量限制 |
 
-**表述建议**：峰值由 **「必须常驻的 \(N \times N\) 矩阵」** 变为 **「行级标量 + 长度 \(d\) 向量 + 片上 tile」**；对长序列 **极其关键**。
+**表述建议**：保留 $d$ 时，总张量存储为 $O(Nd)$，不是不带条件的 $O(N)$。论文的 $O(N)$ 额外存储指避免平方矩阵后保存的行级统计；固定头维 $d$ 时总存储也对 $N$ 线性。
 
 ---
 
-### 1.12 IO 复杂度：\(O(N^2 d / M)\)
+### 1.12 IO 复杂度：$O(N^2 d^2 / M)$
 
-在 **IO 模型** 中（关注 **HBM \(\leftrightarrow\) 片上** 搬运量与 **片上可重用容量 \(M\)**），FlashAttention 类方法对 Attention 的 HBM 访问量可概括为：
+在原论文的 **IO 模型** 中，$N$ 为序列长度，$d$ 为头维，$M$ 是片上 SRAM 可容纳的**标量元素数**（不是字节数或 token 数）。在 $d \le M \le Nd$ 的范围内，单头 FlashAttention 对 Attention 的 HBM 元素读写量为：
 
-\[
-\mathrm{IO}_{\mathrm{HBM}} \approx O\left(\frac{N^2 d}{M}\right).
-\]
+$$
+\mathrm{IO}_{\mathrm{HBM}} = \Theta\left(\frac{N^2 d^2}{M}\right).
+$$
 
-**直觉**：分子与注意力 **标量工作量** 同阶；分母 **\(M\)** 越大，单次 tile 能 **复用** 更多数据，**HBM 往返次数** 相对越少。
+**直觉**：每个 K/V 块可容纳约 $M/d$ 个 token，总计约 $Nd/M$ 轮；每轮搬运约 $Nd$ 个 Q/输出元素，因此主项为 $N^2d^2/M$。分母 **$M$** 越大，单次 tile 能 **复用** 更多数据，**HBM 往返次数** 相对越少。该界与条件见 [FlashAttention 原论文，§3.2 / Theorem 2](https://arxiv.org/html/2205.14135v2#S3.SS2)。若计算字节流量，再乘每元素的字节数。
 
 **注意**：这是 **量级分析**；真实性能还受 **occupancy、mask、序列是否整除块长、bank conflict、Tensor Core 利用率** 等影响。
 
@@ -6746,7 +6947,7 @@ return O / L
 - **`tl.program_id(axis)`**：当前 program 在 **launch grid** 中的坐标，用于 **划分数据块**（如 batch、head、query tile）。
 - **`tl.load` / `tl.store`**：按 **块** 读写全局内存，支持 **`mask`** 处理尾部或不规则形状。
 - **`tl.dot`**：块矩阵乘（对接 Tensor Core）。
-- **`tl.where`**：按条件选择元素（如 **causal mask**：上三角置 \(-\infty\)）。
+- **`tl.where`**：按条件选择元素（如 **causal mask**：上三角置 $-\infty$）。
 - **`tl.max`**：沿指定轴求最大值（online softmax 中求块内 max）。
 
 ---
@@ -6756,9 +6957,9 @@ return O / L
 典型结构：
 
 1. **Grid**：`program_id` 映射到 **batch、head、query 序列块** 等维度。
-2. **对每个 query tile**：沿 **K/V 序列维** 外层循环；内层维护 **\(m,\ell,\mathbf{acc}\)**（与论文中 \(\mathbf{O}\) 对应）。
-3. **内层**：`tl.dot` 得 **QK\(^\top\)** 块 → **`tl.where` 应用 causal / padding mask** → **online softmax 更新** → `tl.dot` 累积 **PV**。
-4. **写回**：**\(\mathbf{acc} / \ell\)** 写入输出。
+2. **对每个 query tile**：沿 **K/V 序列维** 外层循环；内层维护 **$m,\ell,\mathbf{acc}$**（与论文中 $\mathbf{O}$ 对应）。
+3. **内层**：`tl.dot` 得 **QK$^\top$** 块 → **`tl.where` 应用 causal / padding mask** → **online softmax 更新** → `tl.dot` 累积 **PV**。
+4. **写回**：**$\mathbf{acc} / \ell$** 写入输出。
 
 **CS336 Assignment 2（Systems）** 通常要求：使用 **Triton** 实现 **FlashAttention-2** 风格内核，与 **PyTorch 参考实现** 做 **数值对齐（allclose）**、覆盖 **causal / 变长 / 多 head 维** 等，并提交 **基准测试（吞吐、与基线对比）**。细则以 **当年官方 README / PDF** 为准；常见仓库结构含 `assignment2-systems` 或类似命名，需实现 **`flash_attention_triton.py`** 等文件并通过 `pytest`。
 
@@ -6773,7 +6974,7 @@ PyTorch 提供统一入口 **`torch.nn.functional.scaled_dot_product_attention`*
 ### 1.17 性能与适用场景
 
 - **经验加速**：长序列、memory-bound 配置下，相对 **未融合朴素实现**，Attention 子模块常见 **约 2～4×** 加速（**非保证**，依 GPU、驱动、PyTorch 版本而变）。
-- **显存**：避免 **\(N^2\)** 张量，**长上下文** 训练/推理 **更省显存**。
+- **显存**：避免 **$N^2$** 张量，**长上下文** 训练/推理 **更省显存**。
 
 **局限**：极短序列时 kernel 启动与 tile **固定开销** 占比高；**复杂稀疏 mask** 可能无法走最快路径；低精度下可能有 **微小数值差**。
 
@@ -6784,7 +6985,7 @@ PyTorch 提供统一入口 **`torch.nn.functional.scaled_dot_product_attention`*
 | 场景 | 常见优化点 |
 |------|------------|
 | **训练** | 前向 + 反向；常配合 **重计算（recomputation）** 降低激活显存；FA-2 强调 **反向吞吐**；与 **梯度检查点** 可叠加 |
-| **推理** | 与 **KV Cache** 结合：只对 **新 token** 的 query 与 **缓存的 K/V** 做 attention；**PagedAttention** 等解决 **显存碎片**；FlashAttention 仍减少 **中间 \(N^2\)** 物化 |
+| **推理** | Prefill 仍有全序列注意力；单 token decode 是 $1\times S$ 而非 $S\times S$。增量解码内核主要优化 KV 读取、并行度与带宽，PagedAttention 另管缓存分配 |
 
 面试可答：**训练** 侧重 **吞吐 + 反向显存**；**推理** 侧重 **延迟 + KV 缓存 + 批处理** 下的 **访存与内核选择**。
 
@@ -6891,7 +7092,7 @@ def softmax_kernel(
     tl.store(out_ptr + row_start + cols, out, mask=mask)
 ```
 
-**说明**：真实场景需处理 **`n_cols` 大于 `BLOCK_COL` 的分块规约**；此处展示 **`tl.max`、`tl.exp`、`tl.sum`** 的用法。FlashAttention 的 online softmax 是在 **K 维循环** 中 **增量** 更新 **\(m,\ell\)**，而不是对整个行一次性 `max/sum`。
+**说明**：真实场景需处理 **`n_cols` 大于 `BLOCK_COL` 的分块规约**；此处展示 **`tl.max`、`tl.exp`、`tl.sum`** 的用法。FlashAttention 的 online softmax 是在 **K 维循环** 中 **增量** 更新 **$m,\ell$**，而不是对整个行一次性 `max/sum`。
 
 ---
 
@@ -6959,12 +7160,12 @@ out = F.scaled_dot_product_attention(
 
 ## 三、面试要点（速记清单）
 
-1. **瓶颈**：物化 **\(N \times N\)** \(\Rightarrow\) **\(O(N^2)\)** 显存；Attention 常 **memory-bound**，HBM 往返多。
+1. **瓶颈**：物化 **$N \times N$** $\Rightarrow$ **$O(N^2)$** 显存；Attention 常 **memory-bound**，HBM 往返多。
 2. **核心**：**IO-aware** = **分块 tiling** + **online softmax** + **融合 kernel**；**精确注意力**，非稀疏近似。
-3. **三路量**：**\(m,\ell,\mathbf{O}\)**；**\(M_{\mathrm{new}}, \mathrm{exp\_old}, \mathrm{exp\_new}\)** 做 **基准统一**。
-4. **归一化**：行处理完后 **\(\mathbf{O} / L\)**。
-5. **显存**：不显式存完整注意力矩阵时，峰值 **约 \(O(N)\)**（相对 \(N^2\)）。
-6. **IO**：**\(O(N^2 d / M)\)**，\(M\) 为片上 tile / SRAM 相关规模。
+3. **三路量**：**$m,\ell,\mathbf{O}$**；**$M_{\mathrm{new}}, \mathrm{exp\_old}, \mathrm{exp\_new}$** 做 **基准统一**。
+4. **归一化**：行处理完后 **$\mathbf{O} / L$**。
+5. **显存**：Q/K/V/输出共 $O(Nd)$，行级统计额外 $O(N)$；避免完整 $N^2$ 中间矩阵。
+6. **IO**：**$O(N^2 d^2 / M)$**，$M$ 为片上 SRAM 可容纳的标量元素数，适用条件为 $d \le M \le Nd$。
 7. **FA-2**：**更好并行**、**更少非 matmul FLOPs**、**更快反向**。
 8. **Triton**：**块级** GPU 语言；**`tl.load/store/dot/where/max`** + **`@triton.jit`**。
 9. **正确性**：数学 **等价**；浮点 **可能有微小差**。
@@ -6978,31 +7179,31 @@ out = F.scaled_dot_product_attention(
 
 ### Q1：FlashAttention 的核心思想是什么？
 
-**答**：在 **不近似注意力定义** 的前提下，通过 **分块 tiling** 使计算主要在 **片上 SRAM** 完成，并用 **在线 Softmax** 维护每行的 **全局最大值 \(m\)**、**指数和 \(\ell\)** 与 **未归一化输出累加 \(\mathbf{O}\)**，从而 **不显式构造完整 \(N \times N\) 注意力矩阵**，显著 **降低 HBM 访问量** 与 **峰值显存**。本质是 **IO 感知（IO-aware）的精确注意力 + 融合内核**。
+**答**：在 **不近似注意力定义** 的前提下，通过 **分块 tiling** 使计算主要在 **片上 SRAM** 完成，并用 **在线 Softmax** 维护每行的 **全局最大值 $m$**、**指数和 $\ell$** 与 **未归一化输出累加 $\mathbf{O}$**，从而 **不显式构造完整 $N \times N$ 注意力矩阵**，显著 **降低 HBM 访问量** 与 **峰值显存**。本质是 **IO 感知（IO-aware）的精确注意力 + 融合内核**。
 
 ---
 
 ### Q2：为什么标准 Attention 是访存瓶颈？
 
-**答**：标准多阶段实现会 **物化** 大尺寸中间张量（如 \(\mathbf{S}\)、\(\mathbf{P}\)），在 **HBM 与计算单元之间多次读写**；Attention 的 **算术强度** 往往不足以 **吃满算力**，表现为 **memory-bound**。此外 **\(N^2\)** 规模的张量 **占用带宽与显存**，进一步放大瓶颈。
+**答**：标准多阶段实现会 **物化** 大尺寸中间张量（如 $\mathbf{S}$、$\mathbf{P}$），在 **HBM 与计算单元之间多次读写**；Attention 的 **算术强度** 往往不足以 **吃满算力**，表现为 **memory-bound**。此外 **$N^2$** 规模的张量 **占用带宽与显存**，进一步放大瓶颈。
 
 ---
 
 ### Q3：FlashAttention 如何实现分块 Softmax（online softmax 算法）？
 
-**答**：将一行 logits 按 **K/V 块** 顺序处理。每块计算 **局部最大值 \(m_j\)** 与 **局部指数和 \(\ell_j\)**（块内可先减 \(m_j\) 稳定 exp）。用 **\(M_{\mathrm{new}} = \max(M_{\mathrm{old}}, m_j)\)** 更新全局最大值，用 **\(\exp(M_{\mathrm{old}}-M_{\mathrm{new}})\)** 与 **\(\exp(m_j-M_{\mathrm{new}})\)** 把 **旧累积** 与 **新块** 统一到 **同一基准最大值**，更新 **\(L\)** 与 **\(\mathbf{O}\)**；全程 **无需存储整行 logits**。最后 **\(\mathbf{O}/L\)** 即 softmax 加权后的输出。
+**答**：将一行 logits 按 **K/V 块** 顺序处理。每块计算 **局部最大值 $m_j$** 与 **局部指数和 $\ell_j$**（块内可先减 $m_j$ 稳定 exp）。用 **$M_{\mathrm{new}} = \max(M_{\mathrm{old}}, m_j)$** 更新全局最大值，用 **$\exp(M_{\mathrm{old}}-M_{\mathrm{new}})$** 与 **$\exp(m_j-M_{\mathrm{new}})$** 把 **旧累积** 与 **新块** 统一到 **同一基准最大值**，更新 **$L$** 与 **$\mathbf{O}$**；全程 **无需存储整行 logits**。最后 **$\mathbf{O}/L$** 即 softmax 加权后的输出。
 
 ---
 
 ### Q4：FlashAttention 的内存复杂度是多少？
 
-**答**：**不显式物化** 完整 \(N \times N\) 矩阵时，额外需要 **每行** 的标量 **\(m,\ell\)** 与 **长度 \(d\) 的向量 \(\mathbf{O}\)**，以及 **小块临时缓冲**，峰值 **\(O(N)\)** 量级（与 batch、head 数线性；常数依赖 tile）。对比朴素 **\(\Theta(N^2)\)** 存储 **占主导** 的中间矩阵，长序列下差异巨大。
+**答**：单头 Q/K/V 与输出本身占 $O(Nd)$；反向所需行级统计占 $O(N)$，片上 tile 占受限的临时空间。固定 $d$ 时，总存储对序列长度 $N$ 线性；若同时讨论 $N,d$，应写 $O(Nd)$。相较显式物化的 $N^2$ 注意力矩阵，关键是去掉平方级中间存储。
 
 ---
 
 ### Q5：FlashAttention 的 IO 复杂度是多少？
 
-**答**：在常用 **IO 模型** 下，HBM 访问量可记为 **\(O(N^2 d / M)\)** 量级，其中 **\(M\)** 表示 **片上可重用数据量 / tile 规模**（与 SRAM、分块策略相关）。含义：**注意力计算规模** 与 **\(N^2 d\)** 同阶；**更大的 \(M\)** 提高数据复用，**减少 HBM 往返**。
+**答**：在原论文的 **IO 模型** 下，单头 HBM 元素读写量为 **$\Theta(N^2 d^2 / M)$**，其中 **$M$** 表示 **片上 SRAM 可容纳的标量元素数**，且 $d \le M \le Nd$。这是**访存量**，不能与计算量 $O(N^2d)$ 混淆；**更大的 $M$** 提高数据复用，**减少 HBM 往返**。完整定义与条件见 1.12 节。
 
 ---
 
@@ -7044,13 +7245,13 @@ out = F.scaled_dot_product_attention(
 
 ### Q12：分块计算（Tiling）的基本原理？
 
-**答**：当 **工作集大于片上快速存储** 时，把大矩阵/张量沿某维切成 **小块（tile）**，使 **当前计算所需数据** 能放入 **SRAM/寄存器**，算完一块再载入下一块，通过 **提高数据局部性** 减少对 **HBM** 的重复访问。FlashAttention 将 **Q、K、V** 分块，并在块上维护 **online softmax** 统计量，**从不组装完整 \(N \times N\) 矩阵**。
+**答**：当 **工作集大于片上快速存储** 时，把大矩阵/张量沿某维切成 **小块（tile）**，使 **当前计算所需数据** 能放入 **SRAM/寄存器**，算完一块再载入下一块，通过 **提高数据局部性** 减少对 **HBM** 的重复访问。FlashAttention 将 **Q、K、V** 分块，并在块上维护 **online softmax** 统计量，**从不组装完整 $N \times N$ 矩阵**。
 
 ---
 
 ### Q13（补充）：反向传播为什么也能省显存？
 
-**答**：朴素实现常在 **前向保存大张量** 供反向使用。FlashAttention 常用 **重计算**：反向需要时在 **分块结构下重新计算** 部分中间量，以 **额外计算换存储**，避免 **\(O(N^2)\)** 激活常驻 HBM，从而降低 **反向峰值显存**。
+**答**：朴素实现常在 **前向保存大张量** 供反向使用。FlashAttention 常用 **重计算**：反向需要时在 **分块结构下重新计算** 部分中间量，以 **额外计算换存储**，避免 **$O(N^2)$** 激活常驻 HBM，从而降低 **反向峰值显存**。
 
 ---
 
@@ -7058,21 +7259,21 @@ out = F.scaled_dot_product_attention(
 
 ### 练习 1：复杂度对比
 
-给定 \(N=65536, d=128\)，比较 **物化 \(\mathbf{P}\in\mathbb{R}^{N\times N}\)** 与 **仅每行存 \(\ell\) 与 \(\mathbf{o}\in\mathbb{R}^d\)** 的显存主导项阶别。
+给定 $N=65536, d=128$，比较 **物化 $\mathbf{P}\in\mathbb{R}^{N\times N}$** 与 **仅每行存 $\ell$ 与 $\mathbf{o}\in\mathbb{R}^d$** 的显存主导项阶别。
 
-**提示**：\(N^2\) vs \(Nd\)；估算 float16 下字节数。
+**提示**：$N^2$ vs $Nd$；估算 float16 下字节数。
 
 ---
 
 ### 练习 2：手推块更新
 
-给定 \(M_{\mathrm{old}}, L_{\mathrm{old}}\) 与新块 \(m_j, \ell_j\)，写出 \(M_{\mathrm{new}}, \mathrm{exp\_old}, \mathrm{exp\_new}, L_{\mathrm{new}}\)，并说明 \(L_{\mathrm{new}}\) 是在基准 \(M_{\mathrm{new}}\) 下的全行指数和。
+给定 $M_{\mathrm{old}}, L_{\mathrm{old}}$ 与新块 $m_j, \ell_j$，写出 $M_{\mathrm{new}}, \mathrm{exp\_old}, \mathrm{exp\_new}, L_{\mathrm{new}}$，并说明 $L_{\mathrm{new}}$ 是在基准 $M_{\mathrm{new}}$ 下的全行指数和。
 
 ---
 
 ### 练习 3：PyTorch 实测
 
-用 **朴素 attention**（物化 \(\mathbf{P}\)）与 **`scaled_dot_product_attention`** 在 **fp16**、\(T=2048\) 下对比 **`torch.cuda.max_memory_allocated`** 与 **耗时**。
+用 **朴素 attention**（物化 $\mathbf{P}$）与 **`scaled_dot_product_attention`** 在 **fp16**、$T=2048$ 下对比 **`torch.cuda.max_memory_allocated`** 与 **耗时**。
 
 ---
 
@@ -7088,7 +7289,7 @@ out = F.scaled_dot_product_attention(
 
 - [ ] **数值对齐**：与 `torch` 参考实现 **`allclose`**（给定 atol/rtol）。
 - [ ] **Causal mask** 与 **padding / 变长**（若作业要求）。
-- [ ] **多种 head 维 \(d\)**、**序列长度**（含非整除 block）。
+- [ ] **多种 head 维 $d$**、**序列长度**（含非整除 block）。
 - [ ] **性能基准**：相对基线或目标吞吐、记录 GPU 型号与 PyTorch 版本。
 - [ ] **代码风格与提交格式**（如 `pytest` 全绿）。
 
@@ -7098,11 +7299,11 @@ out = F.scaled_dot_product_attention(
 
 | 文档 | 说明 |
 |------|------|
-| [00-课程总览与学习路线](00-课程总览与学习路线.md) | CS336 全局路线图 |
-| [09-GPU架构与内存层级](09-GPU架构与内存层级.md) | HBM/SRAM、算术强度（本节先修） |
-| [04-多头注意力与RoPE](04-多头注意力与RoPE.md) | Attention 数学基础 |
-| [08-Assignment1实战指南](08-Assignment1实战指南.md) | Assignment 1 整合 |
-| [12-Assignment2系统优化实战](12-Assignment2系统优化实战.md) | Assignment 2 实战（若已收录） |
+| [00-课程总览与学习路线](../docs/00-%E8%AF%BE%E7%A8%8B%E6%80%BB%E8%A7%88%E4%B8%8E%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF.md) | CS336 全局路线图 |
+| [09-GPU架构与内存层级](../docs/09-GPU%E6%9E%B6%E6%9E%84%E4%B8%8E%E5%86%85%E5%AD%98%E5%B1%82%E7%BA%A7.md) | HBM/SRAM、算术强度（本节先修） |
+| [04-多头注意力与RoPE](../docs/04-%E5%A4%9A%E5%A4%B4%E6%B3%A8%E6%84%8F%E5%8A%9B%E4%B8%8ERoPE.md) | Attention 数学基础 |
+| [08-Assignment1实战指南](../docs/08-Assignment1%E5%AE%9E%E6%88%98%E6%8C%87%E5%8D%97.md) | Assignment 1 整合 |
+| [12-Assignment2系统优化实战](../docs/12-Assignment2%E7%B3%BB%E7%BB%9F%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98.md) | Assignment 2 实战（若已收录） |
 
 **下一课建议**：分布式训练（DDP / 通信）与 **Lesson 12** Assignment 2 实战文档衔接。
 
@@ -7112,13 +7313,13 @@ out = F.scaled_dot_product_attention(
 
 | 符号 | 含义 |
 |------|------|
-| \(N\) | 序列长度 |
-| \(d\) | head 维度 |
-| \(s\) | \(1/\sqrt{d}\) |
-| \(M_{\mathrm{old}}, M_{\mathrm{new}}\) | 行 softmax 参考最大值 |
-| \(L_{\mathrm{old}}, L_{\mathrm{new}}\) | 与当前最大值一致的指数和 |
-| \(\mathbf{O}\) | 未归一化输出累加 |
-| \(M\) | IO 分析中的片上 / tile 规模 |
+| $N$ | 序列长度 |
+| $d$ | head 维度 |
+| $s$ | $1/\sqrt{d}$ |
+| $M_{\mathrm{old}}, M_{\mathrm{new}}$ | 行 softmax 参考最大值 |
+| $L_{\mathrm{old}}, L_{\mathrm{new}}$ | 与当前最大值一致的指数和 |
+| $\mathbf{O}$ | 未归一化输出累加 |
+| $M$ | IO 分析中的片上 / tile 规模 |
 
 **延伸阅读**
 
@@ -7156,7 +7357,7 @@ out = F.scaled_dot_product_attention(
 
 | 动机 | 说明 |
 |------|------|
-| 显存瓶颈 | 模型/优化器/激活过大，需分片或多副本策略 |
+| 显存瓶颈 | 模型/优化器/激活过大，需参数/优化器分片或模型并行；普通 DDP 的全副本不能解决整模单卡装不下 |
 | 时间成本 | 希望用更多算力换更短训练周期 |
 | 工程现实 | 生产环境普遍为多卡服务器或 K8s 多节点集群 |
 
@@ -7207,15 +7408,15 @@ out = F.scaled_dot_product_attention(
 
 ### 3.2 数据划分
 
-全局 batch size 记为 \(B\)，若有 \(N\) 个进程，通常每个进程的 **local batch size** 为 \(B_{\text{local}} = B / N\)（需整除）。各进程从各自数据子集取样，保证**每个 step 各卡数据不同**，等价于增大吞吐。
+全局 batch size 记为 $B$，若有 $N$ 个进程，通常每个进程的 **local batch size** 为 $B_{\text{local}} = B / N$（需整除）。各进程从各自数据子集取样，保证**每个 step 各卡数据不同**，等价于增大吞吐。
 
 ### 3.3 梯度同步：AllReduce
 
 反向传播后，各卡得到**本地 batch 上的梯度**。为使所有副本等价于在全局 batch 上训练，需对梯度做**平均**（或等价缩放后再同步）：
 
-\[
+$$
 \bar{g} = \frac{1}{N} \sum_{i=1}^{N} g_i
-\]
+$$
 
 实现上常用 **AllReduce**：所有进程最终都得到相同的规约结果。若先 Reduce 到 rank 0 再 Broadcast，语义可一致但效率通常不如 AllReduce。
 
@@ -7233,16 +7434,16 @@ DDP 梯度同步核心是 **AllReduce**；部分优化器分片或 FSDP 会用�
 
 ### 3.5 Ring-AllReduce 算法（直观）
 
-**目标**：在 \(N\) 个进程上对向量做求和（或平均），使每进程最终都有全局和。
+**目标**：在 $N$ 个进程上对向量做求和（或平均），使每进程最终都有全局和。
 
-**环形拓扑**：进程排成环 \(0 \to 1 \to \cdots \to N-1 \to 0\)。
+**环形拓扑**：进程排成环 $0 \to 1 \to \cdots \to N-1 \to 0$。
 
 **两阶段**（以 sum 为例）：
 
-1. **Reduce-Scatter 阶段**：数据向量切成 \(N\) 块。经过 \(N-1\) 步，每步每个进程把**自己负责的一块**在环上传递并累加；结束后，**每个进程完整拥有某一块的全局部分和**（不同块在不同进程上）。
-2. **AllGather 阶段**：再经过 \(N-1\) 步，把各块在环上转一圈，使**每个进程拼出完整的全局和向量**。
+1. **Reduce-Scatter 阶段**：数据向量切成 $N$ 块。经过 $N-1$ 步，每步每个进程把**自己负责的一块**在环上传递并累加；结束后，**每个进程完整拥有某一块的全局部分和**（不同块在不同进程上）。
+2. **AllGather 阶段**：再经过 $N-1$ 步，把各块在环上转一圈，使**每个进程拼出完整的全局和向量**。
 
-**带宽直觉**：在理想环形与均衡切分下，总时间近似与数据量、链路带宽相关；比朴素“集中到 rank0”更充分利用**双向链路**。
+**带宽直觉**：环让各 rank 分担流量，避免集中式单点瓶颈；单环通常沿一个方向发送，不能把它等同于必然充分利用双向链路。多环、树和分层算法由具体实现与拓扑选择。
 
 ### 3.6 梯度分桶（Gradient Bucketing）与重叠
 
@@ -7292,6 +7493,7 @@ def cleanup():
 
 ```python
 def build_model_on_device(local_rank):
+    torch.manual_seed(0)  # 教学手动同步版：各 rank 参数初始值必须相同
     model = nn.Linear(1024, 1024).cuda(local_rank)
     return model
 ```
@@ -7308,7 +7510,7 @@ def allreduce_grads(model, world_size):
             p.grad.div_(world_size)  # 等价于全局平均梯度
 ```
 
-更贴近 DDP 的写法是用 **hook** 在反向中排队通信（示意）：
+另一种教学示意是参数 hook：下面使用**阻塞** AllReduce，不实现计算/通信重叠。只适用于各 rank 相同静态图、相同参数就绪顺序；动态图可能使 collective 顺序不一致而挂起。生产使用原生 DDP，不要把两种同步方式叠加。
 
 ```python
 def register_ddp_hooks(model, world_size):
@@ -7336,8 +7538,9 @@ from torch.utils.data import DataLoader, DistributedSampler, TensorDataset
 
 def make_loader(rank, world_size, batch_size):
     # 示例：合成数据
-    x = torch.randn(1000, 1024)
-    y = torch.randn(1000, 1024)
+    generator = torch.Generator().manual_seed(123)  # 各 rank 共享同一数据集内容
+    x = torch.randn(1000, 1024, generator=generator)
+    y = torch.randn(1000, 1024, generator=generator)
     ds = TensorDataset(x, y)
     sampler = DistributedSampler(ds, num_replicas=world_size, rank=rank, shuffle=True)
     loader = DataLoader(ds, batch_size=batch_size, sampler=sampler, num_workers=2)
@@ -7349,22 +7552,22 @@ def make_loader(rank, world_size, batch_size):
 ### 4.5 完整训练循环骨架
 
 ```python
-def train_one_epoch(model, loader, sampler, optimizer, rank, world_size, epoch):
+def train_one_epoch(model, loader, sampler, optimizer, local_rank, world_size, epoch):
     model.train()
     sampler.set_epoch(epoch)
     criterion = nn.MSELoss()
 
     for batch_x, batch_y in loader:
-        batch_x = batch_x.cuda(rank, non_blocking=True)
-        batch_y = batch_y.cuda(rank, non_blocking=True)
+        batch_x = batch_x.cuda(local_rank, non_blocking=True)
+        batch_y = batch_y.cuda(local_rank, non_blocking=True)
 
         optimizer.zero_grad(set_to_none=True)
         out = model(batch_x)
         loss = criterion(out, batch_y)
         loss.backward()
 
-        # 若未用 register_hook 自动同步，则在此处手动 allreduce
-        # allreduce_grads(model, world_size)
+        # 本例采用 backward 后手动同步；不要同时启用 hook 或原生 DDP
+        allreduce_grads(model, world_size)
 
         optimizer.step()
 
@@ -7379,7 +7582,7 @@ def main():
     # handles = register_ddp_hooks(model, world_size)
 
     for epoch in range(10):
-        train_one_epoch(model, loader, sampler, optimizer, rank, world_size, epoch)
+        train_one_epoch(model, loader, sampler, optimizer, local_rank, world_size, epoch)
 
     cleanup()
 
@@ -7441,12 +7644,12 @@ ZeRO（Zero Redundancy Optimizer）通过**消除数据并行中的冗余状态*
 
 ### 8.1 单次 AllReduce 数据量
 
-对 FP32 梯度，参数量为 \(P\)，AllReduce 传输量常按**算法与实现**在 \(O(P)\) 到约 \(2P\) 等量级估算（Ring 等需多轮，但带宽模型常用有效带宽近似）。
+FP32 梯度总大小为 $S=4P$ 字节。理想 Ring-AllReduce 中每 rank 发送约 $2\frac{N-1}{N}S$ 字节，并接收同等字节数；发送量、收发合计与全网络总量是不同口径。时间还包含 $2(N-1)$ 轮启动延迟。
 
 ### 8.2 与 batch、模型关系
 
 - **数据并行**：通信量主要随**模型大小（梯度维度）**增长，与 local batch 大小无线性关系（batch 只影响计算时间）。
-- **瓶颈**：当 **计算时间 \(\ll\) 通信时间** 时，扩展效率下降。
+- **瓶颈**：当 **计算时间 $\ll$ 通信时间** 时，扩展效率下降。
 
 ### 8.3 重叠的意义
 
@@ -7458,7 +7661,7 @@ ZeRO（Zero Redundancy Optimizer）通过**消除数据并行中的冗余状态*
 
 ### 9.1 理想线性加速
 
-若用 \(N\) 张卡，理想 wall-clock 变为原来的 \(1/N\)。定义 **加速比** \(S(N) = T_1 / T_N\)，理想 \(S(N)=N\)。
+若用 $N$ 张卡，理想 wall-clock 变为原来的 $1/N$。定义 **加速比** $S(N) = T_1 / T_N$，理想 $S(N)=N$。
 
 ### 9.2 实际因素
 
@@ -7469,7 +7672,7 @@ ZeRO（Zero Redundancy Optimizer）通过**消除数据并行中的冗余状态*
 
 ### 9.3 扩展效率公式
 
-常定义 **scaling efficiency** 为 \(\eta(N) = S(N) / N\)。若 \(\eta(N)\) 随 \(N\) 快速下降，说明通信或负载不均占主导。
+常定义 **scaling efficiency** 为 $\eta(N) = S(N) / N$。若 $\eta(N)$ 随 $N$ 快速下降，说明通信或负载不均占主导。
 
 ---
 
@@ -7484,7 +7687,7 @@ ZeRO（Zero Redundancy Optimizer）通过**消除数据并行中的冗余状态*
 ### Q2：AllReduce 是什么？Ring-AllReduce 如何工作？
 
 **答**：**AllReduce** 是集合通信：每个进程提供输入张量，对所有进程的输入做规约（如求和），**每个进程都得到相同的规约结果**。  
-**Ring-AllReduce** 将数据分块，进程排成环，分 **Reduce-Scatter** 与 **AllGather** 两阶段，每阶段约 \(N-1\) 步，使每步通信可与邻居进行，**充分利用环形带宽**，避免单节点成为中心瓶颈。最终每进程都有完整向量的全局和，再除以 \(N\) 即得平均。
+**Ring-AllReduce** 将数据分块，进程排成环，分 **Reduce-Scatter** 与 **AllGather** 两阶段，每阶段约 $N-1$ 步，使每步通信可与邻居进行，**充分利用环形带宽**，避免单节点成为中心瓶颈。最终每进程都有完整向量的全局和，再除以 $N$ 即得平均。
 
 ---
 
@@ -7497,7 +7700,7 @@ ZeRO（Zero Redundancy Optimizer）通过**消除数据并行中的冗余状态*
 
 ### Q4：梯度同步的通信开销如何计算？
 
-**答**：粗略上，与**梯度总字节数**和 **AllReduce 的有效带宽** 有关。FP32 下梯度约 \(4 \times P\) 字节（\(P\) 为参数量）；BF16/FP16 减半。实际时间 \(\approx\) 传输量 / 有效带宽 + 延迟；Ring 等多步算法用**带宽模型**估算。DDP 中若 **bucket 重叠**成功，**暴露**的通信时间小于未重叠情形。多机时机间带宽常是瓶颈。
+**答**：粗略上，与**梯度总字节数**和 **AllReduce 的有效带宽** 有关。FP32 下梯度约 $4 \times P$ 字节（$P$ 为参数量）；BF16/FP16 减半。实际时间 $\approx$ 传输量 / 有效带宽 + 延迟；Ring 等多步算法用**带宽模型**估算。DDP 中若 **bucket 重叠**成功，**暴露**的通信时间小于未重叠情形。多机时机间带宽常是瓶颈。
 
 ---
 
@@ -7522,7 +7725,7 @@ ZeRO（Zero Redundancy Optimizer）通过**消除数据并行中的冗余状态*
 
 ### Q8：分布式训练中如何保证梯度一致性？
 
-**答**：各卡本地梯度是对**本地 batch** 的平均（或和）；通过 **AllReduce SUM + 除以 world_size** 得到**全局平均梯度**，等价于在**拼接后的全局 batch** 上的梯度（在标准平均损失定义下）。所有进程使用**相同规约结果**和相同优化器公式更新，故参数保持一致。前提是 **随机种子、Sampler 划分、数值顺序** 在实现上无 bug，且无不参与同步的参数。
+**答**：若各 rank 损失均为等量有效样本/token 的平均，AllReduce SUM 后除以 world_size 等价于全局平均。若监督 token 数不同，需要按各 rank 的有效 token 数加权。相同参数初值、相同更新规则和同步梯度才能保持副本一致；不同 rank 的 dropout/数据随机种子可以不同。
 
 ---
 
@@ -7534,7 +7737,7 @@ ZeRO（Zero Redundancy Optimizer）通过**消除数据并行中的冗余状态*
 
 ### Q10：如何计算分布式训练的扩展效率？
 
-**答**：测单机单卡（或单节点基准）一步时间 \(T_1\)，与 \(N\) 卡（或 \(N\) 节点）下一步时间 \(T_N\)。**加速比** \(S(N)=T_1/T_N\)，**扩展效率** \(\eta(N)=S(N)/N\)。若 \(\eta\) 明显低于 1，分析：**通信占比**、**batch 过小**、**IO**、**straggler**、**学习率与 batch 缩放**是否匹配。也可用 **吞吐量（tokens/s）** 随资源增长是否接近线性来评估。
+**答**：测单机单卡（或单节点基准）一步时间 $T_1$，与 $N$ 卡（或 $N$ 节点）下一步时间 $T_N$。**加速比** $S(N)=T_1/T_N$，**扩展效率** $\eta(N)=S(N)/N$。若 $\eta$ 明显低于 1，分析：**通信占比**、**batch 过小**、**IO**、**straggler**、**学习率与 batch 缩放**是否匹配。也可用 **吞吐量（tokens/s）** 随资源增长是否接近线性来评估。
 
 ---
 
@@ -7562,9 +7765,9 @@ ZeRO（Zero Redundancy Optimizer）通过**消除数据并行中的冗余状态*
 
 ## 十二、导航
 
-| 上一课 | [10-FlashAttention原理与Triton.md](./10-FlashAttention原理与Triton.md) |
+| 上一课 | [10-FlashAttention原理与Triton.md](../docs/10-FlashAttention%E5%8E%9F%E7%90%86%E4%B8%8ETriton.md) |
 |--------|------------------------------------------------------------------------|
-| 下一课 | [12-Assignment2系统优化实战.md](./12-Assignment2系统优化实战.md) |
+| 下一课 | [12-Assignment2系统优化实战.md](../docs/12-Assignment2%E7%B3%BB%E7%BB%9F%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98.md) |
 
 ---
 
@@ -7592,7 +7795,7 @@ ZeRO（Zero Redundancy Optimizer）通过**消除数据并行中的冗余状态*
 
 > **Stanford CS336**：Language Modeling from Scratch — 面试导向学习指南（第 12 节）
 
-**先修**：[Lesson 10：FlashAttention 原理与 Triton](./10-FlashAttention原理与Triton.md)、[Lesson 11：DDP 分布式训练](./11-DDP分布式训练.md)。
+**先修**：[Lesson 10：FlashAttention 原理与 Triton](../docs/10-FlashAttention%E5%8E%9F%E7%90%86%E4%B8%8ETriton.md)、[Lesson 11：DDP 分布式训练](../docs/11-DDP%E5%88%86%E5%B8%83%E5%BC%8F%E8%AE%AD%E7%BB%83.md)。
 
 **面试热度**：★★★★★（系统 / 推理 / 训练工程岗极高频；常与「性能分析 → 内核 → 分布式」三连问绑定）
 
@@ -7651,15 +7854,15 @@ ZeRO（Zero Redundancy Optimizer）通过**消除数据并行中的冗余状态*
 **FlashAttention-2**（相对第一代）通常强调 **更少的非 matmul 开销、更合理的工作划分与并行策略**（细节以课程讲义与论文为准）。在 **Triton** 中实现时，典型关注点包括：
 
 - **沿序列维分块（tiling）**：外层按 **query 块** 调度，内层遍历 **K/V 块**。
-- **Online softmax**：按行维护 **运行最大值 \(m\)**、**运行归一化因子 \(\ell\)**（与 exp 和相关）、**输出累加 \(\mathbf{o}\)**；每来一个新块做 **rescale** 合并，避免完整物化 \(N\times N\) 注意力矩阵到 HBM。
-- **融合**：在 **少量 kernel** 内完成 \(QK^\top\)、缩放、mask、softmax 与对 \(V\) 的加权，显著降低 **HBM traffic**。
+- **Online softmax**：按行维护 **运行最大值 $m$**、**运行归一化因子 $\ell$**（与 exp 和相关）、**输出累加 $\mathbf{o}$**；每来一个新块做 **rescale** 合并，避免完整物化 $N\times N$ 注意力矩阵到 HBM。
+- **融合**：在 **少量 kernel** 内完成 $QK^\top$、缩放、mask、softmax 与对 $V$ 的加权，显著降低 **HBM traffic**。
 
 **Triton 内核开发流程（可写进简历/面试）**：
 
 1. **规格与形状**：固定 `B, H, T, D`；先写清 **因果 / 非因果**、**dtype**（fp16/bf16）。
 2. **参考实现**：PyTorch **朴素注意力**（小 `T`）、`F.scaled_dot_product_attention`（环境允许时）作为 **golden**。
 3. **最小可运行内核**：单头或小 `B`，只实现 forward；对齐 **mask 与 `1/sqrt(d)`**。
-4. **在线 softmax**：严格按递推式实现 \(m,\ell,\mathbf{o}\)，注意 **数值稳定**（减 max）。
+4. **在线 softmax**：严格按递推式实现 $m,\ell,\mathbf{o}$，注意 **数值稳定**（减 max）。
 5. **调块与并行**：调整 `BLOCK_M`、`BLOCK_N`、`BLOCK_K`（或课程命名），观察 **寄存器 spill、shared memory、occupancy**。
 6. **性能对比**：与 **naive**、**SDPA** 对比 **耗时与显存**；用 **nsys/ncu** 佐证瓶颈类型。
 
@@ -7686,7 +7889,7 @@ ZeRO（Zero Redundancy Optimizer）通过**消除数据并行中的冗余状态*
 
 **梯度同步与 hooks**：
 
-- `DistributedDataParallel` 在 **`backward`** 中注册 **gradient accumulation hooks**：梯度就绪后按 **bucket** 触发 **`all_reduce`**，并与 **反向计算重叠**（实现细节随 PyTorch 版本演进）。
+- `DistributedDataParallel` 在模型包装时注册、在 **`backward`** 中触发 **gradient accumulation hooks**：梯度就绪后按 **bucket** 触发 **`all_reduce`**，并与 **反向计算重叠**（实现细节随 PyTorch 版本演进）。
 - 一般业务代码 **无需手写** `all_reduce`；若自定义通信（如 **gradient compression**），才需了解 **hook 时机** 与 **bucket**。
 
 **混合精度（AMP）与 DDP**：
@@ -7876,7 +8079,7 @@ torch.testing.assert_close(ref, out, rtol=2e-2, atol=2e-2)
 | 维度 | Naive / 未融合 | Triton FlashAttention-2 类实现 |
 |------|-----------------|----------------------------------|
 | HBM 访问 | 常显著更高（物化大方阵等） | 分块融合，降低 traffic |
-| 峰值显存 | \(O(N^2)\) 级中间结果风险 | 通常更低（实现相关） |
+| 峰值显存 | $O(N^2)$ 级中间结果风险 | 通常更低（实现相关） |
 | 调优抓手 | 有限 | block、occupancy、融合度 |
 
 ---
@@ -7930,6 +8133,7 @@ def main():
         pin_memory=True,
     )
 
+    optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
     scaler = torch.cuda.amp.GradScaler(enabled=True)
 
     for epoch in range(epochs):
@@ -7965,7 +8169,7 @@ def main():
 ### 3.2 高频追问
 
 - **块大小怎么选**：资源约束 → 实测吞吐 → 是否 spill。
-- **Online softmax 三个量**：\(m,\ell,\mathbf{o}\) 与 **rescale**。
+- **Online softmax 三个量**：$m,\ell,\mathbf{o}$ 与 **rescale**。
 - **DDP vs ZeRO**：DDP **每卡全参**；ZeRO **切分优化器状态/梯度/参数**（进阶）。
 
 ---
@@ -7989,8 +8193,8 @@ def main():
 
 ## 五、导航（Navigation）
 
-- **上一节**：[Lesson 11：DDP 分布式训练](./11-DDP分布式训练.md)
-- **下一节**：[Lesson 13：Scaling Laws 缩放定律](./13-Scaling-Laws缩放定律.md)
+- **上一节**：[Lesson 11：DDP 分布式训练](../docs/11-DDP%E5%88%86%E5%B8%83%E5%BC%8F%E8%AE%AD%E7%BB%83.md)
+- **下一节**：[Lesson 13：Scaling Laws 缩放定律](../docs/13-Scaling-Laws%E7%BC%A9%E6%94%BE%E5%AE%9A%E5%BE%8B.md)
 
 ---
 
@@ -8029,10 +8233,10 @@ def main():
 1. **Grid 划分**：按 **query 块**（或 `(batch, head, q_tile)`）映射到 program id。
 2. **加载 Q tile** 到片上（寄存器/shared，依实现）。
 3. **K/V 内层循环**：`tl.dot` 等计算 **块内 logits**（注意 **scale** 与 **mask**）。
-4. **Online softmax**：更新 \(m,\ell,\mathbf{o}\)，新块 **rescale** 历史输出。
+4. **Online softmax**：更新 $m,\ell,\mathbf{o}$，新块 **rescale** 历史输出。
 5. **写回**：将 **输出 tile** 写回全局内存；若作业要求 backward，常涉及 **重算** 或 **保存最小中间量**（依课程定义）。
 
-**一句话**：**不在 HBM 物化完整 \(N\times N\)**，并尽量减少 **round-trips**。
+**一句话**：**不在 HBM 物化完整 $N\times N$**，并尽量减少 **round-trips**。
 
 ---
 
@@ -8149,7 +8353,7 @@ def main():
 
 **文档结构**：标题与导读 → **概念（Concepts）** → **代码（Code）** → **面试要点（Interview）** → **练习（Practice）** → **导航（Navigation）**
 
-**本节定位**：从 **经验幂律（power-law）** 出发，系统梳理 **Kaplan et al. (2020)** 关于 **损失随参数量 \(N\)、数据量 \(D\)、计算量 \(C\)** 的缩放关系；深入 **Chinchilla (Hoffmann et al., 2022)** 的 **计算最优配比**、**IsoFLOPs 分析** 与 **\(D^\* \approx 20N\)** 量级直觉；连接 **\(C \approx 6ND\)** 的 FLOPs 估算与 **给定算力预算下的 \((N,D)\)** 选择；对照 **过训练（如 LLaMA）**、**推理最优**、**数据质量**、**测试时计算（推理模型）** 等「超越经典 Chinchilla」的实践；并延伸到 **下游任务上的缩放** 与 **工业界落地含义**。本节与 **CS336 Assignment 3（Scaling）** 强相关。
+**本节定位**：从 **经验幂律（power-law）** 出发，系统梳理 **Kaplan et al. (2020)** 关于 **损失随参数量 $N$、数据量 $D$、计算量 $C$** 的缩放关系；深入 **Chinchilla (Hoffmann et al., 2022)** 的 **计算最优配比**、**IsoFLOPs 分析** 与 **$D^{\ast} \approx 20N$** 量级直觉；连接 **$C \approx 6ND$** 的 FLOPs 估算与 **给定算力预算下的 $(N,D)$** 选择；对照 **过训练（如 LLaMA）**、**推理最优**、**数据质量**、**测试时计算（推理模型）** 等「超越经典 Chinchilla」的实践；并延伸到 **下游任务上的缩放** 与 **工业界落地含义**。本节与 **CS336 Assignment 3（Scaling）** 强相关。
 
 **先修**：语言建模损失（交叉熵）、训练循环与 batch（Lesson 07）、分布式与算力概念（Lesson 11–12）。
 
@@ -8159,14 +8363,14 @@ def main():
 
 ## 导读：为什么要单独学 Scaling Laws？
 
-在大模型研发中，**「加参数」还是「加数据」**、**「7B 该训多少 token」**、**「多一倍 GPU 小时能换多少 loss」** 都不是拍脑袋问题。Scaling Laws 提供了一套 **可沟通、可拟合、可复盘** 的语言：把 **预训练损失** 与 **\(N,D,C\)** 的关系写成 **幂律 + 残差**，从而支持 **预算分配、实验设计、对外解释**。同时必须牢记：它是 **经验规律**，不是 **物理定律**——**数据治理、对齐、推理 SLA** 会系统性改写「最优」。
+在大模型研发中，**「加参数」还是「加数据」**、**「7B 该训多少 token」**、**「多一倍 GPU 小时能换多少 loss」** 都不是拍脑袋问题。Scaling Laws 提供了一套 **可沟通、可拟合、可复盘** 的语言：把 **预训练损失** 与 **$N,D,C$** 的关系写成 **幂律 + 残差**，从而支持 **预算分配、实验设计、对外解释**。同时必须牢记：它是 **经验规律**，不是 **物理定律**——**数据治理、对齐、推理 SLA** 会系统性改写「最优」。
 
 **本节读完你应能回答**：
 
-1. Kaplan 式分解 \(L(N,D)\) 的三项各代表什么？
+1. Kaplan 式分解 $L(N,D)$ 的三项各代表什么？
 2. Chinchilla 与 Kaplan 时代实践差异的 **一句话** 是什么？
-3. 如何用 **IsoFLOPs** 在固定算力下找 **较优 \(N\)**？
-4. **\(C\approx 6ND\)** 与 **\(D\approx 20N\)** 分别回答什么问题，能否混用？
+3. 如何用 **IsoFLOPs** 在固定算力下找 **较优 $N$**？
+4. **$C\approx 6ND$** 与 **$D\approx 20N$** 分别回答什么问题，能否混用？
 5. 为何工业界会出现 **「过训练」** 与 **推理最优** 两条与教科书不同的轴？
 
 ---
@@ -8177,13 +8381,13 @@ def main():
 
 **Scaling Laws（缩放定律）** 指：在 **架构族相对固定、训练流程（优化器、精度、正则）相对稳定** 的前提下，语言模型在 **预训练阶段** 的 **验证集损失（或其它可重复指标）** 与 **模型规模、数据规模、计算量** 等变量之间，往往呈现 **可在 log-log 坐标下线性化的幂律关系**。它不是从第一性原理严格推导的定理，而是 **大量实验拟合出的经验规律**，因此对 **数据分布、tokenizer、训练细节、评估集** 敏感。
 
-**核心数学形态（直觉）**：若 \(y\) 随 \(x\) 幂律变化，则
+**核心数学形态（直觉）**：若 $y$ 随 $x$ 幂律变化，则
 
-\[
+$$
 y \propto x^{-k}
 \quad\Leftrightarrow\quad
 \log y \approx -k \log x + \text{const}
-\]
+$$
 
 **为什么要关心？**
 
@@ -8191,30 +8395,30 @@ y \propto x^{-k}
 - **解释**：说明为何 **单纯堆参数** 或 **单纯加数据** 都会出现 **边际收益递减（diminishing returns）**。
 - **对比**：比较 **Kaplan 时代** 与 **Chinchilla 之后** 的行业实践差异（常见历史叙事：**偏大模型 + 训练不足** vs **配比更均衡**）。
 
-**面试一句话**：Scaling Laws 描述的是 **「规模变量 ↔ 预训练损失」** 的 **经验幂律**，用来指导 **算力约束下的 \((N,D)\)** 选择，但必须结合 **数据质量、推理成本、任务目标** 修正。
+**面试一句话**：Scaling Laws 描述的是 **「规模变量 ↔ 预训练损失」** 的 **经验幂律**，用来指导 **算力约束下的 $(N,D)$** 选择，但必须结合 **数据质量、推理成本、任务目标** 修正。
 
 ---
 
 ## 2. Kaplan et al. (2020)：《Scaling Laws for Neural Language Models》
 
-### 2.1 损失作为 \(N\)、\(D\)、\(C\) 的函数
+### 2.1 损失作为 $N$、$D$、$C$ 的函数
 
-Kaplan 等系统变化 **参数量 \(N\)**、**训练 token 数 \(D\)**、以及由此隐含的 **计算量 \(C\)**，在 **Transformer 语言模型** 上拟合损失。核心观察是：在较大范围内，**验证损失** 随规模 **平滑下降**，且可用 **幂律项** 近似刻画。
+Kaplan 等系统变化 **参数量 $N$**、**训练 token 数 $D$**、以及由此隐含的 **计算量 $C$**，在 **Transformer 语言模型** 上拟合损失。核心观察是：在较大范围内，**验证损失** 随规模 **平滑下降**，且可用 **幂律项** 近似刻画。
 
-论文中讨论了 **仅随 \(N\) 缩放**、**仅随 \(D\) 缩放**、**随计算量 \(C\) 缩放** 以及 **联合缩放** 等多种设定。一类便于直觉理解、面试常考的 **示意分解** 是：
+论文中讨论了仅随 $N$、$D$、$C$ 缩放以及联合缩放等设定。下面的“不可约项 + 模型项 + 数据项”来自 [Chinchilla Approach 3](https://arxiv.org/html/2203.15556v1)，不能当作 [Kaplan 原论文](https://arxiv.org/html/2001.08361v1) 的联合公式：
 
-\[
+$$
 L(N, D) \approx E + \frac{A}{N^{\alpha}} + \frac{B}{D^{\beta}}
-\]
+$$
 
 其中：
 
-- **\(E\)**：**不可约误差（irreducible error）** 的代理项——反映 **数据噪声、任务固有难度、评测与分布外因素** 等；**不随 \(N,D\) 无限下降**。
-- **\(A/N^{\alpha}\)**：**模型容量不足** 带来的误差项；\(N\) 越大，该项越小。
-- **\(B/D^{\beta}\)**：**数据不足** 带来的误差项；\(D\) 越大，该项越小。
-- **\(\alpha,\beta\)**：**幂律指数**，通常由 **对 \(N\)、\(D\) 分别或联合** 做 **log-log 线性回归** 估计；刻画 **边际收益递减的速度**。
+- **$E$**：**不可约误差（irreducible error）** 的代理项——反映 **数据噪声、任务固有难度、评测与分布外因素** 等；**不随 $N,D$ 无限下降**。
+- **$A/N^{\alpha}$**：**模型容量不足** 带来的误差项；$N$ 越大，该项越小。
+- **$B/D^{\beta}$**：**数据不足** 带来的误差项；$D$ 越大，该项越小。
+- **$\alpha,\beta$**：幂律指数。对上述含 $E$ 与两项之和的模型应做联合非线性拟合；只有纯幂律、或已扣除不可约项且其他项可忽略时，才适合 log-log 线性回归。
 
-> **注意**：Kaplan 原文在不同图表里拟合的对象可能是 **\(L(N)\)**、**\(L(D)\)**、**\(L(C)\)** 或 **包含交互项** 的更复杂形式；面试中更重要的是 **「幂律 + 不可约项 + 双来源误差」** 的结构直觉，而不是背某一组系数的精确数值。
+> **注意**：Kaplan 原文在不同图表里拟合的对象可能是 **$L(N)$**、**$L(D)$**、**$L(C)$** 或 **包含交互项** 的更复杂形式；面试中更重要的是 **「幂律 + 不可约项 + 双来源误差」** 的结构直觉，而不是背某一组系数的精确数值。
 
 ### 2.2 幂律指数及其含义
 
@@ -8223,11 +8427,11 @@ L(N, D) \approx E + \frac{A}{N^{\alpha}} + \frac{B}{D^{\beta}}
 - **指数越大（绝对值）**：同样倍增规模，损失下降 **更快**，但也更容易 **很快进入平缓区**（diminishing returns 更明显）。
 - **指数越小**：曲线 **更「拖尾」**，继续加规模仍可能有 **可见收益**，但 **绝对改进** 可能仍小。
 
-**与工程决策的关系**：指数告诉你 **「再投一笔算力，loss 还能不能动」**；不可约项 \(E\) 告诉你 **「loss 再低也有天花板」**（尽管真实系统里 \(E\) 很难单独识别）。
+**与工程决策的关系**：指数告诉你 **「再投一笔算力，loss 还能不能动」**；不可约项 $E$ 告诉你 **「loss 再低也有天花板」**（尽管真实系统里 $E$ 很难单独识别）。
 
 ### 2.3 边际收益递减：10× 算力 ≠ 10×「性能」
 
-幂律的关键推论是：**等量倍增投入带来的损失下降（或对数尺度上的改进）会变小**。因此：
+对于 $L(C)=E+aC^{-\gamma}$、$\gamma>0$，每次把计算量乘同一个倍数时，**绝对 loss 改善**会逐次变小；残差 $L-E$ 的相对下降比例不变，$\log(L-E)$ 的下降量也不变。因此：
 
 - **10× 训练计算** 通常 **不会** 带来 **10× 的「质量」**（损失不是线性；下游指标更非线性）。
 - 若把「性能」换成 **下游任务**，还会引入 **饱和、评测噪声、数据污染、对齐差异** 等复杂因素。
@@ -8238,31 +8442,31 @@ L(N, D) \approx E + \frac{A}{N^{\alpha}} + \frac{B}{D^{\beta}}
 
 ## 3. Chinchilla (Hoffmann et al., 2022)
 
-### 3.1 关键发现：最优 \(N:D\) 配比
+### 3.1 关键发现：最优 $N:D$ 配比
 
-在 **固定总算力（FLOPs）** 的前提下，Kaplan 路线启发下的许多实践会训练 **相对过大的模型、相对偏少的数据**（在同等 FLOPs 下 **欠训练**）。Chinchilla 通过 **IsoFLOPs 曲线** 系统扫描，发现 **更小模型 + 更多数据** 在 **算力最优** 意义下往往更优：即 **最优 token 数 \(D^\*\)** 与 **参数量 \(N\)** 近似成 **线性比例**，而不是「固定训练若干步」那种与 \(N\) 弱相关的习惯。
+在 **固定总算力（FLOPs）** 的前提下，Kaplan 路线启发下的许多实践会训练 **相对过大的模型、相对偏少的数据**（在同等 FLOPs 下 **欠训练**）。Chinchilla 通过 **IsoFLOPs 曲线** 系统扫描，发现 **更小模型 + 更多数据** 在 **算力最优** 意义下往往更优：即 **最优 token 数 $D^{\ast}$** 与 **参数量 $N$** 近似成 **线性比例**，而不是「固定训练若干步」那种与 $N$ 弱相关的习惯。
 
-### 3.2 「~20:1」规则：\(D^\* \approx 20N\)
+### 3.2 「~20:1」规则：$D^{\ast} \approx 20N$
 
 社区常把 Chinchilla 的结论口语化为：
 
-- **训练 token 数约为参数量的约 20 倍**：\(D \approx 20 \times N\)（\(N\) 以 **参数个数** 计，\(D\) 以 **token 数** 计）。
+- **训练 token 数约为参数量的约 20 倍**：$D \approx 20 \times N$（$N$ 以 **参数个数** 计，$D$ 以 **token 数** 计）。
 
-**直觉演算**：它把 **「算力最优」** 下的配比，转成一个 **可口算的检查**：例如 **7B（\(7\times10^9\)）参数** 模型，取 \(D \approx 20N\) 时约为 **\(1.4\times10^{11}\) tokens**，即 **140B tokens**（与「7B → 140B tokens」的口算一致）。
+**直觉演算**：它把 **「算力最优」** 下的配比，转成一个 **可口算的检查**：例如 **7B（$7\times10^9$）参数** 模型，取 $D \approx 20N$ 时约为 **$1.4\times10^{11}$ tokens**，即 **140B tokens**（与「7B → 140B tokens」的口算一致）。
 
 > **重要澄清**：**20** 不是宇宙常数，它来自论文在特定设定下的拟合；不同 **架构、数据、训练超参、是否包含重计算、是否混合精度** 会改变最优点的位置。面试要说清：**「量级规则 + 需要实验校准」**。
 
 ### 3.3 IsoFLOPs 分析方法
 
-**IsoFLOPs（等计算量）**：固定 **总训练 FLOPs \(C\)**，改变 **模型大小 \(N\)**（从而改变每步成本）与 **训练 token 数 \(D\)**，使得 **\(C \approx 6ND\)**（见后文）保持不变或近似不变。对每条等计算量曲线，记录 **验证损失**，取 **最低点** 作为该 \(C\) 下的 **近似最优 \(N\)**（以及对应的 \(D\)）。
+**IsoFLOPs（等计算量）**：固定 **总训练 FLOPs $C$**，改变 **模型大小 $N$**（从而改变每步成本）与 **训练 token 数 $D$**，使得 **$C \approx 6ND$**（见后文）保持不变或近似不变。对每条等计算量曲线，记录 **验证损失**，取 **最低点** 作为该 $C$ 下的 **近似最优 $N$**（以及对应的 $D$）。
 
 **流程直觉**：
 
-1. 选一个 **算力预算** \(C\)。
-2. 扫一组 **\(N_i\)**，为每个 \(N_i\) 配一个 **\(D_i \approx C/(6N_i)\)**（示意）。
+1. 选一个 **算力预算** $C$。
+2. 扫一组 **$N_i$**，为每个 $N_i$ 配一个 **$D_i \approx C/(6N_i)$**（示意）。
 3. 训练到对应 token，比较 **loss**。
-4. 在 **\(N\)** 维度上找 **最小损失点** → 得到 **该 \(C\) 下的最优规模**。
-5. 多选几个 \(C\)，可进一步 **拟合 \(N^\*(C)\)、\(D^\*(C)\)** 的缩放关系。
+4. 在 **$N$** 维度上找 **最小损失点** → 得到 **该 $C$ 下的最优规模**。
+5. 多选几个 $C$，可进一步 **拟合 $N^{\ast}(C)$、$D^{\ast}(C)$** 的缩放关系。
 
 ### 3.4 对训练实践的影响（Before / After）
 
@@ -8271,51 +8475,51 @@ L(N, D) \approx E + \frac{A}{N^{\alpha}} + \frac{B}{D^{\beta}}
 
 ---
 
-## 4. 计算最优训练：\(C \approx 6ND\) 与预算分配
+## 4. 计算最优训练：$C \approx 6ND$ 与预算分配
 
-### 4.1 \(C \approx 6ND\) 从哪里来？（教学推导）
+### 4.1 $C \approx 6ND$ 从哪里来？（教学推导）
 
 考虑 **Decoder-only Transformer** 训练一步（一个 token 位置参与一次前向+反向），其主导成本常近似为 **矩阵乘**。一个非常粗糙但面试常用的数量级估计：
 
 - **每个 token、每个参数** 在前向与反向中 **大约对应常数次乘法累加**（不同实现细节会改变常数）。
 - 文献与课程中常把 **总训练 FLOPs** 近似为：
 
-\[
+$$
 C \approx \tau \, N D
-\]
+$$
 
-其中 \(\tau\) 是 **经验常数**；在许多讨论里取 **\(\tau \approx 6\)**，于是：
+其中 $\tau$ 是 **经验常数**；在许多讨论里取 **$\tau \approx 6$**，于是：
 
-\[
+$$
 C \approx 6 N D
-\]
+$$
 
 **为什么是 6（而不是精确推导）**：
 
 - 反向传播对 **线性层** 的梯度计算常带来 **约 2×** 于前向的乘法量量级（依实现与是否融合而异）。
 - 注意力与其它算子也会改变常数；**6ND** 是 **数量级正确的工程近似**，用于 **配比与扫描**，不是精确会计。
 
-**面试安全说法**：**\(C \approx 6ND\)** 是 **Transformer LM 训练 FLOPs 的常用粗估**；常数依赖 **重计算、并行策略、融合 kernel、是否计入优化器与嵌入** 等，**只能用于相对比较与 IsoFLOPs 设计**，不能当财务结算。
+**面试安全说法**：**$C \approx 6ND$** 是 **Transformer LM 训练 FLOPs 的常用粗估**；常数依赖 **重计算、并行策略、融合 kernel、是否计入优化器与嵌入** 等，**只能用于相对比较与 IsoFLOPs 设计**，不能当财务结算。
 
-### 4.2 给定计算预算，如何想最优 \(N\) 与 \(D\)
+### 4.2 给定计算预算，如何想最优 $N$ 与 $D$
 
-在 **\(C \approx 6ND\)** 约束下，\((N,D)\) 必须落在 **双曲线** 上。Chinchilla 的意义是：这条双曲线上 **只有一个「算力最优」区域**（损失最低），而不是 **任意点都一样**。
+在 **$C \approx 6ND$** 约束下，$(N,D)$ 必须落在 **双曲线** 上。Chinchilla 的意义是：这条双曲线上 **只有一个「算力最优」区域**（损失最低），而不是 **任意点都一样**。
 
 **实操模板**：
 
 1. 先估计 **可用 FLOPs**（由 GPU 小时 × 峰值利用率 × 有效 TFLOPS 粗估，或由账单反推）。
-2. 用 **IsoFLOPs** 扫 **\(N\)**，找到 **最低验证损失** 对应的 **\(N^\*\)**。
-3. 由 \(D^\* \approx C/(6N^\*)\) 得到 token 预算。
+2. 用 **IsoFLOPs** 扫 **$N$**，找到 **最低验证损失** 对应的 **$N^{\ast}$**。
+3. 由 $D^{\ast} \approx C/(6N^{\ast})$ 得到 token 预算。
 
-**例子（口算）**：若 Chinchilla 规则取 **\(D \approx 20N\)**，则
+**例子（口算）**：若 Chinchilla 规则取 **$D \approx 20N$**，则
 
-\[
+$$
 C \approx 6 N D \approx 6 N \times (20N) = 120 N^2
-\]
+$$
 
 这给出一种直觉：在 **遵循该配比** 时，**算力预算** 与 **参数规模** 之间存在 **可讨论的标度关系**（具体指数依赖最优配比与拟合，面试说清「**不是单一公式定终身**」即可）。
 
-**用户例子**：**7B 模型 → 140B tokens**：\(7\times10^9 \times 20 = 1.4\times10^{11}\) tokens = **140B**。
+**用户例子**：**7B 模型 → 140B tokens**：$7\times10^9 \times 20 = 1.4\times10^{11}$ tokens = **140B**。
 
 ---
 
@@ -8324,14 +8528,14 @@ C \approx 6 N D \approx 6 N \times (20N) = 120 N^2
 Assignment 3 的典型训练目标是：**在固定算力预算** 下，理解 **模型规模与数据规模** 的 trade-off。与论文一致的核心步骤：
 
 1. **固定 compute budget**（例如通过 **总训练 FLOPs** 或 **等价的 token×常数** 约束）。
-2. **训练多个不同 \(N\)** 的模型（其它条件尽量一致：数据混合、超参搜索预算、评估协议）。
-3. 在每个 \(N\) 上配 **相应的 \(D\)**，使 **总 FLOPs 近似相同**。
-4. 比较 **验证损失**，选择 **最小值** 对应的 **\(N^\*\)**。
-5. 在 **log-log** 坐标下，对 **损失与 \(N\)、\(D\)、\(C\)** 的关系做 **线性回归**，估计 **幂律指数**。
+2. **训练多个不同 $N$** 的模型（其它条件尽量一致：数据混合、超参搜索预算、评估协议）。
+3. 在每个 $N$ 上配 **相应的 $D$**，使 **总 FLOPs 近似相同**。
+4. 比较 **验证损失**，选择 **最小值** 对应的 **$N^{\ast}$**。
+5. 选择明确的拟合模型；纯幂律或扣除不可约项的残差可做 log-log 回归，含多项之和时做非线性拟合，并验证残差与外推误差。
 
 **拟合提示**：
 
-- 取 \(\log\) 后做 **最小二乘**；注意 **异常点**（训练不稳定、学习率不匹配导致欠训）。
+- 对纯幂律或已知不可约项的残差可做 log-log 回归；对 $E+A/N^\alpha+B/D^\beta$ 不能直接取 log 当作线性模型，应估计 $E$ 并作非线性拟合或明确近似区间。
 - 报告 **置信区间/残差** 比「报一个很精确的小数」更专业。
 
 ---
@@ -8352,17 +8556,17 @@ Assignment 3 的典型训练目标是：**在固定算力预算** 下，理解 *
 
 ### 6.2 推理最优缩放（Inference-optimal）
 
-训练阶段最优的 \(N\) 与 **服务阶段最优** 不一定一致：
+训练阶段最优的 $N$ 与 **服务阶段最优** 不一定一致：
 
 - **大模型** 可能 **训练 loss 更好**，但需要 **更多 GPU 显存、更低并发、更高延迟成本**。
 - 若业务 **QPS/时延/成本** 敏感，可能偏好 **更小模型 + 更长训练 + 更强蒸馏/对齐**。
 
 ### 6.3 数据质量 vs 数据数量
 
-Scaling Laws 的经典叙事常把 **\(D\)** 当作「token 数」。但工业界经验是：
+Scaling Laws 的经典叙事常把 **$D$** 当作「token 数」。但工业界经验是：
 
 - **10× 低质网页** 可能不如 **1× 高质量代码/书籍/数学**。
-- **去重、去毒、领域配比** 会改变 **有效 \(D\)**（可理解为 **等效 token**）。
+- **去重、去毒、领域配比** 会改变 **有效 $D$**（可理解为 **等效 token**）。
 
 ### 6.4 测试时计算缩放（Test-time compute）
 
@@ -8389,13 +8593,13 @@ Scaling Laws 的经典叙事常把 **\(D\)** 当作「token 数」。但工业�
 - **数据**：把 **「等效 token」** 纳入数据工程 KPI（质量、去重、领域覆盖）。
 - **服务**：把 **推理成本** 纳入模型规格选型（不是越大越好）。
 - **迭代**：Scaling Laws **不能替代 ablation**；任何配方变化都要 **重新量损失曲线**。
-- **合规与风险**：更大 \(D\) 可能放大 **记忆、版权与有害模式**；需要 **治理流程** 与 **红队** 并行。
+- **合规与风险**：更大 $D$ 可能放大 **记忆、版权与有害模式**；需要 **治理流程** 与 **红队** 并行。
 
 ---
 
 # 二、代码示例（Code）
 
-下列代码为 **教学演示**：用 **numpy** 做 **log-log 线性回归**，从斜率恢复 **幂律指数**；并演示 **在 \(C \approx 6ND\) 约束下** 由 **\(N\)** 计算 **\(D\)**；最后给出一个 **IsoFLOPs 网格** 的伪代码骨架，便于对照 Assignment 3。
+下列代码为 **教学演示**：用 **numpy** 做 **log-log 线性回归**，从斜率恢复 **幂律指数**；并演示 **在 $C \approx 6ND$ 约束下** 由 **$N$** 计算 **$D$**；最后给出一个 **IsoFLOPs 网格** 的伪代码骨架，便于对照 Assignment 3。
 
 ```python
 import numpy as np
@@ -8475,8 +8679,8 @@ if __name__ == "__main__":
 **读代码要点**：
 
 - **拟合** 用 **log 域** 更稳，但真实实验要对 **误差模型**（异方差）谨慎。
-- **\(C=6ND\)** 与 **\(D=20N\)** 不要混用场景：前者是 **FLOPs 约束关系**，后者是 **经验最优配比**（二者结合才会推出 **\(C\) 与 \(N\) 的关系**）。
-- **IsoFLOPs** 的关键不是算 \(D\)，而是 **在同一 \(C\) 下比较不同 \(N\)** 的 **验证损失**。
+- **$C=6ND$** 与 **$D=20N$** 不要混用场景：前者是 **FLOPs 约束关系**，后者是 **经验最优配比**（二者结合才会推出 **$C$ 与 $N$ 的关系**）。
+- **IsoFLOPs** 的关键不是算 $D$，而是 **在同一 $C$ 下比较不同 $N$** 的 **验证损失**。
 
 ---
 
@@ -8486,11 +8690,11 @@ if __name__ == "__main__":
 
 | 主题 | 你需要能说的「一句话」 |
 |------|------------------------|
-| Scaling Laws | 预训练指标随 \(N,D,C\) 常呈 **经验幂律**，含 **不可约误差** 与 **递减收益**。 |
-| Kaplan | \(L\) 可拆成 **模型项 + 数据项 + 不可约项**；**10× 算力 ≠ 10× 性能**。 |
-| Chinchilla | 固定 FLOPs 下 **更小模型+更多数据** 往往更优；**\(D^\* \sim N\)**，口语 **~20N**。 |
-| IsoFLOPs | **固定总算力**，扫 **\(N\)**，找 **最低 loss** 的 **\(N^\*\)**。 |
-| \(C \approx 6ND\) | **训练 FLOPs 粗估**；常数依赖实现，用于 **相对比较**。 |
+| Scaling Laws | 预训练指标随 $N,D,C$ 常呈 **经验幂律**，含 **不可约误差** 与 **递减收益**。 |
+| Kaplan | 损失对模型、数据与计算呈经验幂律；其联合拟合与 Chinchilla 的可分离形式不同。 |
+| Chinchilla | 固定 FLOPs 下 **更小模型+更多数据** 往往更优；**$D^{\ast} \sim N$**，口语 **~20N**。 |
+| IsoFLOPs | **固定总算力**，扫 **$N$**，找 **最低 loss** 的 **$N^{\ast}$**。 |
+| $C \approx 6ND$ | **训练 FLOPs 粗估**；常数依赖实现，用于 **相对比较**。 |
 | 过训练 | **目标函数与服务成本** 使实践偏离 Chinchilla；**小模型+长训练** 可能更划算。 |
 | 推理最优 | **服务时延/成本** 可能偏好更小模型或蒸馏。 |
 | 数据质量 | **有效 token** 比 **原始 token** 更关键。 |
@@ -8502,25 +8706,25 @@ if __name__ == "__main__":
 
 ### Q1：Scaling Laws 揭示了什么规律？
 
-**答**：它揭示在 **固定家族与训练范式** 下，语言模型的 **预训练损失** 往往随 **参数量 \(N\)、训练 token 数 \(D\)、总算力 \(C\)** 呈现 **可拟合的幂律关系**，并伴随 **不可约误差项** 与 **强烈边际递减**：算力倍增通常只会带来 **次线性** 的指标改进。因而它支持「**规模确实带来能力**」，但反对「**投入线性换性能**」的简单外推。其规律 **经验性** 强，会随 **数据、tokenizer、训练细节** 变化，需要 **持续重标定**。
+**答**：它揭示在 **固定家族与训练范式** 下，语言模型的 **预训练损失** 往往随 **参数量 $N$、训练 token 数 $D$、总算力 $C$** 呈现 **可拟合的幂律关系**，并伴随 **不可约误差项** 与 **强烈边际递减**：算力倍增通常只会带来 **次线性** 的指标改进。因而它支持「**规模确实带来能力**」，但反对「**投入线性换性能**」的简单外推。其规律 **经验性** 强，会随 **数据、tokenizer、训练细节** 变化，需要 **持续重标定**。
 
 ---
 
 ### Q2：Chinchilla 最优配比是什么？
 
-**答**：在 **总算力近似固定** 的前提下，Chinchilla 发现许多先前实践在同等 FLOPs 下 **模型过大、训练不足**；更优做法是让 **模型规模与数据规模更匹配**。经验上常把最优关系口语化为 **训练 token 与参数量近似线性**：\(D^\* \approx c \cdot N\)，其中 **\(c\)** 常被引用在 **约 20** 的量级（因此有 **「约 20:1」** 说法：tokens ≈ 20× parameters）。需要强调：**20 不是精确常数**，应以 **IsoFLOPs 或团队探针实验** 校准。
+**答**：在 **总算力近似固定** 的前提下，Chinchilla 发现许多先前实践在同等 FLOPs 下 **模型过大、训练不足**；更优做法是让 **模型规模与数据规模更匹配**。经验上常把最优关系口语化为 **训练 token 与参数量近似线性**：$D^{\ast} \approx c \cdot N$，其中 **$c$** 常被引用在 **约 20** 的量级（因此有 **「约 20:1」** 说法：tokens ≈ 20× parameters）。需要强调：**20 不是精确常数**，应以 **IsoFLOPs 或团队探针实验** 校准。
 
 ---
 
 ### Q3：给定计算预算，如何确定最优模型大小？
 
-**答**：工程上常用三步：**(1)** 用 **\(C \approx 6ND\)** 把预算翻译成 **可实现的 \((N,D)\) 双曲线**；**(2)** 做 **IsoFLOPs 扫描**：在相同 \(C\) 下训练多档 \(N\)，比较 **验证损失**，取 **最小点 \(N^\*\)**；**(3)** 结合 **显存、并行效率、数据可获得性** 修正——因为 **数学最优点** 可能在 **硬件不可达** 或 **数据不够** 时不可行。小规模 **pilot** 往往比纯口算更可靠。
+**答**：工程上常用三步：**(1)** 用 **$C \approx 6ND$** 把预算翻译成 **可实现的 $(N,D)$ 双曲线**；**(2)** 做 **IsoFLOPs 扫描**：在相同 $C$ 下训练多档 $N$，比较 **验证损失**，取 **最小点 $N^{\ast}$**；**(3)** 结合 **显存、并行效率、数据可获得性** 修正——因为 **数学最优点** 可能在 **硬件不可达** 或 **数据不够** 时不可行。小规模 **pilot** 往往比纯口算更可靠。
 
 ---
 
 ### Q4：IsoFLOPs 方法是什么？
 
-**答**：IsoFLOPs 指 **固定总训练计算量（FLOPs）**，系统改变 **模型参数规模 \(N\)**，并为每个 \(N\) 配一个 **相应的训练 token 数 \(D\)**，使得 **\(C \approx 6ND\)** 近似保持不变；然后比较不同 \(N\) 的 **验证损失**，找到 **该算力预算下的最优点**。它是 Chinchilla 用来反驳「一味变大模型」的关键实验框架，也是 CS336 Assignment 3 的核心方法学模板。
+**答**：IsoFLOPs 指 **固定总训练计算量（FLOPs）**，系统改变 **模型参数规模 $N$**，并为每个 $N$ 配一个 **相应的训练 token 数 $D$**，使得 **$C \approx 6ND$** 近似保持不变；然后比较不同 $N$ 的 **验证损失**，找到 **该算力预算下的最优点**。它是 Chinchilla 用来反驳「一味变大模型」的关键实验框架，也是 CS336 Assignment 3 的核心方法学模板。
 
 ---
 
@@ -8530,33 +8734,33 @@ if __name__ == "__main__":
 
 ---
 
-### Q6：\(C \approx 6ND\) 这个公式怎么来的？
+### Q6：$C \approx 6ND$ 这个公式怎么来的？
 
-**答**：它来自对 **Decoder-only Transformer 训练** 的计算量 **数量级估计**：训练一个 token 位置需要 **前向+反向** 的主要成本可近似为 **与参数量成比例** 的矩阵运算堆叠；业界常用经验把 **总训练 FLOPs** 写成 **\(C \approx \tau ND\)**，并取 **\(\tau \approx 6\)** 作为 **粗常数**（不同实现、是否 activation checkpoint、是否计入优化器与嵌入会改变 \(\tau\)）。因此它是 **工程近似**，用于 **配比与 IsoFLOPs 设计**，不是严格解析式。
+**答**：它来自对 **Decoder-only Transformer 训练** 的计算量 **数量级估计**：训练一个 token 位置需要 **前向+反向** 的主要成本可近似为 **与参数量成比例** 的矩阵运算堆叠；业界常用经验把 **总训练 FLOPs** 写成 **$C \approx \tau ND$**，并取 **$\tau \approx 6$** 作为 **粗常数**（不同实现、是否 activation checkpoint、是否计入优化器与嵌入会改变 $\tau$）。因此它是 **工程近似**，用于 **配比与 IsoFLOPs 设计**，不是严格解析式。
 
 ---
 
 ### Q7：Scaling Laws 有什么局限性？
 
-**答**：主要局限包括：**(1)** **经验性**：换数据/架构可能失效；**(2)** **指标单一**：预训练损失无法完整预测 **安全、对齐、长尾事实**；**(3)** **常数敏感**：\(6ND\) 的常数、训练稳定性会让最优点偏移；**(4)** **分布外**：网页到业务场景的 **gap**；**(5)** **涌现与任务指标** 的非平滑现象难以用简单幂律概括；**(6)** **测试时计算**（推理搜索）使「训练缩放」不足以解释系统能力。工业界应把它当 **规划工具**，不是 **物理定律**。
+**答**：主要局限包括：**(1)** **经验性**：换数据/架构可能失效；**(2)** **指标单一**：预训练损失无法完整预测 **安全、对齐、长尾事实**；**(3)** **常数敏感**：$6ND$ 的常数、训练稳定性会让最优点偏移；**(4)** **分布外**：网页到业务场景的 **gap**；**(5)** **涌现与任务指标** 的非平滑现象难以用简单幂律概括；**(6)** **测试时计算**（推理搜索）使「训练缩放」不足以解释系统能力。工业界应把它当 **规划工具**，不是 **物理定律**。
 
 ---
 
 ### Q8：数据质量 vs 数据数量如何权衡？
 
-**答**：Scaling Laws 的经典写法把 **\(D\)** 当 token 数，但真实训练应追求 **等效高质量 token**：**去重、去毒、领域配比、课程学习** 会改变「同样 \(D\)」带来的收益。一般策略是：**先提高质量与覆盖，再扩量**；扩量时监控 **数据重复率、有害率、能力维度**。**质量不足时盲加数量** 可能带来 **记忆、偏见、版权与攻击面** 放大。面试要强调：**数量是杠杆，质量决定杠杆是否打在正确支点上**。
+**答**：Scaling Laws 的经典写法把 **$D$** 当 token 数，但真实训练应追求 **等效高质量 token**：**去重、去毒、领域配比、课程学习** 会改变「同样 $D$」带来的收益。一般策略是：**先提高质量与覆盖，再扩量**；扩量时监控 **数据重复率、有害率、能力维度**。**质量不足时盲加数量** 可能带来 **记忆、偏见、版权与攻击面** 放大。面试要强调：**数量是杠杆，质量决定杠杆是否打在正确支点上**。
 
 ---
 
 ### Q9：推理成本如何影响最优模型设计？
 
-**答**：Chinchilla 的「最优」主要在 **训练算力最优**。一旦进入 **在线服务**，成本由 **时延、吞吐、显存占用、并发** 主导，可能更偏好 **更小模型 + 更长训练/蒸馏**、或 **分层系统（路由到小模型）**。因此 **推理最优** 与 **训练最优** 的 \(N\) 可能不同：面试中要把 **TCO（总拥有成本）** 与 **SLA** 纳入，而不是只看训练曲线。
+**答**：Chinchilla 的「最优」主要在 **训练算力最优**。一旦进入 **在线服务**，成本由 **时延、吞吐、显存占用、并发** 主导，可能更偏好 **更小模型 + 更长训练/蒸馏**、或 **分层系统（路由到小模型）**。因此 **推理最优** 与 **训练最优** 的 $N$ 可能不同：面试中要把 **TCO（总拥有成本）** 与 **SLA** 纳入，而不是只看训练曲线。
 
 ---
 
-### Q10：2026 年 Scaling Laws 面临什么新挑战？
+### Q10：Scaling Laws 在真实系统中有哪些延伸挑战？
 
-**答**：可答 **趋势与不确定性**（不必断言唯一答案）：**(1)** **数据瓶颈与合规**：高质量公开语料竞争、版权与隐私约束使「继续扩 \(D\)」更贵；**(2)** **合成数据与自举** 改变「真实 \(D\)」定义；**(3)** **推理模型** 让 **测试时计算** 成为主战场，训练缩放不再是唯一叙事；**(4)** **多模态与工具** 使损失函数与架构更异质，单一幂律更难覆盖；**(5)** **能源与碳排** 约束算力扩张；**(6)** **评估体系**（能力与安全）比 **loss** 更主导产品决策。结论：**Scaling Laws 仍有价值，但必须与数据治理、对齐、系统工程一起谈**。
+**答**：可答 **趋势与不确定性**（不必断言唯一答案）：**(1)** **数据瓶颈与合规**：高质量公开语料竞争、版权与隐私约束使「继续扩 $D$」更贵；**(2)** **合成数据与自举** 改变「真实 $D$」定义；**(3)** **推理模型** 让 **测试时计算** 成为主战场，训练缩放不再是唯一叙事；**(4)** **多模态与工具** 使损失函数与架构更异质，单一幂律更难覆盖；**(5)** **能源与碳排** 约束算力扩张；**(6)** **评估体系**（能力与安全）比 **loss** 更主导产品决策。结论：**Scaling Laws 仍有价值，但必须与数据治理、对齐、系统工程一起谈**。
 
 ---
 
@@ -8568,14 +8772,14 @@ if __name__ == "__main__":
 
 ### Q12：Kaplan 与 Chinchilla 的「冲突」到底是什么？
 
-**答**：不是数学矛盾，而是 **最优点定义不同**：Kaplan 大量实验刻画了 **损失随规模的幂律**；Chinchilla 强调在 **固定总算力** 下，**\(N\) 与 \(D\) 的组合** 之前 **系统性偏离最优**，尤其 **过大 \(N\) + 不足 \(D\)**。换句话说：**Kaplan 描述曲线**；**Chinchilla 在曲线约束下找最优配比**。
+**答**：两篇都研究固定训练计算下的最优资源分配，并非“一个只描述曲线，另一个才找最优”。Kaplan 拟合得到 $N_{opt}\propto C^{0.73}$、$D_{opt}\propto C^{0.27}$；Chinchilla 的不同方法给出更接近均衡增长的关系。差异涉及实验覆盖、训练 token 范围、学习率调度与拟合方法，不是简单的最优定义不同。
 
 ---
 
 # 四、练习（Practice）
 
-1. **推导直觉**：在 \(C \approx 6ND\) 固定时，为什么「只增大 \(N\)」必须「减小 \(D\)」？用双曲线解释 trade-off。
-2. **口算**：\(N=1.3\times10^{10}\)（13B）在 **\(D=20N\)** 规则下大约多少 tokens？
+1. **推导直觉**：在 $C \approx 6ND$ 固定时，为什么「只增大 $N$」必须「减小 $D$」？用双曲线解释 trade-off。
+2. **口算**：$N=1.3\times10^{10}$（13B）在 **$D=20N$** 规则下大约多少 tokens？
 3. **实验设计**：你要复现 IsoFLOPs，列出 **必须控制变量** 与 **允许变化变量**。
 4. **批判性思考**：为什么 **验证损失** 更低，可能 **有害内容** 或 **隐私记忆** 风险更高？
 5. **联系 Assignment 3**：如果你拟合的幂律 **残差很大**，更可能来自 **训练不稳定** 还是 **数据分布漂移**？如何排查？
@@ -8586,15 +8790,15 @@ if __name__ == "__main__":
 
 - 第 2 题：约 **260B tokens**。
 - 第 4 题：损失与「人类偏好/安全」不对齐；需要 **对齐与评测**。
-- 第 6 题：先 **缩小 \(N\) 的搜索网格** + **短训探针** 估计 loss 曲线形状，再放大到目标 \(C\)；强调 **同数据同评估**。
+- 第 6 题：先 **缩小 $N$ 的搜索网格** + **短训探针** 估计 loss 曲线形状，再放大到目标 $C$；强调 **同数据同评估**。
 - 第 7 题：训练侧关注 **FLOPs、收敛、数据覆盖**；推理侧关注 **延迟、吞吐、显存、并发、路由**。
 
 ---
 
 # 五、导航（Navigation）
 
-- **上一节**：[12-Assignment2系统优化实战.md](./12-Assignment2系统优化实战.md)
-- **下一节**：[14-数据工程-CommonCrawl处理.md](./14-数据工程-CommonCrawl处理.md)
+- **上一节**：[12-Assignment2系统优化实战.md](../docs/12-Assignment2%E7%B3%BB%E7%BB%9F%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98.md)
+- **下一节**：[14-数据工程-CommonCrawl处理.md](../docs/14-%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-CommonCrawl%E5%A4%84%E7%90%86.md)
 
 ---
 
@@ -8602,13 +8806,13 @@ if __name__ == "__main__":
 
 | 符号 | 含义 |
 |------|------|
-| \(N\) | 模型参数量（个数，非 MB） |
-| \(D\) | 训练 token 数 |
-| \(C\) | 训练总计算量（FLOPs，粗估） |
-| \(L\) | 验证损失（如交叉熵） |
-| \(E\) | 不可约误差代理项 |
+| $N$ | 模型参数量（个数，非 MB） |
+| $D$ | 训练 token 数 |
+| $C$ | 训练总计算量（FLOPs，粗估） |
+| $L$ | 验证损失（如交叉熵） |
+| $E$ | 不可约误差代理项 |
 
-**单位提醒**：口语中 **7B** 指 **\(7\times 10^9\)** 参数；**140B tokens** 指 **\(1.4\times 10^{11}\)** tokens。
+**单位提醒**：口语中 **7B** 指 **$7\times 10^9$** 参数；**140B tokens** 指 **$1.4\times 10^{11}$** tokens。
 
 ---
 
@@ -8635,7 +8839,7 @@ if __name__ == "__main__":
 - **长尾与能力**：代码、数学、多语言等能力需要对应域数据；缺数据则表现为该能力薄弱。
 - **可扩展定律的隐含前提**：Scaling Laws 描述的是「在**合理数据管线**下」损失随规模的变化；若数据脏、重复极高或域配比失衡，边际收益会迅速变差。
 
-因此，工业界与学术界的预训练工程往往把 **50% 以上精力**放在数据采集、清洗、去重、过滤与配比上，而非仅堆模型层数。
+数据采集、清洗、去重、过滤与配比都是预训练工程的重要工作；不同项目投入比例差异很大，不应给出无调查依据的固定百分比。
 
 ### 1.2 预训练常见数据来源
 
@@ -8651,7 +8855,7 @@ if __name__ == "__main__":
 
 ### 1.3 Common Crawl 概览
 
-**是什么**：Common Crawl 是一个**按月进行**的互联网网页抓取项目，累积数据量达 **PB 级**，是构建大规模预训练语料最常用的开放 Web 源之一。
+**是什么**：Common Crawl 发布互联网抓取档案与派生数据。抓取批次有年份与编号，但不保证每个自然月恰好发布一次，应按官方批次选择。参见 [Common Crawl 数据概览](https://commoncrawl.org/overview)。
 
 **为何重要**：它提供了难以自建的海量、多语言、多领域文本，是 RedPajama、FineWeb、DCLM 等众多开放数据集的基底之一。
 
@@ -8768,7 +8972,7 @@ CS336 作业通常要求学生将 **原始 Common Crawl 类 dump** 转为可用�
 **稍展开的面试一句话**：
 
 - **The Pile**：体现「多源拼盘」思路，子源可单独消融；适合讲 **数据卡片** 与 **子源版权差异**。
-- **RedPajama**：强调 **复现某闭源模型的数据配方**，面试可联系「分布匹配 vs 真实闭源数据不可得」。
+- **RedPajama**：早期版本复现 LLaMA-1 的公开数据配方，后续版本扩展 Web 数据；需要区分开源模型权重与原始训练数据是否公开。
 - **FineWeb**：适合讨论 **Web 子集上的激进过滤** 与 **质量–规模折中**。
 - **DCLM / DataComp**：适合讲 **固定训练预算下比较数据管线**，突出 **数据工程即竞争力**。
 - **Dolma**：强调 **透明文档 + 可复现管线**，适合答「如何向审稿人证明数据处理严谨」类问题。
@@ -8935,7 +9139,7 @@ def write_jsonl_line(f, doc_id: str, text: str, token_ids: list[int]):
 
 ### Q2：Common Crawl 是什么？如何使用？
 
-**答**：Common Crawl 是 **按月抓取**的互联网网页数据集，体量为 **PB 级**，是开放 Web 语料的重要来源。**使用方式**一般为：（1）在官网或 S3 清单上选定 **crawl 批次**；（2）下载 **WARC**（原始）或 **WET**（预抽取文本）分片；（3）用 **warcio、Spark** 等流式解析；（4）走正文抽取、语言识别、过滤、去重后写入 **JSONL / MDS / Arrow** 等训练格式。注意：**不要试图单机下载全量**，应先抽样验证管线。
+**答**：Common Crawl 是 **按批次发布**的互联网网页数据集，体量为 **PB 级**，是开放 Web 语料的重要来源。**使用方式**一般为：（1）在官网或 S3 清单上选定 **crawl 批次**；（2）下载 **WARC**（原始）或 **WET**（预抽取文本）分片；（3）用 **warcio、Spark** 等流式解析；（4）走正文抽取、语言识别、过滤、去重后写入 **JSONL / MDS / Arrow** 等训练格式。注意：**不要试图单机下载全量**，应先抽样验证管线。
 
 ### Q3：数据处理的完整流程是什么？
 
@@ -8998,8 +9202,8 @@ def write_jsonl_line(f, doc_id: str, text: str, token_ids: list[int]):
 
 | 项目 | 链接 |
 |------|------|
-| **上一课** | [13-Scaling-Laws缩放定律.md](./13-Scaling-Laws缩放定律.md) |
-| **下一课** | [15-数据过滤与去重.md](./15-数据过滤与去重.md) |
+| **上一课** | [13-Scaling-Laws缩放定律.md](../docs/13-Scaling-Laws%E7%BC%A9%E6%94%BE%E5%AE%9A%E5%BE%8B.md) |
+| **下一课** | [15-数据过滤与去重.md](../docs/15-%E6%95%B0%E6%8D%AE%E8%BF%87%E6%BB%A4%E4%B8%8E%E5%8E%BB%E9%87%8D.md) |
 
 ---
 
@@ -9179,7 +9383,7 @@ flowchart LR
 
 对**规范化后**全文（Unicode NFKC、统一空白、可选小写）计算哈希，用集合或外存键值存储已见哈希。
 
-- 优点：实现简单；在规范化定义下**无误判**。
+- 优点：实现简单；规范化内容相同可直接判重复。哈希碰撞概率极低但不严格为零，若要求精确应再次比较内容；规范化过强也可能合并不同原文。
 - 缺点：改一个字符即不命中；无法抓近似重复。
 
 **URL 去重**
@@ -9197,28 +9401,28 @@ flowchart LR
 **MinHash + LSH（Locality-Sensitive Hashing）**
 
 - **MinHash**：将大集合压缩为短**签名**，使签名相等概率与 **Jaccard 相似度**相关。
-- **LSH**：将签名分段，段全同则映射到同一 **bucket**；仅对同 bucket 文档对做精细比较，避免 \(O(N^2)\) 全对比较。
+- **LSH**：将签名分段，段全同则映射到同一 **bucket**；仅对同 bucket 文档对做精细比较，避免 $O(N^2)$ 全对比较。
 
 **MinHash 步骤（面试常考）**
 
-1. **Shingling**：将文档转为 **k-shingle** 集合（字符 k-gram 或词级 k-gram），得到集合 \(A\)。
-2. **多个哈希函数** \(h_1,\ldots,h_m\)：对每个 shingle 映射到大整数域。
-3. **签名第 \(i\) 维**：\(\text{sig}_i(A) = \min_{x\in A} h_i(x)\)（MinHash 性质）。
-4. **Jaccard 估计**：\(\Pr[\text{sig}_i(A)=\text{sig}_i(B)] = J(A,B)\)，故两签名逐维**相等比例**为 \(J\) 的无偏估计。
+1. **Shingling**：将文档转为 **k-shingle** 集合（字符 k-gram 或词级 k-gram），得到集合 $A$。
+2. **多个哈希函数** $h_1,\ldots,h_m$：对每个 shingle 映射到大整数域。
+3. **签名第 $i$ 维**：$\text{sig}_i(A) = \min_{x\in A} h_i(x)$（MinHash 性质）。
+4. **Jaccard 估计**：在独立随机排列（或理想 min-wise 哈希）下，$\Pr[\mathrm{sig}_i(A)=\mathrm{sig}_i(B)]=J(A,B)$，匹配比例为无偏估计。实际有限位哈希近似该性质，还需考虑碰撞与相关性。
 
 **LSH 分桶（banding）**
 
-将长度为 \(m\) 的签名分为 **\(b\) 个 band**，每个 band 含 **\(r\) 行**，满足 \(b \times r = m\)。若某 band 内 \(r\) 个分量完全相同，则两文档进入该 band 的同一候选桶。**相似度越高**，至少一个 band 全匹配的概率越大；不相似文档碰撞概率可压到很低。候选对再用精确 Jaccard 或编辑距离**二次验证**，控制假阳性。
+将长度为 $m$ 的签名分为 **$b$ 个 band**，每个 band 含 **$r$ 行**，满足 $b \times r = m$。若某 band 内 $r$ 个分量完全相同，则两文档进入该 band 的同一候选桶。**相似度越高**，至少一个 band 全匹配的概率越大；不相似文档碰撞概率可压到很低。候选对再用精确 Jaccard 或编辑距离**二次验证**，控制假阳性。
 
 **Jaccard 相似度**
 
-对有限集合 \(A,B\)：
+对有限集合 $A,B$：
 
-\[
+$$
 J(A,B) = \frac{|A \cap B|}{|A \cup B|}
-\]
+$$
 
-取值 \([0,1]\)。基于 shingle 集合的 Jaccard 高 → 文本共享大量子串，适合**近重复**度量。
+取值 $[0,1]$。基于 shingle 集合的 Jaccard 高 → 文本共享大量子串，适合**近重复**度量。
 
 **SimHash**
 
@@ -9249,17 +9453,17 @@ J(A,B) = \frac{|A \cap B|}{|A \cup B|}
    在 shingle 或哈希前统一空白、小写、Unicode 规范化；否则同一页面会产生多种「假不同」副本。
 
 2. **粒度选择**  
-   - **Document-level**：整篇 SHA-256 / SimHash → 删除完全重复。  
+   - **Document-level**：整篇 SHA-256 → 精确去重；SimHash → 近重复候选。  
    - **Shingle + MinHash + LSH**：捕获近似重复（洗稿、轻微编辑）。  
    - **Substring-level**：后缀数组或长 n-gram 重叠 → 删除跨文档复制块。
 
-3. **参数**：k-gram 的 \(k\)、MinHash 排列数 `num_perm`、LSH 的 `bands × rows_per_band`、Jaccard 阈值。
+3. **参数**：k-gram 的 $k$、MinHash 排列数 `num_perm`、LSH 的 `bands × rows_per_band`、Jaccard 阈值。
 
 4. **正确性验证**：小规模数据上 **暴力两两 Jaccard** 与 LSH 候选集对比，检查召回与假阳性。
 
 5. **工程**：大文件流式读取、分片、外存索引；若作业要求分布式，需说明 **shuffle 开销**与 bucket key 设计。
 
-**答辩可用一句话**：「先做规范化，再用 LSH 把比较从 \(N^2\) 降到近似线性候选集，最后用精确 Jaccard 去掉 LSH 假阳性。」
+**答辩可用一句话**：“规范化后用 LSH 缩小候选集，再用精确 Jaccard 验证。复杂度取决于桶大小，不保证近似线性；大桶可退化到平方比较。”
 
 ---
 
@@ -9431,7 +9635,7 @@ def shingle_set(text: str, k: int = 5) -> set[str]:
 def minhash_signature(shingles: Iterable[str], num_perm: int = 128) -> list[int]:
     shingles = list(shingles)
     if not shingles:
-        return [0] * num_perm
+        raise ValueError("empty shingle set: handle short/empty documents separately")
 
     sig: list[int] = []
     for i in range(num_perm):
@@ -9546,25 +9750,25 @@ def hamming_distance(a: int, b: int) -> int:
 
 ### Q2：精确去重和模糊去重的区别？
 
-**答**：**精确去重**在规范化规则下要求内容一致：整篇 SHA-256、URL 规范化、精确 n-gram 集合匹配等。优点是实现简单、在定义下无误判；缺点是改一个字符即不命中，无法识别「洗稿」或轻微编辑。**模糊/近似去重**允许少量差异，用 **Jaccard（k-shingle 集合）**、**MinHash**、**SimHash**、编辑距离分桶等；能捕获镜像站、模板微调、复制块，但需设定阈值，存在**假阳性/假阴性**，工程上通常 **LSH/SimHash 出候选 → 精确相似度二次验证**。
+**答**：**精确去重**在规范化规则下要求内容一致：整篇 SHA-256、URL 规范化、精确 n-gram 集合匹配等。优点是实现简单；需考虑哈希碰撞与规范化导致的内容合并；缺点是改一个字符即不命中，无法识别「洗稿」或轻微编辑。**模糊/近似去重**允许少量差异，用 **Jaccard（k-shingle 集合）**、**MinHash**、**SimHash**、编辑距离分桶等；能捕获镜像站、模板微调、复制块，但需设定阈值，存在**假阳性/假阴性**，工程上通常 **LSH/SimHash 出候选 → 精确相似度二次验证**。
 
 ---
 
 ### Q3：MinHash 算法的原理？
 
-**答**：对两集合 \(A,B\) 的 Jaccard 相似度 \(J=|A\cap B|/|A\cup B|\)，直接求交并在大集合上代价高。MinHash 使用 \(m\) 个独立哈希函数 \(h_i\)，定义 \(\text{sig}_i(A)=\min_{x\in A} h_i(x)\)。**关键性质**：\(\Pr[\text{sig}_i(A)=\text{sig}_i(B)] = J(A,B)\)。因此两签名在各位上**相等频率**是 \(J\) 的无偏估计。文本场景先将文档转为 **k-shingle 集合**再 MinHash。签名长度 \(m\) 越大，估计方差越小，但存储与 LSH 成本上升。
+**答**：对两集合 $A,B$ 的 Jaccard 相似度 $J=|A\cap B|/|A\cup B|$，直接求交并在大集合上代价高。MinHash 使用 $m$ 个独立哈希函数 $h_i$，定义 $\text{sig}_i(A)=\min_{x\in A} h_i(x)$。**关键性质（理想随机排列/min-wise 哈希假设下）**：$\Pr[\text{sig}_i(A)=\text{sig}_i(B)] = J(A,B)$。因此两签名在各位上**相等频率**是 $J$ 的无偏估计。文本场景先将文档转为 **k-shingle 集合**再 MinHash。签名长度 $m$ 越大，估计方差越小，但存储与 LSH 成本上升。
 
 ---
 
 ### Q4：LSH（局部敏感哈希）如何加速近似去重？
 
-**答**：朴素两两比较复杂度 \(O(N^2)\)，不可扩展。LSH 将 MinHash 签名划为 **\(b\) 个 band**，每 band **\(r\) 行**；若两文档在某 band 内 \(r\) 个分量全相等，则进入同一 **bucket**，作为**候选对**。只对同 bucket 内文档计算精确 Jaccard 或编辑距离。相似文档在至少一个 band 上碰撞概率高；不相似文档碰撞概率可压得很低。总体比较次数近似 **\(O(N)\)** 量级（与参数有关），用可控**假阳性**换时间，假阳性靠第二阶段过滤。
+**答**：朴素两两比较复杂度 $O(N^2)$，不可扩展。LSH 将 MinHash 签名划为 **$b$ 个 band**，每 band **$r$ 行**；若两文档在某 band 内 $r$ 个分量全相等，则进入同一 **bucket**，作为**候选对**。只对同 bucket 内文档计算精确 Jaccard 或编辑距离。相似文档在至少一个 band 上碰撞概率高；不相似文档碰撞概率可压得很低。比较次数取决于 $\sum_b \binom{|bucket_b|}{2}$，大桶最坏仍可达 $O(N^2)$。LSH 有假阳性也有假阴性；精确验证去掉假阳性，但不能找回未进入候选集的重复对。
 
 ---
 
 ### Q5：Jaccard 相似度是什么？
 
-**答**：对有限集合 \(A,B\)，\(J(A,B)=|A\cap B|/|A\cup B|\)，取值 \([0,1]\)。将文本表示为 k-gram **集合**（字符或词级 shingle）时，Jaccard 高表示两文档共享大量相同子串，适合度量**内容重叠**与近重复。若需 multiset，可改用加权或余弦等变体，但经典 MinHash 针对集合 Jaccard。
+**答**：对有限集合 $A,B$，$J(A,B)=|A\cap B|/|A\cup B|$，取值 $[0,1]$。将文本表示为 k-gram **集合**（字符或词级 shingle）时，Jaccard 高表示两文档共享大量相同子串，适合度量**内容重叠**与近重复。若需 multiset，可改用加权或余弦等变体，但经典 MinHash 针对集合 Jaccard。
 
 ---
 
@@ -9594,7 +9798,7 @@ def hamming_distance(a: int, b: int) -> int:
 
 ### Q10：Benchmark contamination 是什么？如何检测？
 
-**答**：**污染**指预训练语料与**公开基准**在整段文档、题目或答案上存在重叠或极高相似度，导致评测分数**不能反映真实泛化**（模型可能「见过答案」）。**检测方法**：**(1)** 对评测条目与训练语料做 **n-gram 重叠**统计；**(2)** 规范化后 **字符串哈希 / MinHash** 查重；**(3)** 嵌入检索找**近邻句**；**(4)** 去重或剔除重叠数据后**重新评测**对比分数变化。工业管线可对已知 benchmark 做**显式排除**或降权。
+**答**：**污染**指预训练语料与**公开基准**在整段文档、题目或答案上存在重叠或极高相似度，导致评测分数**不能反映真实泛化**（模型可能「见过答案」）。**检测方法**：**(1)** 对评测条目与训练语料做 **n-gram 重叠**统计；**(2)** 规范化后 **字符串哈希 / MinHash** 查重；**(3)** 嵌入检索找**近邻句**；**(4)** 剔除重叠训练数据后重新训练对照模型，或使用新构造的未污染测试集评估；仅删除训练文件后对旧模型重新评测不能消除已有记忆。工业管线可对已知 benchmark 做**显式排除**或降权。
 
 ---
 
@@ -9618,7 +9822,7 @@ def hamming_distance(a: int, b: int) -> int:
 
 ## 四、练习题
 
-1. 手写两段 5 句英文，计算 **5-gram shingle 集合**的精确 Jaccard，并用 `minhash_signature` 估计 \(J\)，对比误差。
+1. 手写两段 5 句英文，计算 **5-gram shingle 集合**的精确 Jaccard，并用 `minhash_signature` 估计 $J$，对比误差。
 2. 固定文档集，扫描 **LSH 的 `num_bands` 与 `rows_per_band`**，记录候选对数量与暴力真重复集合的 **召回率**，写出调参笔记。
 3. 在 `rule_based_keep` 中增加 **汉字占比**（`"\u4e00" <= c <= "\u9fff"`）与 **全角标点** 规则，适配中文网页。
 4. 阅读 **LLaMA** 或 **Gopher** 数据附录，绘制 **document-level → near-dup → substring** 的流程草图。
@@ -9631,7 +9835,7 @@ def hamming_distance(a: int, b: int) -> int:
 
 | 上一课 | 下一课 |
 |--------|--------|
-| [Lesson 14：数据工程 — Common Crawl 处理](14-数据工程-CommonCrawl处理.md) | [Lesson 16：Assignment 3-4 实战指南](16-Assignment3-4实战指南.md) |
+| [Lesson 14：数据工程 — Common Crawl 处理](../docs/14-%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-CommonCrawl%E5%A4%84%E7%90%86.md) | [Lesson 16：Assignment 3-4 实战指南](../docs/16-Assignment3-4%E5%AE%9E%E6%88%98%E6%8C%87%E5%8D%97.md) |
 
 **建议学习顺序**：精读概念篇（能白板推导 MinHash+LSH）→ 运行代码篇小实验 → 用面试题自测 → 结合 Assignment 4 作业要求实现端到端管线。
 
@@ -9650,7 +9854,7 @@ def hamming_distance(a: int, b: int) -> int:
 
 **文档结构**：**标题** → **概念（Concepts）** → **代码（Code）** → **面试要点（Interview）** → **练习（Practice）** → **导航（Navigation）**
 
-**本节定位**：将 **Assignment 3（Scaling / 缩放实验）** 与 **Assignment 4（Data / 预训练数据工程）** 收束为一条可执行、可讲述、可面试的闭环：从 **IsoFLOPs 与 log-log 幂律拟合**、**外推到 \(10^{23}\)/\(10^{24}\) FLOPs** 与 **可视化**，到 **Common Crawl WARC 处理、正文抽取、语言与质量过滤、精确哈希与 MinHash+LSH 去重、训练数据管道**；并给出 **调试清单、常见故障、预期现象、STAR 表达法** 与 **10+ 道面试题详解**。
+**本节定位**：将 **Assignment 3（Scaling / 缩放实验）** 与 **Assignment 4（Data / 预训练数据工程）** 收束为一条可执行、可讲述、可面试的闭环：从 **IsoFLOPs 与 log-log 幂律拟合**、**外推到 $10^{23}$/$10^{24}$ FLOPs** 与 **可视化**，到 **Common Crawl WARC 处理、正文抽取、语言与质量过滤、精确哈希与 MinHash+LSH 去重、训练数据管道**；并给出 **调试清单、常见故障、预期现象、STAR 表达法** 与 **10+ 道面试题详解**。
 
 **先修**：Lesson 07（训练循环）、Lesson 11–12（分布式与系统）、Lesson 13（Scaling Laws）、Lesson 14–15（Common Crawl 与过滤去重）。
 
@@ -9665,7 +9869,7 @@ def hamming_distance(a: int, b: int) -> int:
 ## 1. 为何把 A3 与 A4 放在同一课？
 
 - **Assignment 3** 回答：**在固定总算力下，模型要多大、数据要训多长** —— 这是 **计算最优（compute-optimal）** 的实验方法论（Chinchilla / **IsoFLOPs**）。
-- **Assignment 4** 回答：**训练分布长什么样** —— 同样的参数量 \(N\) 与名义 token 数 \(D\)，若 **有效 token（等效数据量）** 不同，**同一条 scaling 曲线会整体平移**。
+- **Assignment 4** 回答：**训练分布长什么样** —— 同样的参数量 $N$ 与名义 token 数 $D$，若 **有效 token（等效数据量）** 不同，**同一条 scaling 曲线会整体平移**。
 
 面试官常把二者连着问：**「你只调大了模型，有没有同时保证数据干净、去重、语言配比？」** 本节给出 **统一话术与检查清单**。
 
@@ -9673,8 +9877,8 @@ def hamming_distance(a: int, b: int) -> int:
 
 **目标（教学抽象）**：在 **架构族固定**（同一套 Transformer LM 配置模板）、**训练流程可比**（相同 tokenizer、相同评估协议、相近超参搜索预算）的前提下，系统研究：
 
-- **参数量 \(N\)**、**训练 token 数 \(D\)**、**总算力 \(C\)** 与 **验证损失 \(L\)** 之间的 **经验幂律**；
-- 在 **固定 \(C\)**（**IsoFLOPs**）下，**最优 \(N^\*\)** 出现在何处 —— 直观复现 **Chinchilla** 的核心结论：**同等算力下「过大模型 + 过少数据」往往不如更均衡的配比**（具体数值依赖设定）。
+- **参数量 $N$**、**训练 token 数 $D$**、**总算力 $C$** 与 **验证损失 $L$** 之间的 **经验幂律**；
+- 在 **固定 $C$**（**IsoFLOPs**）下，**最优 $N^{\ast}$** 出现在何处 —— 直观复现 **Chinchilla** 的核心结论：**同等算力下「过大模型 + 过少数据」往往不如更均衡的配比**（具体数值依赖设定）。
 
 **你不只是在「跑 loss」**：而是在展示 **受控实验（controlled experiments）** 能力 —— 这是研究岗与训练工程岗的共性要求。
 
@@ -9682,16 +9886,16 @@ def hamming_distance(a: int, b: int) -> int:
 
 无论课程提供的是 `train.py`、Hydra 配置还是 Slurm 脚本，缩放实验通常要 **显式** 控制：
 
-1. **模型规模**：`hidden_size`、`num_layers`、`num_heads`、FFN 维度等 → 汇总为 **参数总量 \(N\)**（或由代码打印 `num_parameters`）。
-2. **数据规模**：**总训练 token 数 \(D\)**（不是「epoch 数」本身，除非每 epoch token 恒定）。
-3. **总算力**：用 **\(C \approx 6ND\)** 作为 **相对比较** 的预算锚点；或课程提供的 **FLOPs 计数器**（若作业要求更精确，以作业为准）。
+1. **模型规模**：`hidden_size`、`num_layers`、`num_heads`、FFN 维度等 → 汇总为 **参数总量 $N$**（或由代码打印 `num_parameters`）。
+2. **数据规模**：**总训练 token 数 $D$**（不是「epoch 数」本身，除非每 epoch token 恒定）。
+3. **总算力**：用 **$C \approx 6ND$** 作为 **相对比较** 的预算锚点；或课程提供的 **FLOPs 计数器**（若作业要求更精确，以作业为准）。
 4. **可比性**：**相同验证集**、**相同评估步长**、**相同数据混合**；**学习率、warmup、weight decay** 要么固定合理默认值，要么在 **小规模子集上做 budgeted sweep**。
 
 **工程要点**：缩放实验最怕 **「欠训」**（optimization budget 不足）—— 表现为曲线抖动、最优点偏移。应对：**学习率随规模缩放规则（如参考 μParam / 宽度缩放经验）**、**更长 warmup**、**梯度裁剪**、**检查 loss spike**。
 
 ### 2.2 IsoFLOPs 方法（定义与心智模型）
 
-**定义**：在 **近似相同的总训练 FLOPs \(C\)** 下，扫描一组模型规模 \(\{N_i\}\)，并为每个规模匹配 **\(D_i \approx C / (\tau N_i)\)**（常取 **\(\tau \approx 6\)**，与 **\(C \approx 6ND\)** 一致），训练 **到约定 token**，记录 **验证损失 \(L_i\)**，在 **\(N\)** 维度上取 **最小值** 对应的 **\(N^\*\)**（及 **\(D^\*\)**）。
+**定义**：在 **近似相同的总训练 FLOPs $C$** 下，扫描一组模型规模 $\{N_i\}$，并为每个规模匹配 **$D_i \approx C / (\tau N_i)$**（常取 **$\tau \approx 6$**，与 **$C \approx 6ND$** 一致），训练 **到约定 token**，记录 **验证损失 $L_i$**，在 **$N$** 维度上取 **最小值** 对应的 **$N^{\ast}$**（及 **$D^{\ast}$**）。
 
 **伪代码**：
 
@@ -9707,39 +9911,39 @@ plot N_star vs C, val_loss vs N for each C
 
 **常见坑**：
 
-- **常数 \(\tau\) 不一致**：不同实现计入 **重计算、融合算子、优化器** 会让绝对 FLOPs 偏移；**相对比较** 仍可用，但 **跨仓库对比** 要谨慎。
-- **Batch 与步数**：若用 **固定步数** 而非固定 token，**\(D\)** 会随 **序列长度与 microbatch** 变化 —— 报告时以 **总 token** 为准更干净。
-- **早停不一致**：IsoFLOPs 要求 **每个点训练到可比阶段**（如固定 `D`），否则「较小型号更快收敛」会误导。
+- **常数 $\tau$ 不一致**：不同实现计入 **重计算、融合算子、优化器** 会让绝对 FLOPs 偏移；**相对比较** 仍可用，但 **跨仓库对比** 要谨慎。
+- **Batch 与步数**：若用 **固定步数** 而非固定 token，**$D$** 会随 **序列长度与 microbatch** 变化 —— 报告时以 **总 token** 为准更干净。
+- **早停不一致**：IsoFLOPs 要求 **每个点训练到可比阶段**（各点达到自己的 $D_i=C/(6N_i)$，不是所有模型固定同一个 `D`），否则「较小型号更快收敛」会误导。
 
 ### 2.3 log-log 回归与幂律拟合
 
 若经验上存在近似幂律，例如验证损失随参数量满足：
 
-\[
+$$
 L(N) \approx a N^{-\alpha} + L_\infty
-\]
+$$
 
 实践上常在 **log-log** 域做线性拟合（可对 **多段区间** 分段拟合，或只对 **中间线性段** 拟合）：
 
-\[
+$$
 \log(L - L_\infty) \approx -\alpha \log N + \text{const}
-\]
+$$
 
 **操作要点**：
 
-1. **估计 \(L_\infty\)**：可用 **领域经验**、**最长训练点的平台值**、或 **多模型外推**；敏感，需报告 **敏感性分析**。
-2. **线性回归**：最小二乘；报告 **\(R^2\)、残差图、置信区间** 比报「精确到小数点后四位」更重要。
+1. **估计 $L_\infty$**：可用 **领域经验**、**最长训练点的平台值**、或 **多模型外推**；敏感，需报告 **敏感性分析**。
+2. **线性回归**：最小二乘；报告 **$R^2$、残差图、置信区间** 比报「精确到小数点后四位」更重要。
 3. **异常点处理**：训练不稳定、数据管线变更、评估集泄漏，都会让点 **偏离直线** —— 先修实验，再谈拟合。
 
-对 **\(N^\*(C)\)** 常拟合 **\(\log N^\*(C) = p \log C + q\)**，用于 **外推** 更大算力下的最优规模（见下节）。
+对 **$N^{\ast}(C)$** 常拟合 **$\log N^{\ast}(C) = p \log C + q$**，用于 **外推** 更大算力下的最优规模（见下节）。
 
-### 2.4 外推到 \(10^{23}\) 与 \(10^{24}\) FLOPs（方法论）
+### 2.4 外推到 $10^{23}$ 与 $10^{24}$ FLOPs（方法论）
 
 面试官想听的是 **结构化推理**，不是背一个数字：
 
-1. 用 **IsoFLOPs** 得到 **若干 \(C_j\)** 下的 **\(N^\*(C_j)\)** 经验点列。
-2. 在 **log-log** 下拟合 **\(N^\*(C)\)** 的幂律：**\(N^\* \propto C^{p}\)**（指数 \(p\) 由数据估计；常见讨论量级在 **0.5** 附近与 **\(C \propto N^2\)** 类口算一致，但以 **你的拟合** 为准）。
-3. 将 **\(C_{\text{target}} \in \{10^{23}, 10^{24}\}\)** 代入，得到 **预测 \(N\)**，并立刻给出 **不确定性来源**：**外推风险**、**数据质量假设**、**推理成本是否纳入目标**。
+1. 用 **IsoFLOPs** 得到 **若干 $C_j$** 下的 **$N^{\ast}(C_j)$** 经验点列。
+2. 在 **log-log** 下拟合 **$N^{\ast}(C)$** 的幂律：**$N^{\ast} \propto C^{p}$**（指数 $p$ 由数据估计；常见讨论量级在 **0.5** 附近与 **$C \propto N^2$** 类口算一致，但以 **你的拟合** 为准）。
+3. 将 **$C_{\text{target}} \in \{10^{23}, 10^{24}\}$** 代入，得到 **预测 $N$**，并立刻给出 **不确定性来源**：**外推风险**、**数据质量假设**、**推理成本是否纳入目标**。
 
 **必须强调的 caveat**：这是 **预训练验证损失意义下的粗预测**；**产品最优** 可能选 **更小模型 + 更长训练（过训练）** 以适配 **推理预算**。
 
@@ -9747,9 +9951,9 @@ L(N) \approx a N^{-\alpha} + L_\infty
 
 一张合格的 **scaling 报告** 至少包含：
 
-1. **\(L\) vs \(N\)**（固定 \(C\) 的 IsoFLOPs 切片）：看 **U 形 / 最优点**。
-2. **\(L\) vs \(D\)**（固定 \(C\)）：检查 **数据是否欠给**。
-3. **\(L\) vs \(C\)**（不同预算）：看 **是否单调改善** 与 **收益递减**。
+1. **$L$ vs $N$**（固定 $C$ 的 IsoFLOPs 切片）：看 **U 形 / 最优点**。
+2. **$L$ vs $D$**（固定 $C$）：检查 **数据是否欠给**。
+3. **$L$ vs $C$**（不同预算）：看 **是否单调改善** 与 **收益递减**。
 4. **残差 vs 拟合**：检查 **幂律假设是否成立**。
 5. **训练曲线（train/val）**：排查 **欠训 vs 不稳定**。
 
@@ -9767,7 +9971,7 @@ L(N) \approx a N^{-\alpha} + L_\infty
 | **RMSNorm / 残差** | 稳定深层优化 | 不稳定时 loss 曲线不可比 |
 | **RoPE** | 相对位置偏置 | 基础 scaling 常固定 **最大序列长度** |
 
-**面试安全表述**：在 **固定架构家族** 下，**宽度、深度、头数、FFN 比** 共同决定 \(N\) 与 **每步 FLOPs**；A3 通常通过 **改规模并匹配 \(D\)** 观察 **验证损失**。
+**面试安全表述**：在 **固定架构家族** 下，**宽度、深度、头数、FFN 比** 共同决定 $N$ 与 **每步 FLOPs**；A3 通常通过 **改规模并匹配 $D$** 观察 **验证损失**。
 
 ---
 
@@ -9800,7 +10004,7 @@ L(N) \approx a N^{-\alpha} + L_\infty
 
 ### 3.4 去重：精确哈希 + MinHash + LSH
 
-- **精确去重**：规范化空白与 Unicode 后 **整篇哈希**（SHA-256）；**\(O(1)\)** 查表；抓不到 **近似重复**。
+- **精确去重**：规范化空白与 Unicode 后 **整篇哈希**（SHA-256）；**$O(1)$** 查表；抓不到 **近似重复**。
 - **MinHash + LSH**：**shingle**（如字符 n-gram）→ **MinHash 签名** → **LSH 分桶** → 只对 **候选对** 算 Jaccard/编辑距离；在 **TB 级** 上可扩展（分片 + 外存）。
 
 **参数意识**：`num_perm`、bands/rows 影响 **召回 vs 假阳性**；要用 **小规模网格** 校准。
@@ -9817,11 +10021,11 @@ L(N) \approx a N^{-\alpha} + L_\infty
 
 ### 3.6 数据质量如何影响 scaling（整合视角）
 
-- **低质重复网页** → **有效 \(D_{\text{eff}}\)** 远小于名义 token。  
+- **低质重复网页** → **有效 $D_{\text{eff}}$** 远小于名义 token。  
 - **去重** → 降低记忆化与 **评测污染** 风险。  
 - **过滤** → 提升信噪比，**同算力** 下曲线可能 **整体下移** 或 **更数据高效**。
 
-**面试一句话**：数据管线决定 **「等效数据规模」**；它会把 **\(L\)–\(N\)–\(D\)–\(C\)** 关系 **整体上移/下移**，并改变 **最优配比点**。
+**面试一句话**：数据管线决定 **「等效数据规模」**；它会把 **$L$–$N$–$D$–$C$** 关系 **整体上移/下移**，并改变 **最优配比点**。
 
 ---
 
@@ -9857,7 +10061,7 @@ def loglog_fit_power_law(x, y, eps=1e-12):
     return slope, intercept  # slope 符号与 alpha 的关系依赖具体函数形式
 ```
 
-**提醒**：真实作业要处理 **\(L_\infty\)**、**异常点**、以及拟合对象是 **\(L(N)\)** 还是 **\(N^\*(C)\)** —— 以课件定义为准。
+**提醒**：真实作业要处理 **$L_\infty$**、**异常点**、以及拟合对象是 **$L(N)$** 还是 **$N^{\ast}(C)$** —— 以课件定义为准。
 
 ## 6. A4：WARC → 文本流（抽象）
 
@@ -9903,9 +10107,9 @@ def keep(doc):
 
 ## 9. 速记清单（Scaling + Data）
 
-1. **IsoFLOPs**：固定 \(C\)，扫 \(N\)，配 \(D \sim C/(6N)\)，比较 **val loss**，取 **argmin**。  
-2. **\(C \approx 6ND\)**：**粗估** 用；跨实现比较常数可能漂移。  
-3. **log-log**：幂律在双对数下近似直线；注意 **\(L_\infty\)** 与 **分段**。  
+1. **IsoFLOPs**：固定 $C$，扫 $N$，配 $D \sim C/(6N)$，比较 **val loss**，取 **argmin**。  
+2. **$C \approx 6ND$**：**粗估** 用；跨实现比较常数可能漂移。  
+3. **log-log**：幂律在双对数下近似直线；注意 **$L_\infty$** 与 **分段**。  
 4. **WARC / WET / WAT**：能解释 **为何自抽 WARC**（可控正文与管线一致性）。  
 5. **过滤**：规则透明 + 分类器强力；警惕 **偏见与误杀**。  
 6. **去重**：精确抓副本；MinHash+LSH 抓 **近重复**；参数影响 **召回/假阳性**。  
@@ -9921,7 +10125,7 @@ def keep(doc):
 - **A（Action）**：实验设计、模块划分、阈值搜索、测试与版本管理。  
 - **R（Result）**：**量化**（loss、保留率、吞吐、下游）；**反思**（外推局限、下一步）。
 
-**A3 骨架**：S 固定 GPU 小时；T 实现 \(C\) 约束与 \(N^\*(C)\)；A 锁 tokenizer、扫 \(N_i\)、多 seed；R 报最优点与外推到 \(10^{23}\) FLOPs 的 **区间与假设**。
+**A3 骨架**：S 固定 GPU 小时；T 实现 $C$ 约束与 $N^{\ast}(C)$；A 锁 tokenizer、扫 $N_i$、多 seed；R 报最优点与外推到 $10^{23}$ FLOPs 的 **区间与假设**。
 
 **A4 骨架**：S 从 CC 构建语料；T 抽取+过滤+去重+JSONL；A 黄金测试、丢弃原因计数、MinHash 参数网格；R 保留率、去重率、固定训练预算下 loss/下游变化。
 
@@ -9931,12 +10135,12 @@ def keep(doc):
 
 | 现象 | 可能原因 | 对策 |
 |------|----------|------|
-| IsoFLOPs 曲线 **无清晰最优点** | 全部欠训；LR 不适配；评估噪声 | 延长训练；调 LR/warmup；多 seed |
+| IsoFLOPs 曲线 **无清晰最优点** | 全部欠训；LR 不适配；评估噪声 | 保持原预算调 LR/warmup、检查网格；若提高预算，整条 IsoFLOPs 曲线一起重跑 |
 | **小模型** 更差 | batch 太小；正则过强 | 调正则；检查数据难度 |
 | **大模型** loss 更差 | 不稳定；初始化与宽度不匹配 | 查 loss spike；参考宽度缩放经验 |
-| 外推 **离谱** | 拟合用错段；\(L_\infty\) 乱设 | 分段拟合；留验证点 |
+| 外推 **离谱** | 拟合用错段；$L_\infty$ 乱设 | 分段拟合；留验证点 |
 
-**预期（定性）**：在同一 \(C\) 下，**\(L\) vs \(N\)** 常呈 **U 形**；**\(N^\*(C)\)** 随 \(C\) 增大而增大；训练曲线应 **整体下降** 且无长期平台前的 **断崖**（除非有意 early stop）。
+**预期（定性）**：在同一 $C$ 下，**$L$ vs $N$** 常呈 **U 形**；**$N^{\ast}(C)$** 随 $C$ 增大而增大；训练曲线应 **整体下降** 且无长期平台前的 **断崖**（除非有意 early stop）。
 
 ### 11.2 Assignment 4
 
@@ -9945,7 +10149,7 @@ def keep(doc):
 | WARC 解析慢 | 单线程、非流式 | 多进程分片；抽样开发 |
 | 过滤太狠 | 阈值过严 | 网格扫描 **保留率 vs 代理指标** |
 | 过滤太松 | 阈值过松 | 增加规则/分类器；分段阈值 |
-| MinHash **误杀** | LSH 过松、桶太大 | 提高签名维度；收紧 bands |
+| MinHash **误杀** | LSH 候选被直接当重复；未二次验证 | 对候选做精确相似度验证，再调整阈值/聚类策略 |
 | MinHash **漏判** | 签名太短、shingle 不合适 | 调 num_perm、n-gram 宽度 |
 
 **预期（定性）**：规则过滤后保留率 **显著低于** 原始抽取；精确去重去掉 **完全重复**；MinHash 进一步降低 **近重复**；最终语料 **平均长度、语言纯度** 应优于原始分布。
@@ -9959,18 +10163,18 @@ def keep(doc):
 **答**：Scaling laws 是 **经验幂律**，验证思路是 **受控实验 + 函数形式检验 + 外推检验**。
 
 1. **固定架构族与训练协议**（tokenizer、数据混合、优化器族、评估集）。  
-2. **系统改变规模变量**：至少覆盖 **IsoFLOPs（固定 \(C\) 扫 \(N\)）** 或与 **\(D\)** 的联合扫描。  
+2. **系统改变规模变量**：至少覆盖 **IsoFLOPs（固定 $C$ 扫 $N$）** 或与 **$D$** 的联合扫描。  
 3. **记录验证损失**，在 **log-log** 检验近似直线；**线性回归** 估计指数，报告 **残差与置信区间**。  
 4. **多随机种子**；检查最优点稳定性。  
-5. **外推谨慎**：在更大 \(C\) 上 **留验证点**，观察是否 **断点**（数据瓶颈、技巧变更）。
+5. **外推谨慎**：在更大 $C$ 上 **留验证点**，观察是否 **断点**（数据瓶颈、技巧变更）。
 
 **加分句**：验证的是 **你当前数据与训练栈下** 的可拟合关系，不是「宇宙常数」。
 
 ### Q2：IsoFLOPs 曲线本身如何「拟合」？与幂律外推有何区别？
 
-**答**：**曲线本身**：对每个固定 **\(C\)**，得到 **\((N_i, L_i)\)**；最优点为 **\(\arg\min_i L_i\)**，即 **\(N^\*(C)\)**。若点密，可对 **\(L_i\)** 关于 **\(N\)** 做平滑插值（小数据慎用）。
+**答**：**曲线本身**：对每个固定 **$C$**，得到 **$(N_i, L_i)$**；最优点为 **$\arg\min_i L_i$**，即 **$N^{\ast}(C)$**。若点密，可对 **$L_i$** 关于 **$N$** 做平滑插值（小数据慎用）。
 
-**幂律外推**：对 **\(N^\*(C)\)** 或 **\(L^\*(C)\)** 在 log-log 域回归，例如 **\(\log N^\*(C) = p \log C + q\)**。**\(C \approx 6ND\)** 用于 **配平 token**；**拟合的是实测 \(L\)**。
+**幂律外推**：对 **$N^{\ast}(C)$** 或 **$L^{\ast}(C)$** 在 log-log 域回归，例如 **$\log N^{\ast}(C) = p \log C + q$**。**$C \approx 6ND$** 用于 **配平 token**；**拟合的是实测 $L$**。
 
 ### Q3：数据管道的完整流程（端到端）？
 
@@ -9987,7 +10191,7 @@ def keep(doc):
 
 ### Q4：如何评估数据质量对模型的影响？
 
-**答**：**控制变量**：同一 **\(N\)、\(D\)、训练超参**，只换 **数据版本**。
+**答**：**控制变量**：同一 **$N$、$D$、训练超参**，只换 **数据版本**。
 
 **指标**：预训练 **val loss**；代表性 **下游任务**；**毒性/安全**（若相关）；**记忆率/污染**（与去重联动）。
 
@@ -9995,7 +10199,7 @@ def keep(doc):
 
 ### Q5：Assignment 3 与 4 的关联？
 
-**答**：**A3** 研究 **算力在 \(N\) 与 \(D\) 间如何分配**；**A4** 决定 **\(D\) 的有效信息量**。
+**答**：**A3** 研究 **算力在 $N$ 与 $D$ 间如何分配**；**A4** 决定 **$D$ 的有效信息量**。
 
 更干净的数据可使 **同一条 IsoFLOPs 曲线整体下移**；不去重会让模型浪费容量记忆重复，**scaling 变差** 或需更多名义 token。
 
@@ -10005,7 +10209,7 @@ def keep(doc):
 
 ### Q7：如何处理 Common Crawl 的大规模数据？
 
-**答**：**分片并行 + 流式 + 近似**。按文件/hash 分片多进程；解析器 **迭代器化**；先 **单分片** 调通再扩容；去重用 **外存哈希 / LSH**，避免 **\(O(N^2)\)** 全对比较；持续记录 **丢弃原因计数**。
+**答**：**分片并行 + 流式 + 近似**。按文件/hash 分片多进程；解析器 **迭代器化**；先 **单分片** 调通再扩容；去重用 **外存哈希 / LSH**，避免 **$O(N^2)$** 全对比较；持续记录 **丢弃原因计数**。
 
 ### Q8：数据过滤阈值如何确定？
 
@@ -10017,15 +10221,15 @@ def keep(doc):
 
 ### Q10：Kaplan 与 Chinchilla 在实验方法上差在哪？
 
-**答**：**Kaplan** 系统展示 **\(L\)** 随 **\(N,D,C\)** 的幂律；**Chinchilla** 用 **IsoFLOPs** 强调 **固定总算力下的最优 \(N:D\)**，指出 **偏大模型+数据不足** 常 **欠训练**。A3 报告宜用 **IsoFLOPs** 语言对齐 Chinchilla。
+**答**：**Kaplan** 系统展示 **$L$** 随 **$N,D,C$** 的幂律；**Chinchilla** 用 **IsoFLOPs** 强调 **固定总算力下的最优 $N:D$**，指出 **偏大模型+数据不足** 常 **欠训练**。A3 报告宜用 **IsoFLOPs** 语言对齐 Chinchilla。
 
 ### Q11：如何用可视化证明「你真的做过 scaling」？
 
-**答**：展示：**每个 \(C\) 的 \(L\) vs \(N\)**（标最优点）；**\(N^\*(C)\)** 或 **\(L^\*(C)\)** 的 log-log 与残差；**训练曲线** 证明无灾难性欠训。
+**答**：展示：**每个 $C$ 的 $L$ vs $N$**（标最优点）；**$N^{\ast}(C)$** 或 **$L^{\ast}(C)$** 的 log-log 与残差；**训练曲线** 证明无灾难性欠训。
 
 ### Q12：MinHash 为何能估计 Jaccard？LSH 降低了什么复杂度？
 
-**答**：**MinHash** 性质：两集合的 **MinHash 签名相等概率** 等于 **Jaccard 相似度**（在标准构造下）；多置换取平均得无偏估计。**LSH** 把相似文档 **映射到同一桶** 的概率高，从而 **近邻搜索** 从近似 **\(O(N^2)\)** 降到 **\(O(N \cdot \text{每桶候选数})\)**，只需对 **候选对** 精算距离。
+**答**：**MinHash** 性质：两集合的 **MinHash 签名相等概率** 等于 **Jaccard 相似度**（在标准构造下）；多置换取平均得无偏估计。**LSH** 把相似文档 **映射到同一桶** 的概率高，从而 **近邻搜索** 从近似 **$O(N^2)$** 降到 **$O(N \cdot \text{每桶候选数})$**，只需对 **候选对** 精算距离。
 
 ### Q13：若过滤后 val loss 降 0.05，是否必然下游更好？
 
@@ -10035,7 +10239,7 @@ def keep(doc):
 
 # 练习（Practice）
 
-1. 给定 **\(C = 10^{22}\)**，用 **\(C \approx 6ND\)** 与 **\(D = 20N\)** 联立，估算 **\(N\)** 的量级（笔算推导）。  
+1. 给定 **$C = 10^{22}$**，用 **$C \approx 6ND$** 与 **$D = 20N$** 联立，估算 **$N$** 的量级（笔算推导）。  
 2. 设计一张表：列出 IsoFLOPs 实验的 **控制变量** 与 **必须记录的配置项**（至少 10 项）。  
 3. 为 Common Crawl 管道写 **10 条**「应丢弃」的启发式规则，并各写一条 **误伤场景**。  
 4. 解释 **MinHash** 估计 Jaccard 的直觉，以及 **bands/rows** 与 **假阳性/召回** 的权衡。  
@@ -10049,8 +10253,8 @@ def keep(doc):
 
 | 方向 | 文档 |
 |------|------|
-| **上一节** | [15-数据过滤与去重.md](./15-数据过滤与去重.md) |
-| **下一节** | [17-SFT有监督微调.md](./17-SFT有监督微调.md) |
+| **上一节** | [15-数据过滤与去重.md](../docs/15-%E6%95%B0%E6%8D%AE%E8%BF%87%E6%BB%A4%E4%B8%8E%E5%8E%BB%E9%87%8D.md) |
+| **下一节** | [17-SFT有监督微调.md](../docs/17-SFT%E6%9C%89%E7%9B%91%E7%9D%A3%E5%BE%AE%E8%B0%83.md) |
 
 **建议复习链**：Lesson 13（Scaling Laws 理论）→ Lesson 14（CC 管道）→ Lesson 15（过滤与 MinHash）→ **本节（A3–A4 实战整合）**。
 
@@ -10237,7 +10441,7 @@ Below is an instruction that describes a task, paired with an input that provide
 
 #### 仅对 Assistant 回复计算损失（Loss Masking）
 
-在 SFT 中，标准做法是：**仅对 assistant 回复（及多轮里模型应生成的部分）的 token 参与交叉熵**，对 system、user、以及模板中的固定前缀 token **mask 掉 loss**（常见实现：`labels` 在这些位置设为 `-100` 或等价 `ignore_index`）。
+在 response-only SFT 中，常见做法是：**仅对 assistant 回复中应生成的 token 计算交叉熵**，对 system、user、固定前缀和 padding 的标签设为 `-100`。这不是所有 SFT 的唯一目标；也有 full-sequence loss 配方，需要明确所用定义。
 
 **原因简述**：
 
@@ -10245,13 +10449,13 @@ Below is an instruction that describes a task, paired with an input that provide
 2. **梯度效率**：避免在用户措辞上过拟合，把容量用在「如何答」上。
 3. **与推理一致**：推理时模型只看到前文，不会「预测用户下一句」。
 
-**数学上**，若 \(m_t \in \{0,1\}\) 表示位置 \(t\) 是否参与监督，常写作：
+**数学上**，若 $m_t \in \{0,1\}$ 表示位置 $t$ 是否参与监督，常写作：
 
-\[
+$$
 \mathcal{L}_{\text{SFT}} = - \frac{1}{\sum_t m_t} \sum_{t} m_t \log p_\theta(x_t \mid x_{<t})
-\]
+$$
 
-实现上需注意：**多轮对话**中每一轮 assistant 段都要计入 loss；若使用工具调用等特殊格式，团队需统一规则（哪些 token 算模型责任）。
+实现上需明确监督所有 assistant 轮次还是仅最后一轮；工具调用、结束符等也要统一规则。移位后必须至少有一个有效标签，否则平均交叉熵可能为 NaN。
 
 #### Padding
 
@@ -10269,31 +10473,31 @@ Below is an instruction that describes a task, paired with an input that provide
 
 ### 1.7 参数高效微调：LoRA 与 QLoRA
 
-#### LoRA 数学：\(W = W_0 + BA\)，秩 \(r\) 与 \(\alpha\) 缩放
+#### LoRA 数学：低秩增量、秩 $r$ 与 $\alpha$ 缩放
 
-对某线性层原权重 \(W_0 \in \mathbb{R}^{d_{\text{out}} \times d_{\text{in}}}\)（实现中常等价讨论转置），LoRA **冻结** \(W_0\)，仅训练低秩增量：
+对某线性层原权重 $W_0 \in \mathbb{R}^{d_{\text{out}} \times d_{\text{in}}}$（实现中常等价讨论转置），LoRA **冻结** $W_0$，仅训练低秩增量：
 
-\[
-W = W_0 + \Delta W,\quad \Delta W = B A
-\]
+$$
+W = W_0 + \Delta W,\quad \Delta W = \frac{\alpha}{r} B A
+$$
 
-其中 \(B \in \mathbb{R}^{d_{\text{out}} \times r}\)，\(A \in \mathbb{R}^{r \times d_{\text{in}}}\)，**秩 \(r \ll \min(d_{\text{in}}, d_{\text{out}})\)**。
+其中 $B \in \mathbb{R}^{d_{\text{out}} \times r}$，$A \in \mathbb{R}^{r \times d_{\text{in}}}$，**秩 $r \ll \min(d_{\text{in}}, d_{\text{out}})$**。
 
-前向（以输入 \(x\) 为例，忽略 bias）：
+前向（以输入 $x$ 为例，忽略 bias）：
 
-\[
+$$
 y = W_0 x + \frac{\alpha}{r} \cdot B A x
-\]
+$$
 
-**\(\alpha\)** 为 LoRA 缩放超参（与 \(r\) 常一起调）：\(\alpha/r\) 使在改变 \(r\) 时保持**更新幅度的大致可比性**（不同框架命名可能为 `lora_alpha`，实现细节以所用库为准）。
+**$\alpha$** 为 LoRA 缩放超参（与 $r$ 常一起调）：$\alpha/r$ 使在改变 $r$ 时保持**更新幅度的大致可比性**（不同框架命名可能为 `lora_alpha`，实现细节以所用库为准）。
 
-**Rank \(r\)**：越大容量越大，可训练参数约 \(r(d_{\text{in}}+d_{\text{out}})\)；过大可能过拟合，常见 8、16、32、64。
+**Rank $r$**：越大容量越大，可训练参数约 $r(d_{\text{in}}+d_{\text{out}})$；过大可能过拟合，常见 8、16、32、64。
 
-**施加在哪些层**：常见对 **注意力层的 \(W_q, W_k, W_v, W_o\)**（及有时 FFN）加 LoRA；**全层 LoRA** 更强但更贵。面试可答：**先 attention，再视任务扩到 FFN**。
+**施加在哪些层**：常见对 **注意力层的 $W_q, W_k, W_v, W_o$**（及有时 FFN）加 LoRA；**全层 LoRA** 更强但更贵。面试可答：**先 attention，再视任务扩到 FFN**。
 
 #### 为什么 LoRA 往往有效：低秩与内在维度
 
-**直观解释**：大量经验表明，**特定任务上的有效权重更新**往往落在**低维子空间**内——即「微调需要的方向」不必填满整个高维权重矩阵。用 \(BA\) 低秩分解，用较少参数近似该子空间中的主要更新方向，从而**省显存、省存储、减轻灾难性遗忘**（相对全参而言）。
+**直观解释**：大量经验表明，**特定任务上的有效权重更新**往往落在**低维子空间**内——即「微调需要的方向」不必填满整个高维权重矩阵。用 $BA$ 低秩分解，用较少参数近似该子空间中的主要更新方向，从而**省显存、省存储、减轻灾难性遗忘**（相对全参而言）。
 
 **补充**：这与「**内在维度（intrinsic dimension）**」相关文献一致：许多下游适配可用远小于全参的自由度描述。**并非**声称所有能力都低秩，而是**任务相关的偏移**常可低秩近似。
 
@@ -10314,9 +10518,9 @@ y = W_0 x + \frac{\alpha}{r} \cdot B A x
 
 | 维度 | Full Fine-Tuning | LoRA | QLoRA |
 |------|------------------|------|-------|
-| **更新对象** | 全部权重 | 冻结 \(W_0\)，训 \(A,B\) | 同 LoRA，基座 4-bit |
+| **更新对象** | 全部权重 | 冻结 $W_0$，训 $A,B$ | 同 LoRA，基座 4-bit |
 | **显存 / 优化器** | 最高（全参 Adam 状态） | 较低 | **最低**（基座量化） |
-| **表达能力上限** | 最高 | 受 \(r\) 与层选择限制 | 同 LoRA（数值上受量化影响） |
+| **表达能力上限** | 最高 | 受 $r$ 与层选择限制 | 同 LoRA（数值上受量化影响） |
 | **Checkpoint** | 全量大文件 | 小适配器权重 | 小适配器 + 可选合并脚本 |
 | **灾难性遗忘** | 相对更易「改写」基座 | 通常较轻 | 通常较轻 |
 | **典型场景** | 数据足、需深度改基座 | 默认 PEFT、多任务多适配器 | **单卡大模型**、资源紧 |
@@ -10357,20 +10561,20 @@ SFT 质量**不能**只看训练 loss，需**多维基准**（与业务任务对
 
 ### 1.11 CS336 Assignment 5 中的 SFT 组件
 
-Stanford **CS336 Assignment 5（Alignment）** 在课程叙事中把 **SFT、RL（如 GRPO）、可选 DPO** 串成对齐链路。就 **SFT 子任务** 而言，与 [Lesson 19：Assignment 5 对齐实战](./19-Assignment5对齐实战.md) 一致，通常包括：
+Stanford **CS336 Assignment 5（Alignment）** 在课程叙事中把 **SFT、RL（如 GRPO）、可选 DPO** 串成对齐链路。就 **SFT 子任务** 而言，与 [Lesson 19：Assignment 5 对齐实战](../docs/19-Assignment5%E5%AF%B9%E9%BD%90%E5%AE%9E%E6%88%98.md) 一致，通常包括：
 
 1. **数据**：数学推理等场景下的 **instruction–response**（常含 **思维链 CoT** 与可解析答案格式，如 `\boxed{}`）。
 2. **损失**：标准 **Causal LM 交叉熵**，**仅对 assistant 完成部分** 累计；`labels` 在 user/system/padding 处 **ignore**。
 3. **训练**：学习率、epoch、精度（BF16 等）、梯度裁剪；可选 **LoRA/QLoRA** 以降低资源占用。
-4. **接口**：SFT 产出的 checkpoint 常作为 **RL 阶段的初始策略** 与 **冻结的 reference 模型** \(\pi_{\text{ref}}\)，用于 **KL 惩罚** 或优势基线。
+4. **接口**：SFT checkpoint 可作为 RL 初始策略；若启用 KL 正则，可另冻结为 reference。reference 用于 KL，不是 critic/value baseline；是否需要 reference 取决于作业版本和损失定义。
 
 **公式对齐**（与 Assignment 5 文档一致）：
 
-\[
+$$
 \mathcal{L}_{\text{SFT}} = - \frac{1}{\sum_t m_t} \sum_{t} m_t \log p_\theta(x_t \mid x_{<t})
-\]
+$$
 
-其中 \(m_t\) 仅在 **模型应生成的 token** 上为 1。具体文件名与测试以**当年官方仓库**为准。
+其中 $m_t$ 仅在 **模型应生成的 token** 上为 1。具体文件名与测试以**当年官方仓库**为准。
 
 ---
 
@@ -10383,7 +10587,7 @@ Stanford **CS336 Assignment 5（Alignment）** 在课程叙事中把 **SFT、RL�
 ```python
 from transformers import AutoTokenizer
 
-tokenizer = AutoTokenizer.from_pretrained("your-model-name", trust_remote_code=True)
+tokenizer = AutoTokenizer.from_pretrained("your-model-name")
 
 messages = [
     {"role": "system", "content": "你是一个有帮助的助手。"},
@@ -10395,17 +10599,19 @@ encoded = tokenizer.apply_chat_template(
     messages,
     tokenize=True,
     return_dict=True,
-    return_assistant_tokens_mask=True,  # 若 tokenizer 支持
+    return_assistant_tokens_mask=True,  # 模板必须包含 {% generation %} 区间
 )
 
 input_ids = encoded["input_ids"]
-labels = [
-    tid if m else -100
-    for tid, m in zip(input_ids, encoded.get("assistant_tokens_mask", [False] * len(input_ids)))
-]
+assistant_mask = encoded.get("assistant_masks")
+if assistant_mask is None or len(assistant_mask) != len(input_ids):
+    raise ValueError("模板未返回有效 assistant_masks")
+labels = [tid if m else -100 for tid, m in zip(input_ids, assistant_mask)]
+if not any(tid != -100 for tid in labels[1:]):
+    raise ValueError("没有可监督的 assistant token，请检查模板/截断")
 ```
 
-若 `assistant_tokens_mask` 不可用，则需**手动**根据模板中 assistant 起始 special token 位置切分并构造 mask。
+参数名是 `return_assistant_tokens_mask`，返回字段是 **`assistant_masks`**，且模板需支持 `{% generation %}`。不要用全 False 默认值掩盖不支持的模板。应逐 token 验证边界与结束符；不支持时可用下节的单轮前缀法，或实现经测试的多轮区间解析。参见 [Transformers 模板 API](https://huggingface.co/docs/transformers/main_classes/tokenizer#transformers.PreTrainedTokenizerBase.apply_chat_template)。
 
 ### 2.2 只对 response 求交叉熵（PyTorch）
 
@@ -10417,6 +10623,8 @@ def masked_ce_loss(logits, labels, ignore_index=-100):
     # logits: (B, T, V), labels: (B, T)
     shift_logits = logits[..., :-1, :].contiguous()
     shift_labels = labels[..., 1:].contiguous()
+    if not (shift_labels != ignore_index).any():
+        raise ValueError("no supervised tokens after causal shift")
     return F.cross_entropy(
         shift_logits.view(-1, shift_logits.size(-1)),
         shift_labels.view(-1),
@@ -10433,8 +10641,13 @@ import torch.nn as nn
 import torch
 
 class LoRALinear(nn.Module):
-    def __init__(self, in_features, out_features, rank=8, alpha=16):
+    def __init__(self, base_linear, rank=8, alpha=16):
         super().__init__()
+        if rank < 1:
+            raise ValueError("rank must be positive")
+        self.base = base_linear
+        self.base.requires_grad_(False)
+        in_features, out_features = base_linear.in_features, base_linear.out_features
         self.r = rank
         self.alpha = alpha
         self.scaling = alpha / rank
@@ -10442,9 +10655,11 @@ class LoRALinear(nn.Module):
         self.lora_b = nn.Linear(rank, out_features, bias=False)
         nn.init.kaiming_uniform_(self.lora_a.weight, a=5**0.5)
         nn.init.zeros_(self.lora_b.weight)
+        self.lora_a.to(device=base_linear.weight.device, dtype=base_linear.weight.dtype)
+        self.lora_b.to(device=base_linear.weight.device, dtype=base_linear.weight.dtype)
 
-    def forward(self, x, base_linear):
-        return base_linear(x) + self.scaling * self.lora_b(self.lora_a(x))
+    def forward(self, x):
+        return self.base(x) + self.scaling * self.lora_b(self.lora_a(x))
 ```
 
 生产环境应使用 **`peft`** 或框架内置 LoRA，以正确处理保存、合并与推理。
@@ -10467,14 +10682,14 @@ from peft import LoraConfig, get_peft_model, TaskType
 
 MODEL_ID = "meta-llama/Llama-3.2-1B-Instruct"  # 示例；按权限与显存替换
 
-tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
 tokenizer.pad_token = tokenizer.pad_token or tokenizer.eos_token
+tokenizer.padding_side = "right"
+use_bf16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
 
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
-    torch_dtype=torch.bfloat16,
-    device_map="auto",
-    trust_remote_code=True,
+    torch_dtype=torch.bfloat16 if use_bf16 else torch.float32,
 )
 
 peft_config = LoraConfig(
@@ -10497,17 +10712,25 @@ raw = [
 ]
 
 def preprocess(example):
-    text = tokenizer.apply_chat_template(
-        example["messages"],
-        tokenize=False,
-        add_generation_prompt=False,
+    messages = example["messages"]
+    # 单轮示例：可含 system，但只允许最后一条是 assistant
+    if messages[-1]["role"] != "assistant" or any(
+        m["role"] == "assistant" for m in messages[:-1]
+    ):
+        raise ValueError("此示例只支持单个最终 assistant 回答")
+    prefix = tokenizer.apply_chat_template(
+        messages[:-1], tokenize=True, return_dict=False, add_generation_prompt=True,
     )
-    enc = tokenizer(text, max_length=512, truncation=True)
+    enc = tokenizer.apply_chat_template(
+        messages, tokenize=True, return_dict=True, add_generation_prompt=False,
+    )
+    if enc["input_ids"][:len(prefix)] != prefix:
+        raise ValueError("模板前缀不一致，应改用经过验证的 assistant 区间 mask")
+    enc = {k: v[:512] for k, v in enc.items()}
     input_ids = enc["input_ids"]
-    # 简化：若 tokenizer 支持 assistant mask，应在此填 labels；否则用手动区间
-    labels = input_ids.copy()
-    # 占位：真实项目必须用 assistant_tokens_mask 或定位 assistant 起止
-    enc["labels"] = labels
+    if len(prefix) >= len(input_ids):
+        raise ValueError("截断删除了全部回答 token")
+    enc["labels"] = [-100] * len(prefix) + input_ids[len(prefix):]
     return enc
 
 ds = Dataset.from_list(raw)
@@ -10519,7 +10742,7 @@ args = TrainingArguments(
     gradient_accumulation_steps=8,
     num_train_epochs=1,
     learning_rate=2e-4,  # LoRA 常用略高于全参 SFT；全参常 1e-5~5e-5
-    bf16=True,
+    bf16=use_bf16,
     logging_steps=10,
     save_steps=200,
     report_to=[],
@@ -10539,7 +10762,8 @@ tokenizer.save_pretrained("./sft-lora-adapter")
 
 **说明**：
 
-- **`labels` 构造**：上例为骨架；**生产级**必须用 `return_assistant_tokens_mask=True` 或解析模板，将非 assistant 位置置 `-100`。
+- **`labels` 构造**：上例用经前缀一致性检查的单轮 response-only mask，不支持多轮。直接由模板 tokenize，避免重复添加 BOS/EOS。padding 按位置设为 `-100`，不能因 pad id 等于 EOS 就把真实回答的结束符一并屏蔽。
+- **设备**：由 Trainer 管理训练设备，不使用面向大模型推理的 `device_map="auto"`。示例模型可能需要访问许可；完整训练仍需足够资源。
 - **QLoRA**：将 `from_pretrained` 换为 `BitsAndBytesConfig` 加载 4-bit，其余 LoRA 类似（见 `peft` 与 `bitsandbytes` 文档）。
 - **学习率**：LoRA 有时用 `1e-4`～`3e-4`；**全参 SFT** 更保守；以验证集为准。
 
@@ -10553,7 +10777,7 @@ tokenizer.save_pretrained("./sft-lora-adapter")
 4. **Loss**：**只对 assistant 生成段**做 NTP；system/user/pad **mask**。
 5. **Padding / Packing**：pad 不参与 loss；packing 需防跨样本注意力与错误 position。
 6. **数据**：人工 + Self-Instruct + Evol-Instruct + 蒸馏；**质量、多样性、一致性**。
-7. **LoRA**：\(W=W_0+BA\)，\(\alpha/r\) 缩放，\(r\) 控容量；**低秩有效**与任务子空间直觉。
+7. **LoRA**：$W=W_0+(\alpha/r)BA$，$r$ 控容量；冻结基座，只训练适配器。
 8. **QLoRA**：4-bit 基座 + LoRA 适配器，**省显存**。
 9. **遗忘**：混合数据、小 LR、少 epoch、PEFT、KL、回放。
 10. **评测**：**MMLU**（知识）、**HumanEval**（代码）、**MT-Bench**（多轮对话）+ 人工。
@@ -10582,15 +10806,15 @@ tokenizer.save_pretrained("./sft-lora-adapter")
 
 ---
 
-### Q4：LoRA 的公式是什么？\(\alpha\) 和 \(r\) 起什么作用？
+### Q4：LoRA 的公式是什么？$\alpha$ 和 $r$ 起什么作用？
 
-**答**：\(\Delta W = BA\)，\(B\in\mathbb{R}^{d_{\text{out}}\times r}\)，\(A\in\mathbb{R}^{r\times d_{\text{in}}}\)，前向常写 \(y = W_0 x + \frac{\alpha}{r} BAx\)。**\(r\)** 控制秩与容量；**\(\alpha\)** 与 **\(\alpha/r\)** 调节 LoRA 分支幅度，便于在改变 \(r\) 时保持尺度可比。实际常用 **PEFT** 实现，超参需在小验证集上扫。
+**答**：$\Delta W = BA$，$B\in\mathbb{R}^{d_{\text{out}}\times r}$，$A\in\mathbb{R}^{r\times d_{\text{in}}}$，前向常写 $y = W_0 x + \frac{\alpha}{r} BAx$。**$r$** 控制秩与容量；**$\alpha$** 与 **$\alpha/r$** 调节 LoRA 分支幅度，便于在改变 $r$ 时保持尺度可比。实际常用 **PEFT** 实现，超参需在小验证集上扫。
 
 ---
 
 ### Q5：为什么说权重更新具有低秩性？LoRA 为什么有效？
 
-**答**：经验与「内在维度」研究表明，许多**任务特定微调**的有效更新可集中在**低维子空间**，不必填满整个权重矩阵。LoRA 用 \(BA\) **参数化该子空间中的主要方向**，从而**大幅减少可训练参数与显存**，并常减轻对基座的全局改写。**注意**：不是断言所有现象都低秩，而是**适配偏移**常可低秩近似。
+**答**：经验与「内在维度」研究表明，许多**任务特定微调**的有效更新可集中在**低维子空间**，不必填满整个权重矩阵。LoRA 用 $BA$ **参数化该子空间中的主要方向**，从而**大幅减少可训练参数与显存**，并常减轻对基座的全局改写。**注意**：不是断言所有现象都低秩，而是**适配偏移**常可低秩近似。
 
 ---
 
@@ -10651,7 +10875,7 @@ tokenizer.save_pretrained("./sft-lora-adapter")
 5. **遗忘粗测**：SFT 前后在同一 **通用知识问答集**上评测；尝试混入 10% 通用指令数据是否缓解掉点。
 6. **评测脚本**：各跑一次 **MMLU 子集 / HumanEval / MT-Bench**（或官方子集），记录 SFT 前后变化（资源不足可缩小规模并注明）。
 7. **阅读**：LIMA、Self-Instruct、Evol-Instruct 的摘要各一页，写出各自**适用边界**。
-8. **（CS336）**：阅读 [Assignment 5 对齐实战](./19-Assignment5对齐实战.md)，标出 SFT 阶段张量形状与 **reference model** 在 GRPO/DPO 中的用法。
+8. **（CS336）**：阅读 [Assignment 5 对齐实战](../docs/19-Assignment5%E5%AF%B9%E9%BD%90%E5%AE%9E%E6%88%98.md)，标出 SFT 阶段张量形状与 **reference model** 在 GRPO/DPO 中的用法。
 
 ---
 
@@ -10659,7 +10883,7 @@ tokenizer.save_pretrained("./sft-lora-adapter")
 
 | 上一课 | 下一课 |
 |--------|--------|
-| [16-Assignment3-4实战指南.md](./16-Assignment3-4实战指南.md) | [18-RLHF-DPO-GRPO对齐技术.md](./18-RLHF-DPO-GRPO对齐技术.md) |
+| [16-Assignment3-4实战指南.md](../docs/16-Assignment3-4%E5%AE%9E%E6%88%98%E6%8C%87%E5%8D%97.md) | [18-RLHF-DPO-GRPO对齐技术.md](../docs/18-RLHF-DPO-GRPO%E5%AF%B9%E9%BD%90%E6%8A%80%E6%9C%AF.md) |
 
 ---
 
@@ -10692,7 +10916,7 @@ tokenizer.save_pretrained("./sft-lora-adapter")
 
 这三项合称 **HHH**。**对齐（alignment）** 的目标，是把模型行为从「像互联网语料」拉向 **更符合人类价值观与使用规范**。常见技术路径包括：
 
-- **SFT**：用示范数据教会指令遵循与对话格式（见 [Lesson 17](./17-SFT有监督微调.md)）。
+- **SFT**：用示范数据教会指令遵循与对话格式（见 [Lesson 17](../docs/17-SFT%E6%9C%89%E7%9B%91%E7%9D%A3%E5%BE%AE%E8%B0%83.md)）。
 - **偏好学习**：RLHF、DPO、迭代偏好优化等，用排序或成对比较细调行为。
 - **规则 / 宪法**：Constitutional AI 等，用原则约束自评与改写。
 - **可验证奖励 RL（RLVR）**：数学、代码等任务上用 **执行结果** 作奖励，常与 GRPO 类组采样结合。
@@ -10707,9 +10931,9 @@ tokenizer.save_pretrained("./sft-lora-adapter")
 
 | 步骤 | 名称 | 作用 |
 |------|------|------|
-| **1** | **SFT 模型作起点** | 用高质量指令–回答数据微调基座，得到「会听话、会对话格式」的初始策略；该 checkpoint 常同时作为后续 RL 的 **初始策略** 与 **参考模型 \(\pi_{\mathrm{ref}}\)** 的来源（参考模型多 **冻结** 或极慢更新） |
-| **2** | **奖励模型（RM）训练** | 收集人类偏好数据 \((x, y_w, y_l)\)，用 **Bradley–Terry（BT）** 等配对模型学习标量 \(r_\phi(x,y)\)，近似人类排序 |
-| **3** | **PPO 等策略优化** | 以 RM 为奖励信号优化 \(\pi_\theta\)，并加 **KL 到 \(\pi_{\mathrm{ref}}\)**，在「刷分」与「别偏离 SFT 太远」之间折中 |
+| **1** | **SFT 模型作起点** | 用高质量指令–回答数据微调基座，得到「会听话、会对话格式」的初始策略；该 checkpoint 常同时作为后续 RL 的 **初始策略** 与 **参考模型 $\pi_{\mathrm{ref}}$** 的来源（参考模型多 **冻结** 或极慢更新） |
+| **2** | **奖励模型（RM）训练** | 收集人类偏好数据 $(x, y_w, y_l)$，用 **Bradley–Terry（BT）** 等配对模型学习标量 $r_\phi(x,y)$，近似人类排序 |
+| **3** | **PPO 等策略优化** | 以 RM 为奖励信号优化 $\pi_\theta$，并加 **KL 到 $\pi_{\mathrm{ref}}$**，在「刷分」与「别偏离 SFT 太远」之间折中 |
 
 直觉：**SFT** 教格式与基本服从；**RM** 定义「什么叫更好」；**RL** 把「更好」变成可优化目标。
 
@@ -10717,10 +10941,10 @@ tokenizer.save_pretrained("./sft-lora-adapter")
 
 ### 1.3 步骤 1：SFT 模型作为起点
 
-给定上下文 \(x\)（单轮指令或多轮对话），策略 \(\pi_\theta(y\mid x)\) 在 SFT 阶段通过 **负对数似然**（常对 assistant 段 mask 后计算）模仿示范。完成后得到 **SFT 模型**：
+给定上下文 $x$（单轮指令或多轮对话），策略 $\pi_\theta(y\mid x)$ 在 SFT 阶段通过 **负对数似然**（常对 assistant 段 mask 后计算）模仿示范。完成后得到 **SFT 模型**：
 
 - 作为 **PPO 的初始策略**，避免从随机策略冷启动；
-- 初始化或拷贝出 **\(\pi_{\mathrm{ref}}\)**，用于后续 KL 惩罚，锚定「可接受行为」邻域。
+- 初始化或拷贝出 **$\pi_{\mathrm{ref}}$**，用于后续 KL 惩罚，锚定「可接受行为」邻域。
 
 **面试要点**：SFT 无法区分「两个都不错但人类更喜欢 A」这类细粒度偏好，因此需要偏好数据 + RM 或 DPO 类直接偏好目标。
 
@@ -10730,17 +10954,17 @@ tokenizer.save_pretrained("./sft-lora-adapter")
 
 #### 偏好数据形态
 
-典型为 **\((x, y_w, y_l)\)**：同一 prompt \(x\) 下，**chosen** \(y_w\) 与 **rejected** \(y_l\)。来源可包括：人类并排标注、排序多条候选、或 **AI 反馈（RLAIF）** 生成的合成偏好对。
+典型为 **$(x, y_w, y_l)$**：同一 prompt $x$ 下，**chosen** $y_w$ 与 **rejected** $y_l$。来源可包括：人类并排标注、排序多条候选、或 **AI 反馈（RLAIF）** 生成的合成偏好对。
 
 #### Bradley–Terry 模型
 
-将「\(y_w\) 优于 \(y_l\)」的概率写成与 **隐式效用差** 相关的 logistic 形式。若用可学习标量奖励 \(r_\phi(x,y)\) 近似人类效用，常见写法为：
+将「$y_w$ 优于 $y_l$」的概率写成与 **隐式效用差** 相关的 logistic 形式。若用可学习标量奖励 $r_\phi(x,y)$ 近似人类效用，常见写法为：
 
-\[
+$$
 P(y_w \succ y_l \mid x) = \sigma\big(r_\phi(x,y_w) - r_\phi(x,y_l)\big)
-\]
+$$
 
-训练时最大化该模型下的对数似然，等价于让 **chosen 的奖励高于 rejected**。RM 常为与策略同族的 **Transformer**：输入 \((x,y)\) 拼接，取末 token 隐状态经线性层输出 **标量奖励**。
+训练时最大化该模型下的对数似然，等价于让 **chosen 的奖励高于 rejected**。RM 常为与策略同族的 **Transformer**：输入 $(x,y)$ 拼接，取末 token 隐状态经线性层输出 **标量奖励**。
 
 **工程注意**：RM 易出现 **长度偏置**（更长回答分更高）；需长度归一、截断或数据构造控制；奖励 **数值尺度** 需与后续 PPO 的超参（如 advantage 归一化）匹配。
 
@@ -10750,26 +10974,26 @@ P(y_w \succ y_l \mid x) = \sigma\big(r_\phi(x,y_w) - r_\phi(x,y_l)\big)
 
 #### PPO 在 LM 中的角色
 
-将文本生成视为序列决策：每步选 token；**RM** 常在 **完整回答** 后给出终端奖励（可叠加逐步 KL 惩罚）。**价值网络 \(V_\psi\)** 估计从某前缀出发的期望回报，用于 **GAE** 等 **优势函数** \(A_t\)，降低策略梯度方差。
+将文本生成视为序列决策：每步选 token；**RM** 常在 **完整回答** 后给出终端奖励（可叠加逐步 KL 惩罚）。**价值网络 $V_\psi$** 估计从某前缀出发的期望回报，用于 **GAE** 等 **优势函数** $A_t$，降低策略梯度方差。
 
 #### 裁剪目标（Clipped Surrogate）
 
-用重要性比 \(r_t(\theta)=\frac{\pi_\theta(a_t\mid s_t)}{\pi_{\mathrm{old}}(a_t\mid s_t)}\) 利用旧策略样本更新，并对目标 **clip**，限制单次更新幅度：
+用重要性比 $r_t(\theta)=\frac{\pi_\theta(a_t\mid s_t)}{\pi_{\mathrm{old}}(a_t\mid s_t)}$ 利用旧策略样本更新，并对目标 **clip**，限制单次更新幅度：
 
-\[
+$$
 L^{\mathrm{CLIP}}(\theta)=\mathbb{E}_t\left[\min\left(r_t(\theta)A_t,\ \mathrm{clip}(r_t(\theta),1-\epsilon,1+\epsilon)A_t\right)\right]
-\]
+$$
 
 直觉：**别把策略一步改太狠**，否则分布剧变、训练易崩。
 
 #### KL 惩罚：贴近 SFT 参考模型
 
-目标中常加入 **\(\beta\,\mathrm{KL}(\pi_\theta\,\|\,\pi_{\mathrm{ref}})\)**（或等价约束），使优化后的策略 **不要偏离 SFT 参考太远**：
+目标中常加入 **$\beta\,\mathrm{KL}(\pi_\theta\,\|\,\pi_{\mathrm{ref}})$**（或等价约束），使优化后的策略 **不要偏离 SFT 参考太远**：
 
 - RM 只是人类偏好的 **近似**，在未见区域可能被 **过度优化**；
 - 无 KL 时，策略可能找到 **RM 盲点**（reward hacking），对人类很糟但对 RM 分高。
 
-KL 起到 **信任域**：在参考模型附近的「安全邻域」内提升期望奖励。
+KL 是相对参考模型的**正则项**，不同于 PPO 对旧策略的局部更新控制；它不保证处于“安全邻域”，也不能保证消除 reward hacking。
 
 #### PPO + RLHF 的典型挑战
 
@@ -10777,7 +11001,7 @@ KL 起到 **信任域**：在参考模型附近的「安全邻域」内提升期
 |------|------|
 | **训练不稳定** | 奖励尺度、优势归一化、学习率、clip 系数、熵 bonus 需联合调节；策略与价值网络估计滞后于分布漂移 |
 | **Reward hacking** | 模型利用 RM 漏洞刷分（冗长、固定讨好句式、格式技巧），与人类真实偏好背离 |
-| **算力与显存：四模型** | 经典实现需同时维护 **(1) 策略 \(\pi_\theta\)**、**(2) 旧策略 / rollout 缓存用于 ratio**、**(3) 参考模型 \(\pi_{\mathrm{ref}}\)**、**(4) 奖励模型 \(r_\phi\)**；若使用 **价值网络**，则再加 **critic**。业界常说「四个大模型」量级开销，指 **多路前向** 与优化器状态叠加，对显存与吞吐压力极大 |
+| **算力与显存：四模型** | 通常指 **policy、reference、reward model、critic/value model**。旧策略一般缓存 rollout 时的 token log-prob，不一定额外保留第五份完整模型；critic 也可能共享 policy 主干。多路前向与优化器状态增加显存/算力开销 |
 
 ---
 
@@ -10789,20 +11013,20 @@ KL 起到 **信任域**：在参考模型附近的「安全邻域」内提升期
 
 #### DPO 损失（交叉熵形式在偏好对上）
 
-设 \(\sigma\) 为 logistic，\(\beta>0\) 控制偏离参考模型的强度。DPO 常写为：
+设 $\sigma$ 为 logistic，$\beta>0$ 控制偏离参考模型的强度。DPO 常写为：
 
-\[
+$$
 \mathcal{L}_{\mathrm{DPO}}(\theta) = -\mathbb{E}_{(x,y_w,y_l)}\left[\log \sigma\left(\beta\left(
 \log\frac{\pi_\theta(y_w\mid x)}{\pi_{\mathrm{ref}}(y_w\mid x)}
 -\log\frac{\pi_\theta(y_l\mid x)}{\pi_{\mathrm{ref}}(y_l\mid x)}
 \right)\right)\right]
-\]
+$$
 
 **直觉分项**：
 
-- \(\log \pi_\theta(y_w\mid x) - \log \pi_\theta(y_l\mid x)\)：提高 chosen、压低 rejected 的似然；
-- 减去 \(\log \pi_{\mathrm{ref}}\)：**相对参考模型归一化**，避免把两边概率一起抬高；
-- \(\beta\)：越大越强调偏好对比，过大可能不稳定或损害通用行为。
+- $\log \pi_\theta(y_w\mid x) - \log \pi_\theta(y_l\mid x)$：提高 chosen、压低 rejected 的似然；
+- 减去 $\log \pi_{\mathrm{ref}}$：比较**相对参考模型**的 chosen/rejected log-ratio 差；目标不保证 chosen 的绝对概率一定上升。
+- $\beta$：来自 $\mathbb{E}[r]-\beta\,\mathrm{KL}(\pi\|\pi_{\mathrm{ref}})$ 的 KL 系数。固定奖励下，最优策略满足 $\pi^*(y|x)\propto\pi_{\mathrm{ref}}(y|x)\exp(r(x,y)/\beta)$，较大 $\beta$ 对应更强参考约束；它也缩放偏好损失的 logit/梯度，有限步训练效果并非单调，需实测。参见 [DPO 原论文](https://arxiv.org/html/2305.18290v2)。
 
 从形式上看，这是对 **偏好对** 的 **负对数似然（交叉熵）** 风格目标，实现上类似监督学习，**稳定且简单**。
 
@@ -10839,13 +11063,14 @@ KL 起到 **信任域**：在参考模型附近的「安全邻域」内提升期
 
 #### 不需要（或弱化）Critic / Value Model
 
-经典 PPO 用 \(V_\psi(s)\) 作 baseline 降方差。GRPO 对同一 \(x\) 采样 \(G\) 个回答 \(\{y^{(i)}\}_{i=1}^G\)，得奖励 \(R_i\)，用 **组内均值** 构造优势，例如：
+经典 PPO 常用 $V_\psi(s)$ 作 baseline。原版 GRPO 对同一 $x$ 采样 $G$ 个回答，按组内均值和标准差构造优势：
 
-\[
-A_i = R_i - \frac{1}{G}\sum_{j=1}^G R_j
-\]
+$$
+A_i = \frac{R_i-\bar R}{s_R+\varepsilon},\quad
+\bar R=\frac{1}{G}\sum_jR_j,\quad s_R^2=\frac{1}{G}\sum_j(R_j-\bar R)^2
+$$
 
-再代入策略梯度或 **PPO-style clip** 更新。这样用 **统计基线** 替代 **对所有状态学习一个全局 value**，在 **终端稀疏奖励**、**可验证结果** 场景尤其自然。
+再使用 token 级 PPO-style clip。组统计替代独立 critic，省掉价值网络，但增加多样本生成成本。仅去均值、不除标准差是 Dr. GRPO 等变体/课程消融的选择，应区分定义。GRPO 也可使用学得的奖励模型；规则奖励并不是其定义条件。参见 [DeepSeekMath 原论文](https://arxiv.org/html/2402.03300v3)。
 
 #### 规则奖励与可验证任务
 
@@ -10858,7 +11083,7 @@ A_i = R_i - \frac{1}{G}\sum_{j=1}^G R_j
 
 | 维度 | 经典 PPO（RLHF） | GRPO |
 |------|------------------|------|
-| Baseline | 学习的 \(V_\psi\) 为主 | 组内均值等 **相对基线** |
+| Baseline | 学习的 $V_\psi$ 为主 | 组内均值等 **相对基线** |
 | 奖励 | 常为学得 RM | 常为 **可验证 / 规则** |
 | 采样 | rollout | **同 prompt 组采样** |
 | 适用 | 开放域偏好 | 数学、代码等 **对错清晰** 任务 |
@@ -10892,7 +11117,7 @@ Stanford **CS336 Assignment 5（Alignment）** 在常见大纲中把抽象对齐
 2. **GRPO 子模块**：在 **可验证奖励**（如判题、执行结果）下做 **组内相对优势** 优化，体会 **无需单独 value model** 的 RL 形态，与经典 **PPO+RM** 对照。
 3. **可选 DPO 子模块**：用 **安全相关偏好对** 做 **直接偏好优化**，理解 **隐式奖励** 与 **KL 隐含在 log-ratio** 中的实现细节。
 
-**作业层面一句话**：在指令跟随基座上，用 **GRPO + 规则奖励** 强化推理；可选 **DPO** 做安全偏好对齐。具体函数名与检查点以 **当年官方仓库 / PDF** 为准；动手路线见 [Lesson 19](./19-Assignment5对齐实战.md)。
+**作业层面一句话**：在指令跟随基座上，用 **GRPO + 规则奖励** 强化推理；可选 **DPO** 做安全偏好对齐。具体函数名与检查点以 **当年官方仓库 / PDF** 为准；动手路线见 [Lesson 19](../docs/19-Assignment5%E5%AF%B9%E9%BD%90%E5%AE%9E%E6%88%98.md)。
 
 ---
 
@@ -10924,12 +11149,19 @@ def clipped_surrogate_ratio(ratio, advantage, eps=0.2):
     clipped = torch.clamp(ratio, 1 - eps, 1 + eps) * advantage
     return torch.minimum(unclipped, clipped).mean()
 
-def kl_penalty_per_sequence(logp_theta, logp_ref):
-    # 常对有效 token 求和或按长度归一，再与 beta 相乘并入总目标
-    return (logp_theta - logp_ref).sum(dim=-1).mean()
+def kl_penalty_per_sequence(logits_theta, logits_ref, response_mask):
+    # (B,T,V)，mask: (B,T)。在给定历史上精确计算分类分布的 forward KL。
+    logp = F.log_softmax(logits_theta.float(), dim=-1)
+    with torch.no_grad():
+        logq = F.log_softmax(logits_ref.float(), dim=-1)
+    token_kl = (logp.exp() * (logp - logq)).sum(dim=-1)
+    counts = response_mask.sum(dim=-1)
+    if (counts == 0).any():
+        raise ValueError("empty response")
+    return ((token_kl * response_mask).sum(dim=-1) / counts).mean()
 ```
 
-**要点**：语言模型需正确处理 **因果 logits**、**旧策略采样**、**GAE** 与 **KL 估计器**；显存上需规划 **policy / ref / RM / (value)** 多路前向。
+**要点**：上例 KL 遍历整个词表，需对齐因果位置和 response mask，成本较高。仅采样 token 的 `logp-logq` 不是逐 token 非负 KL；在新策略采样下其期望才等于相应 KL，旧策略数据还需处理 off-policy 偏差。clip 是目标裁剪，不是 ratio 的硬约束。
 
 ### 2.3 DPO：直接偏好损失
 
@@ -10941,26 +11173,30 @@ def dpo_loss(pi_theta, pi_ref, x, y_w, y_l, beta: float):
 
     logp_w_theta = seq_logprob(pi_theta, x, y_w)
     logp_l_theta = seq_logprob(pi_theta, x, y_l)
-    logp_w_ref = seq_logprob(pi_ref, x, y_w)
-    logp_l_ref = seq_logprob(pi_ref, x, y_l)
+    with torch.no_grad():
+        logp_w_ref = seq_logprob(pi_ref, x, y_w)
+        logp_l_ref = seq_logprob(pi_ref, x, y_l)
 
     inside = beta * ((logp_w_theta - logp_w_ref) - (logp_l_theta - logp_l_ref))
     return -F.logsigmoid(inside).mean()
 ```
 
-**要点**：\(\pi_{\mathrm{ref}}\) 通常 **冻结**；\(\pi_\theta\) 由参考初始化；\(\beta\) 与 batch 构造影响极大。
+**要点**：$\pi_{\mathrm{ref}}$ 通常 **冻结**；$\pi_\theta$ 由参考初始化；$\beta$ 与 batch 构造影响极大。
 
 ### 2.4 GRPO：组内相对优势
 
 ```python
-def group_relative_advantages(rewards_group: torch.Tensor) -> torch.Tensor:
+def group_relative_advantages(rewards_group: torch.Tensor, eps=1e-5) -> torch.Tensor:
     """rewards_group: (G,) 同一 prompt 的 G 条轨迹标量奖励"""
-    return rewards_group - rewards_group.mean()
+    if rewards_group.numel() < 2:
+        raise ValueError("group needs at least two responses")
+    rewards = rewards_group.float()
+    return (rewards - rewards.mean()) / (rewards.std(unbiased=False) + eps)
 
 # 后续将 advantages 接入策略梯度或 PPO-style clip（依课程实现而定）
 ```
 
-**要点**：\(G\) 增大可降低方差但增加采样算力；奖励需在同一评判标准下可比。
+**要点**：$G$ 增大可降低方差但增加采样算力；奖励需在同一评判标准下可比。
 
 ---
 
@@ -10968,9 +11204,9 @@ def group_relative_advantages(rewards_group: torch.Tensor) -> torch.Tensor:
 
 ### 3.1 一句话速记
 
-- **RLHF**：SFT → RM（BT pairwise）→ PPO + KL 锚定 \(\pi_{\mathrm{ref}}\)。
-- **RM**：学 \(r_\phi(x,y_w) > r_\phi(x,y_l)\)；推理时标量奖励驱动 RL。
-- **PPO**：clip 限步长；KL 抑制偏离与 reward hacking；**多模型前向** 推高算力与显存。
+- **RLHF**：SFT → RM（BT pairwise）→ PPO + KL 锚定 $\pi_{\mathrm{ref}}$。
+- **RM**：学 $r_\phi(x,y_w) > r_\phi(x,y_l)$；推理时标量奖励驱动 RL。
+- **PPO**：clip 限制目标中的改进激励，不保证步长/ratio 硬界；KL 正则可缓解偏离，但不保证安全。
 - **DPO**：隐式奖励；对比 **log-ratio**；无显式 RM、无典型 RL 循环。
 - **GRPO**：**组采样** + **组均值基线** + **可验证奖励**；推理任务友好。
 - **在线 / 离线**：偏好数据是否随当前策略持续刷新。
@@ -10981,9 +11217,9 @@ def group_relative_advantages(rewards_group: torch.Tensor) -> torch.Tensor:
 
 | 主题 | 答法骨架 |
 |------|----------|
-| BT 与 RM | BT 给出 \(P(\text{win})=\sigma(r_w-r_l)\)；RM 学 \(r_\phi\) 逼近人类效用 |
-| PPO clip | ratio 超出 \([1-\epsilon,1+\epsilon]\) 时被截断，防止一步更新过大 |
-| DPO 各项 | 相对参考的 log-ratio 差；\(\beta\) 控制偏离参考的强度 |
+| BT 与 RM | BT 给出 $P(\text{win})=\sigma(r_w-r_l)$；RM 学 $r_\phi$ 逼近人类效用 |
+| PPO clip | 按优势符号裁剪目标：正优势限制过大的 ratio，负优势限制过小的 ratio；不硬性限制策略概率 |
+| DPO 各项 | 相对参考的 log-ratio 差；$\beta$ 控制偏离参考的强度 |
 | GRPO baseline | 组内减均值 ≈ 控制 prompt 难度差异的相对排序信号 |
 | 四模型成本 | policy、ref、RM、（value）；多路前向 + 优化器状态 |
 
@@ -10993,43 +11229,43 @@ def group_relative_advantages(rewards_group: torch.Tensor) -> torch.Tensor:
 
 ### Q1：RLHF 的三个步骤分别解决什么问题？
 
-**答**：（1）**SFT**：把预训练模型变成 **遵循指令、会对话格式** 的策略，并提供 **RL 起点** 与 **参考模型** 初值。（2）**奖励模型**：把 **人类偏好** 压缩成 **可微对比信号** \(r_\phi(x,y_w) > r_\phi(x,y_l)\)，供 RL 使用。（3）**PPO（+KL）**：在 RM 标量奖励下 **提升策略**，同时用 KL **限制与 SFT 的偏离**，缓解 RM 近似误差带来的 **过度优化**。
+**答**：（1）**SFT**：把预训练模型变成 **遵循指令、会对话格式** 的策略，并提供 **RL 起点** 与 **参考模型** 初值。（2）**奖励模型**：把 **人类偏好** 压缩成 **可微对比信号** $r_\phi(x,y_w) > r_\phi(x,y_l)$，供 RL 使用。（3）**PPO（+KL）**：在 RM 标量奖励下 **提升策略**，同时用 KL **限制与 SFT 的偏离**，缓解 RM 近似误差带来的 **过度优化**。
 
 ---
 
 ### Q2：奖励模型如何训练？Bradley–Terry 起什么作用？
 
-**答**：数据为 **\((x,y_w,y_l)\)**。BT 假设 \(P(y_w \succ y_l\mid x)=\sigma(r_\phi(x,y_w)-r_\phi(x,y_l))\)。训练最小化 **负对数似然** \(-\log \sigma(r_w-r_l)\)，使被人类选中的回答得分更高。BT 提供了 **配对比较** 与 **标量奖励** 之间的概率桥梁，便于用 **二元交叉熵** 训练 RM。
+**答**：数据为 **$(x,y_w,y_l)$**。BT 假设 $P(y_w \succ y_l\mid x)=\sigma(r_\phi(x,y_w)-r_\phi(x,y_l))$。训练最小化 **负对数似然** $-\log \sigma(r_w-r_l)$，使被人类选中的回答得分更高。BT 提供了 **配对比较** 与 **标量奖励** 之间的概率桥梁，便于用 **二元交叉熵** 训练 RM。
 
 ---
 
 ### Q3：PPO 的 clip 目标在优化什么？ratio 过大或过小会怎样？
 
-**答**：在 **重要性采样** 下用旧策略数据更新新策略，clip 限制 **\(r_t=\pi_\theta/\pi_{\mathrm{old}}\)** 偏离 1 的程度。**ratio 过大**：更新步长过大，策略剧变、价值估计失效、训练不稳定。**ratio 过小**：有效梯度被截断，更新保守。clip 在 **步长与稳定性** 间折中。
+**答**：用旧策略数据计算 $r_t=\pi_\theta/\pi_{\mathrm{old}}$。当 $A_t>0$，超过 $1+\epsilon$ 的进一步增大不再提高该项；当 $A_t<0$，低于 $1-\epsilon$ 的进一步减小不再提高该项。反方向仍可产生梯度，其他样本/共享参数也会影响 ratio。裁剪是软性的目标设计，不保证 $r_t$ 始终处于区间内。参见 [PPO 原论文](https://arxiv.org/abs/1707.06347)。
 
 ---
 
 ### Q4：RLHF 里 KL 惩罚的目标是什么？和「贴近 SFT」有什么关系？
 
-**答**：KL 约束 \(\pi_\theta\) 接近 **\(\pi_{\mathrm{ref}}\)**（常为 SFT）。RM 不能覆盖所有行为；无 KL 时策略可能 **利用 RM 漏洞** 得高分但输出 **有害或无用**。**贴近 SFT** 即保留预训练+SFT 已学的 **有用能力与语言质量**，在 **信任域** 内优化偏好。
+**答**：KL 正则惩罚相对冻结 reference（常为 SFT）的偏离，可缓解 RM 过度优化。它不同于对旧策略的 PPO clip，不保证保留所有能力或消除有害输出；仍需独立质量/安全评测。
 
 ---
 
 ### Q5：为什么说经典 RLHF+PPO「贵」？「四个模型」指什么？
 
-**答**：一次训练步往往涉及：**当前策略** 前向/反向、**旧策略** 存 logits 或重算以算 ratio、**参考模型** 前向算 KL、**奖励模型** 前向算回报；若使用 **价值网络**，再叠加 critic。显存与算力接近 **多份大模型** 同时驻留或频繁切换，故常称 **四模型量级** 开销（具体是否含 value 依实现而定，面试讲清 **多路前向** 即可）。
+**答**：通常是 policy、reference、reward model、critic 四个角色。policy 与 critic 常训练，reference 与 RM 通常冻结；旧策略 token log-prob 可在 rollout 时缓存，不必再驻留完整旧模型。critic 可与 policy 共享主干，实际内存开销依实现而定。
 
 ---
 
 ### Q6：DPO 的核心洞见是什么？为什么不需要显式 RM？
 
-**答**：在 BT 与某些正则化假设下，**最优策略与隐式奖励** 可写成仅依赖 **\(\pi_\theta\)** 与 **\(\pi_{\mathrm{ref}}\)** 的 **闭式关系**，从而偏好似然可直接对策略参数优化，**RM 被消去** 或 **隐含在 log-ratio 中**。实现上是对偏好对的 **sigmoid 交叉熵**，无需单独训练 \(r_\phi\)。
+**答**：在 BT 与某些正则化假设下，**最优策略与隐式奖励** 可写成仅依赖 **$\pi_\theta$** 与 **$\pi_{\mathrm{ref}}$** 的 **闭式关系**，从而偏好似然可直接对策略参数优化，**RM 被消去** 或 **隐含在 log-ratio 中**。实现上是对偏好对的 **sigmoid 交叉熵**，无需单独训练 $r_\phi$。
 
 ---
 
-### Q7：写出 DPO 损失并解释 \(\beta\)。
+### Q7：写出 DPO 损失并解释 $\beta$。
 
-**答**：\(\mathcal{L}_{\mathrm{DPO}}=-\mathbb{E}[\log\sigma(\beta(\Delta_w-\Delta_l))]\)，其中 \(\Delta_y=\log\frac{\pi_\theta(y|x)}{\pi_{\mathrm{ref}}(y|x)}\)。**\(\beta\)** 控制 **偏好对比强度** 与 **偏离参考的程度**：\(\beta\) 大则更强调「chosen 相对 rejected 的边际」，但过大可能训练不稳或 **过拟合偏好数据**。
+**答**：$\mathcal{L}_{\mathrm{DPO}}=-\mathbb{E}[\log\sigma(\beta(\Delta_w-\Delta_l))]$，其中 $\Delta_y=\log(\pi_\theta(y|x)/\pi_{\mathrm{ref}}(y|x))$。$\beta$ 对应推导中的 KL 系数：固定奖励下越大，最优策略越受参考约束；损失中也缩放 logit/梯度，不能据此断言实际训练越大越偏离或越强调 chosen。需联合学习率与验证 KL 调参。
 
 ---
 
@@ -11041,13 +11277,13 @@ def group_relative_advantages(rewards_group: torch.Tensor) -> torch.Tensor:
 
 ### Q9：GRPO 与 PPO 的本质区别是什么？
 
-**答**：**PPO** 是通用 **on-policy** 优化框架，RLHF 中常配 **学得 RM + value**。**GRPO** 强调 **同一 prompt 组内多条样本**，用 **组内相对排名/减均值** 作优势，常配 **可验证奖励**，从而 **弱化或避免单独 value model**。二者可共享 **clip** 等稳定技巧，但 **基线来源与奖励类型** 不同。
+**答**：PPO 常用学习的 value baseline；GRPO 用同题多样本的组统计构造优势，不需独立 critic。两者可共享 clip，也都能使用规则或学得的奖励；主要区别不是奖励类型，而是优势估计与采样组织。
 
 ---
 
 ### Q10：GRPO 为什么可以不需要 Value Model？
 
-**答**：Critic 用于估计 **状态值** 以降低方差。GRPO 在同一 \(x\) 下采 \(G\) 条轨迹，用 **组平均奖励** 作 **逐样本 baseline**，优势近似 \(R_i-\bar R\)，在 **终端奖励、同题可比** 的设置下提供 **零成本（无额外网络）的方差缩减**。这不等于所有任务都不需要 value，而是 **任务结构使组基线足够有效**。
+**答**：GRPO 用同题组平均奖励和可选标准差构造优势，替代独立 critic。节省价值网络及其训练开销，不等于零成本：每题生成多个回答要算力，组大小、相关性和奖励分布也会影响方差。
 
 ---
 
@@ -11065,7 +11301,7 @@ def group_relative_advantages(rewards_group: torch.Tensor) -> torch.Tensor:
 
 ### Q13：对齐税（alignment tax）是什么？如何观察与缓解？
 
-**答**：为获得 **更安全、更听话**，在 **其他能力**（如创意、部分知识问答）上 **性能下降**。原因：KL、偏好数据偏向保守、目标与预训练不一致等。缓解：**预训练数据混合回放**、**多任务偏好**、**评测驱动调 \(\beta\) 与数据配比**。
+**答**：为获得 **更安全、更听话**，在 **其他能力**（如创意、部分知识问答）上 **性能下降**。原因：KL、偏好数据偏向保守、目标与预训练不一致等。缓解：**预训练数据混合回放**、**多任务偏好**、**评测驱动调 $\beta$ 与数据配比**。
 
 ---
 
@@ -11078,8 +11314,8 @@ def group_relative_advantages(rewards_group: torch.Tensor) -> torch.Tensor:
 ## 五、练习（Practice）
 
 1. 写出 BT 假设下的 pairwise logistic 损失，并说明与 **二元分类交叉熵** 的联系。
-2. 推导：将 DPO 公式展开为仅含 \(\log\pi_\theta\) 与 \(\log\pi_{\mathrm{ref}}\) 的差，并标注 \(\beta\) 出现位置。
-3. 手算：同一数学题 4 个样本奖励为 \([1,0,0,1]\)，求组内优势向量。
+2. 推导：将 DPO 公式展开为仅含 $\log\pi_\theta$ 与 $\log\pi_{\mathrm{ref}}$ 的差，并标注 $\beta$ 出现位置。
+3. 手算：同一数学题 4 个样本奖励为 $[1,0,0,1]$，求组内优势向量。
 4. 解释 PPO 中若 **删除 clip**、仅保留 KL，训练可能出现什么现象？
 5. 举两个 **reward hacking** 例子，并各给一条 **非神经网络** 缓解手段。
 6. 对比 **RLAIF** 与 **人类标注** 在 **成本、偏差、适用场景** 三维上的差异。
@@ -11092,9 +11328,9 @@ def group_relative_advantages(rewards_group: torch.Tensor) -> torch.Tensor:
 
 | 上一课 | 下一课 |
 |--------|--------|
-| [Lesson 17：SFT 有监督微调](./17-SFT有监督微调.md) | [Lesson 19：Assignment 5 对齐实战](./19-Assignment5对齐实战.md) |
+| [Lesson 17：SFT 有监督微调](../docs/17-SFT%E6%9C%89%E7%9B%91%E7%9D%A3%E5%BE%AE%E8%B0%83.md) | [Lesson 19：Assignment 5 对齐实战](../docs/19-Assignment5%E5%AF%B9%E9%BD%90%E5%AE%9E%E6%88%98.md) |
 
-**相关链接**：[训练循环与损失函数](./07-训练循环与损失函数.md)、[课程总览](./00-课程总览与学习路线.md)。
+**相关链接**：[训练循环与损失函数](../docs/07-%E8%AE%AD%E7%BB%83%E5%BE%AA%E7%8E%AF%E4%B8%8E%E6%8D%9F%E5%A4%B1%E5%87%BD%E6%95%B0.md)、[课程总览](../docs/00-%E8%AF%BE%E7%A8%8B%E6%80%BB%E8%A7%88%E4%B8%8E%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF.md)。
 
 ---
 
@@ -11102,19 +11338,19 @@ def group_relative_advantages(rewards_group: torch.Tensor) -> torch.Tensor:
 
 | 符号 | 含义 |
 |------|------|
-| \(x\) | prompt / 上下文 |
-| \(y_w, y_l\) | chosen / rejected |
-| \(r_\phi\) | 奖励模型 |
-| \(\pi_\theta\) | 当前策略 |
-| \(\pi_{\mathrm{ref}}\) | 参考策略（常冻结） |
-| \(\beta\) | DPO 温度系数或 RL 中 KL 系数（语境依章节） |
-| \(\sigma\) | logistic 函数 |
-| \(\mathrm{KL}\) | Kullback–Leibler 散度 |
-| \(G\) | 组采样条数 |
+| $x$ | prompt / 上下文 |
+| $y_w, y_l$ | chosen / rejected |
+| $r_\phi$ | 奖励模型 |
+| $\pi_\theta$ | 当前策略 |
+| $\pi_{\mathrm{ref}}$ | 参考策略（常冻结） |
+| $\beta$ | DPO 温度系数或 RL 中 KL 系数（语境依章节） |
+| $\sigma$ | logistic 函数 |
+| $\mathrm{KL}$ | Kullback–Leibler 散度 |
+| $G$ | 组采样条数 |
 
 ---
 
-> **学习建议**：先确保 [Lesson 17](./17-SFT有监督微调.md) 中 **mask 与参考模型角色** 清晰，再对照本课 **BT → PPO → DPO → GRPO** 串成一条线；动手请完成 [Assignment 5 实战](./19-Assignment5对齐实战.md) 中的损失与解析器，把公式跑通。
+> **学习建议**：先确保 [Lesson 17](../docs/17-SFT%E6%9C%89%E7%9B%91%E7%9D%A3%E5%BE%AE%E8%B0%83.md) 中 **mask 与参考模型角色** 清晰，再对照本课 **BT → PPO → DPO → GRPO** 串成一条线；动手请完成 [Assignment 5 实战](../docs/19-Assignment5%E5%AF%B9%E9%BD%90%E5%AE%9E%E6%88%98.md) 中的损失与解析器，把公式跑通。
 
 *文档版本：CS336 面试导向 · Lesson 18 · 对齐技术总览；作业细节以官方当年说明为准。*
 
@@ -11127,7 +11363,7 @@ def group_relative_advantages(rewards_group: torch.Tensor) -> torch.Tensor:
 
 > **Stanford CS336**：Language Modeling from Scratch — 面试导向学习指南（第 19 节）
 
-**先修**：[Lesson 17：SFT 有监督微调](./17-SFT有监督微调.md)、[Lesson 18：RLHF / DPO / GRPO 对齐技术](./18-RLHF-DPO-GRPO对齐技术.md)。
+**先修**：[Lesson 17：SFT 有监督微调](../docs/17-SFT%E6%9C%89%E7%9B%91%E7%9D%A3%E5%BE%AE%E8%B0%83.md)、[Lesson 18：RLHF / DPO / GRPO 对齐技术](../docs/18-RLHF-DPO-GRPO%E5%AF%B9%E9%BD%90%E6%8A%80%E6%9C%AF.md)。
 
 **面试热度**：★★★★☆（对齐 / 应用算法 / 推理增强岗高频；常与「SFT → RL → 评估」链路绑定）
 
@@ -11137,7 +11373,9 @@ def group_relative_advantages(rewards_group: torch.Tensor) -> torch.Tensor:
 
 **本节主题**：**Assignment 5：Alignment** —— 在**数学推理**任务上，完成 **SFT（监督微调）→ GRPO（组相对策略优化）** 的完整训练闭环，并可选实现 **DPO** 进行**安全偏好对齐**。
 
-**你在简历/面试里的一句话**：在指令跟随基座上，用**可验证规则奖励**与**组内相对优势**做 RL，提升 GSM8K/MATH 等指标，并用 **KL 到 SFT 参考模型** 抑制策略漂移；可选用 **DPO** 在偏好数据上强化拒答有害请求的能力。
+**版本边界**：本指南以 [2025 年官方 Assignment 5 主讲义](https://github.com/stanford-cs336/assignment5-alignment/blob/eb2c562e05802d3c9ee4c4ec2eec43b104d77e9e/cs336_spring2025_assignment5_alignment.pdf) 为基准：主线还包含 **zero-shot baseline 与 Expert Iteration**（采样、验证、保留正确答案再 SFT）。该版本 GRPO **不要求 reference KL 项**，并比较是否除组标准差、不同长度归一化及 on/off-policy 更新。以下 KL 与 chat-template 示例属于扩展，不能当作所有年份作业的必做规格；实际评测应使用讲义指定模型、prompt 和奖励函数。
+
+**你在简历/面试里的一句话**：在数学基座上比较 zero-shot、SFT、Expert Iteration 与 GRPO，用可验证奖励和组内优势优化，并按固定协议报告实际验证结果；KL 和偏好 DPO 是按版本选择的扩展，不能把未做的实验写成经历。
 
 **与前后课关系**：第 17 课讲 SFT 通用范式，第 18 课讲 RLHF/DPO/GRPO 理论；本课把二者**落到作业级实现与调试**，下一课（推理优化与部署）延续「训好模型之后如何快、稳地服务」。
 
@@ -11150,7 +11388,8 @@ def group_relative_advantages(rewards_group: torch.Tensor) -> torch.Tensor:
 | 模块 | 你在练什么 | 面试官想听到的关键词 |
 |------|-------------|------------------------|
 | **Part 1：SFT** | 指令-回答数据、**loss masking**、训练循环、数学基准评测 | instruction tuning、只监督 assistant、GSM8K/MATH |
-| **Part 2：GRPO** | **多解采样**、**规则奖励**、**组优势**、**KL 约束**、策略梯度 | relative advantage、rule-based reward、reference model |
+| **Expert Iteration** | 用规则筛选正确 rollout，再以 SFT 迭代更新 | verified self-training、采样与过滤 |
+| **Part 2：GRPO** | 多解采样、规则奖励、组优势、token 级策略梯度/clip；KL 可选 | relative advantage、rule-based reward、old policy log-prob |
 | **Optional：DPO** | 偏好对、Bradley-Terry 隐式奖励、β | preference data、helpfulness vs safety |
 | **集成评测** | SFT-only vs SFT+GRPO、CoT 质量 | pass@k、maj@k、长度与格式 |
 
@@ -11189,11 +11428,11 @@ def group_relative_advantages(rewards_group: torch.Tensor) -> torch.Tensor:
 
 **定义**：将多轮对话拼成单条 `input_ids` 后，**仅对 assistant 所对应的 token 位置**计算下一词交叉熵；**system / user** 以及 **assistant 之前的所有前缀**在 `labels` 上标为 **忽略**（常见为 `-100`，与 PyTorch `CrossEntropyLoss(ignore_index=-100)` 对齐）。
 
-形式化：设掩码 \(m_t \in \{0,1\}\)，在 assistant 区间为 1：
+形式化：设掩码 $m_t \in \{0,1\}$，在 assistant 区间为 1：
 
-\[
+$$
 \mathcal{L}_{\text{SFT}} = - \frac{1}{\sum_t m_t} \sum_{t} m_t \log p_\theta(x_t \mid x_{<t})
-\]
+$$
 
 **常见错误**：误监督 user 内容 → 模型被训练成「复述题目」；**错位**：`logits` 与 `labels` 未按「预测下一 token」对齐；**模板差异**：`apply_chat_template` 与手写拼接不一致导致 mask 偏移。
 
@@ -11208,7 +11447,7 @@ def group_relative_advantages(rewards_group: torch.Tensor) -> torch.Tensor:
 
 | 超参 | 常见范围 | 备注 |
 |------|----------|------|
-| 学习率 | \(10^{-5}\)～\(5\times10^{-5}\)（全参） | 大模型常更小；LoRA 可略大 |
+| 学习率 | $10^{-5}$～$5\times10^{-5}$（全参） | 大模型常更小；LoRA 可略大 |
 | 有效 batch | 梯度累积拉大 | 影响稳定性与泛化 |
 | 序列长度 | 2k～8k | 数学题 + CoT 需要足够上下文 |
 | Epoch | 1～3 | 小数据多 epoch 易过拟合格式 |
@@ -11222,7 +11461,7 @@ def group_relative_advantages(rewards_group: torch.Tensor) -> torch.Tensor:
 | **MATH** | 竞赛级 | 分难度 EM；可报 pass@N |
 | **AIME 等** | 更难 | 样本少、方差大 |
 
-**关键**：评测时的 **prompt 模板**、**temperature**、**max tokens**、**答案解析函数** 与训练/奖励侧 **必须同源**，否则出现「训练涨分、评测无效」的假结论。
+**关键**：答案解析与奖励口径应一致；SFT/RL 对照必须使用固定评测模板、温度和 token 上限。训练采样可用不同温度探索，不要求与评测温度相同，但必须记录并处理对应的行为策略概率。
 
 ---
 
@@ -11230,7 +11469,7 @@ def group_relative_advantages(rewards_group: torch.Tensor) -> torch.Tensor:
 
 #### 3.1 每题多条解（Multiple Samples per Problem）
 
-对同一题目 \(q\)，从当前策略 \(\pi_\theta\) **独立采样** \(G\) 条完整解答 \(\{y^{(i)}\}_{i=1}^G\)（可固定 temperature、top-p）。
+对同一题目 $q$，从当前策略 $\pi_\theta$ **独立采样** $G$ 条完整解答 $\{y^{(i)}\}_{i=1}^G$（可固定 temperature、top-p）。
 
 - **G 过小**：组内方差估计差，优势噪声大。
 - **G 过大**：生成与反向成本线性上升。
@@ -11252,47 +11491,48 @@ r = 0.0  otherwise
 
 #### 3.3 组优势（Group Advantage）
 
-对组内奖励 \(\{r_i\}_{i=1}^G\)：
+对组内奖励 $\{r_i\}_{i=1}^G$：
 
 **去均值**：
 
-\[
+$$
 A_i = r_i - \frac{1}{G}\sum_{j=1}^G r_j
-\]
+$$
 
 **标准化**（更常见）：
 
-\[
+$$
 A_i = \frac{r_i - \mu}{\sigma + \epsilon},\quad \mu=\frac{1}{G}\sum_j r_j,\ \sigma^2=\frac{1}{G}\sum_j (r_j-\mu)^2
-\]
+$$
 
-**退化情况**：全组 **同分**（全对或全错）时 \(\sigma \approx 0\)。实务应 **跳过该题的策略梯度** 或 **不反传**，避免除零或零梯度噪声步被误放大。
+**退化情况**：全组同分时 $\sigma=0$，减均值后优势恰为零，加 $\epsilon$ 可防除零，策略梯度项为零。若另有 KL、熵正则或 weight decay，整体参数更新仍可能非零。跳过整个组会改变这些项的权重，应明确约定，不能把“近零方差”一律视为无效。
 
 **直觉**：在同一难度题目内做 **相对比较**，缓和「难题普遍低分、简单题普遍高分」带来的 **跨题尺度** 问题，与 **稀疏终端奖励** 搭配时尤其重要。
 
 #### 3.4 策略梯度与 KL 约束
 
-对每条采样序列，最大化加权对数似然（可 token 级聚合）：
+以每条回答按有效长度平均的 GRPO-Clip 为例，令 $\rho_{i,t}=\pi_\theta(y_t^{(i)}|q,y_{<t}^{(i)})/\pi_{\mathrm{old}}(y_t^{(i)}|q,y_{<t}^{(i)})$：
 
-\[
-J \approx \mathbb{E}\Big[\sum_{t} A_i \cdot f\big(\log \pi_\theta(y_t^{(i)}\mid q, y_{<t}^{(i)})\big)\Big]
-\]
+$$
+J_{\mathrm{clip}}=\frac{1}{G}\sum_{i=1}^{G}\frac{1}{T_i}\sum_{t=1}^{T_i}
+\min\left(\rho_{i,t}A_i,\operatorname{clip}(\rho_{i,t},1-\delta,1+\delta)A_i\right)
+$$
 
-实务中常配合 **PPO 式 clip**：用 **旧策略** \(\pi_{\theta_{\text{old}}}\) 的采样计算 **importance ratio** \(r_t=\pi_\theta/\pi_{\theta_{\text{old}}}\)，并对目标做 **clip**，限制单次更新幅度。
+这里是 **token 级 ratio**，不是整条序列 log-prob 相减后指数化。clip 约束目标的改进激励，不保证概率比硬性落在区间内。课程还比较 REINFORCE 与不同长度归一化；统一分母会改变训练权重，需与实验定义一致。
 
-**KL 到参考模型** \(\pi_{\text{ref}}\)（通常为 **冻结的 SFT 模型**）：
+**可选扩展**：若使用相对冻结参考模型的 KL 正则，可最小化：
 
-\[
-\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{PG}} + \beta \cdot \mathbb{E}[\text{KL}(\pi_\theta \| \pi_{\text{ref}})]
-\]
+$$
+\mathcal{L}_{\text{total}} = -J_{\mathrm{clip}} + \beta_{\mathrm{KL}}\mathbb{E}[\mathrm{KL}(\pi_\theta \| \pi_{\text{ref}})]
+$$
 
-作用：**锚定**语言能力与格式先验，减轻 **为刷正确率而胡编**、**模式坍缩**（例如极短输出、重复 `\boxed{1}`）。
+KL 可缓解偏离参考，但不保证能力、安全或正确性；2025 年主讲义实验省略此项。旧策略用于 importance ratio，reference 用于可选 KL，二者不能混用。若采样使用 temperature/top-p，行为分布不再是原始 softmax；教学时可先用温度 1、top-p 1，并在真实实现中核对概率口径。
 
 #### 3.5 GRPO 训练循环（逻辑）
 
-1. 采样一批题目 \(\{q\}\)。
-2. 对每个 \(q\) 生成 \(G\) 条 \(\{y^{(i)}\}\)，计算 **规则奖励** \(r_i\)。
-3. 组内算 **优势** \(A_i\)；过滤 \(\sigma\approx 0\) 的组（按实现约定）。
+1. 采样一批题目 $\{q\}$。
+2. 对每个 $q$ 生成 $G$ 条 $\{y^{(i)}\}$，计算 **规则奖励** $r_i$。
+3. 组内算优势 $A_i$，明确是否标准化；全同分组的策略梯度为零，不默认删除其所有正则项。
 4. 对选中 token 计算 **策略损失**（+ **KL 项**）；**backward**。
 5. 周期性保存 checkpoint；监控 **reward 均值、KL、生成长度**。
 
@@ -11304,17 +11544,17 @@ J \approx \mathbb{E}\Big[\sum_{t} A_i \cdot f\big(\log \pi_\theta(y_t^{(i)}\mid 
 
 #### 4.1 安全数据集准备
 
-构造偏好三元组 \((q, y_w, y_l)\)：在同一 **用户请求** 下，\(y_w\) **更安全/合规**，\(y_l\) **更危险或更迎合恶意目标**。可与数学数据**分阶段**或**混合**训练，注意 **遗忘** 与 **拒答过度**。
+构造偏好三元组 $(q, y_w, y_l)$：在同一 **用户请求** 下，$y_w$ **更安全/合规**，$y_l$ **更危险或更迎合恶意目标**。可与数学数据**分阶段**或**混合**训练，注意 **遗忘** 与 **拒答过度**。
 
 #### 4.2 DPO 损失（实现视角）
 
 在隐式奖励参数化下（参见第 18 课），最大化偏好对数似然，典型形式为：
 
-\[
+$$
 \mathcal{L}_{\text{DPO}} = - \mathbb{E}_{(q,y_w,y_l)}\Big[\log \sigma\Big(\beta \big(\Delta_w - \Delta_l\big)\Big)\Big]
-\]
+$$
 
-其中 \(\Delta\) 为 \(\log \frac{\pi_\theta(y|q)}{\pi_{\text{ref}}(y|q)}\) 在整条 completion 上的聚合（常取 **序列 log prob 之和**）。**β** 控制与 \(\pi_{\text{ref}}\) 的偏离强度：β 大 → 更强调偏好对比，但需防 **训练不稳定**。
+其中 $\Delta$ 是整条 completion 的序列 log-ratio，序列 log-prob 为有效 token 的和。DPO 的 $\beta$ 对应推导中的 KL 系数，固定奖励下较大值使最优策略更受参考约束；有限步偏好训练还受梯度尺度/学习率影响，不能简单推断越大越偏离。
 
 实现检查：**仅对 completion 部分**累加 log prob；**padding** 与 **mask** 一致；**参考模型**冻结。
 
@@ -11347,11 +11587,11 @@ J \approx \mathbb{E}\Big[\sum_{t} A_i \cdot f\big(\log \pi_\theta(y_t^{(i)}\mid 
 | 解析器与金标不一致 | 单元测试 `extract_answer` / `normalize` |
 | 采样温度过低，多样性不足 | 提高 temperature 或 top-p |
 | 题目过难，几乎全错 | 检查数据难度与 SFT 质量 |
-| 优势全为零仍反传 | 确认实现中 **跳过 \(\sigma\approx 0\)** |
+| 全组同分 | 优势应恰为零；检查是否错误除零，以及 KL/weight decay 是否仍更新 |
 
 #### 6.2 KL 散度监控
 
-**应记录的标量**：batch 内 **近似 KL(\(\pi_\theta\|\pi_{\text{ref}}\))**（token 平均或序列平均，与作业定义一致）。
+**若启用 KL 扩展**：记录相对冻结 reference 的 KL，注明估计器、token/序列平均及行为分布；未启用时不要求驻留 reference。下表仅适用于启用该正则的实验。
 
 | 现象 | 可能解读 | 调参方向 |
 |------|----------|----------|
@@ -11374,9 +11614,9 @@ J \approx \mathbb{E}\Big[\sum_{t} A_i \cdot f\big(\log \pi_\theta(y_t^{(i)}\mid 
 用 **问题 → 方法 → 指标 → 复盘** 控制在 **90～120 秒**：
 
 1. **问题**：基座在数学指令与可解析答案上不足。
-2. **方法**：SFT 做格式与冷启动；GRPO 用 **组采样 + 规则奖励 + 组内优势 + KL**；可选 DPO 做安全偏好。
+2. **方法**：SFT 与 Expert Iteration 做冷启动/自训练；GRPO 用组采样、规则奖励与组优势；明确是否启用 KL，偏好 DPO 可选。
 3. **指标**：GSM8K/MATH EM、pass@k、SFT vs SFT+GRPO。
-4. **复盘**：一次真实的 **KL 或 reward** 异常与如何定位（解析器 / 超参 / 跳过零方差组）。
+4. **复盘**：一次真实的 reward 或可选 KL 异常与定位方法（解析器、采样概率口径、mask、超参）。
 
 ---
 
@@ -11395,39 +11635,34 @@ def build_sft_batch(tokenizer, conversations, max_length: int):
     conversations: List[ List[{role, content}] ]，多轮对话。
     返回 padding 后的 input_ids 与 labels；labels 在非 assistant 段为 -100。
     """
-    batch_input_ids, batch_labels = [], []
-
+    # 教学模板必须支持 {% generation %}；不能逐消息模板化后再拼接。
+    # 实际课程若用 r1_zero prompt，应按其 prompt/response 边界构造 mask。
+    features = []
     for conv in conversations:
-        ids, lab = [], []
-        for turn in conv:
-            # 具体 API 以 tokenizer.apply_chat_template 为准；此处为概念示意
-            segment = tokenizer.apply_chat_template(
-                [turn], tokenize=True, add_generation_prompt=(turn["role"] == "user")
-            )
-            seg_ids = segment["input_ids"]
-            if turn["role"] == "assistant":
-                ids.extend(seg_ids)
-                lab.extend(seg_ids)
-            else:
-                ids.extend(seg_ids)
-                lab.extend([-100] * len(seg_ids))
-
-        ids, lab = ids[:max_length], lab[:max_length]
-        batch_input_ids.append(ids)
-        batch_labels.append(lab)
-
-    batch = tokenizer.pad(
-        {"input_ids": batch_input_ids, "labels": batch_labels},
-        padding=True,
-        return_tensors="pt",
-    )
-    return batch
+        enc = tokenizer.apply_chat_template(
+            conv, tokenize=True, return_dict=True,
+            return_assistant_tokens_mask=True,
+            truncation=True, max_length=max_length, add_generation_prompt=False,
+        )
+        ids = enc["input_ids"]
+        mask = enc.get("assistant_masks")
+        if mask is None or len(mask) != len(ids):
+            raise ValueError("unsupported assistant mask")
+        labels = [tid if m else -100 for tid, m in zip(ids, mask)]
+        if not any(tid != -100 for tid in labels[1:]):
+            raise ValueError("empty supervision after truncation/shift")
+        features.append({"input_ids": ids, "attention_mask": enc["attention_mask"], "labels": labels})
+    # tokenizer.pad 本身不负责按 -100 补齐 labels，交给显式标签 collator。
+    from transformers import DataCollatorForSeq2Seq
+    return DataCollatorForSeq2Seq(tokenizer, label_pad_token_id=-100)(features)
 
 
 def sft_loss(logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
     """logits: (B, T, V)；labels: (B, T)，-100 忽略。"""
     shift_logits = logits[..., :-1, :].contiguous()
     shift_labels = labels[..., 1:].contiguous()
+    if not (shift_labels != -100).any():
+        raise ValueError("no supervised tokens")
     return F.cross_entropy(
         shift_logits.view(-1, shift_logits.size(-1)),
         shift_labels.view(-1),
@@ -11476,36 +11711,53 @@ def rule_reward(pred: str, gold: str) -> float:
 def group_advantages(rewards: list[float], eps: float = 1e-5) -> tuple[list[float], bool]:
     """
     返回 (advantages, skip)。
-    若组内方差过小（全同分），返回 skip=True，建议本组不反传。
+    skip=True 仅表示全同分、策略梯度为零；不表示应跳过 KL/其他正则。
     """
+    if len(rewards) < 2 or eps <= 0:
+        raise ValueError("need at least two rewards and positive eps")
     mu = statistics.mean(rewards)
     sigma = statistics.pstdev(rewards)
-    if sigma < eps:
+    if sigma == 0:
         return [0.0] * len(rewards), True
     adv = [(r - mu) / (sigma + eps) for r in rewards]
     return adv, False
 
 
-def seq_log_probs(model, input_ids, attention_mask, labels_for_completion) -> torch.Tensor:
+def token_log_probs(model, input_ids, attention_mask, labels_for_completion):
     """
-    对 completion token 求和或求平均 log pi（与作业定义一致）。
-    labels_for_completion: 仅 completion 位置非 -100，用于 mask。
+    返回 token log-prob 与 response mask，均为 (B,T-1)，供 GRPO token ratio。
+    DPO 的序列 log-prob 另由 (logp * mask).sum(-1) 得到，不取长度平均。
     """
-    ...
+    logits = model(input_ids=input_ids, attention_mask=attention_mask).logits[:, :-1]
+    labels = labels_for_completion[:, 1:]
+    mask = labels != -100
+    safe_labels = labels.masked_fill(~mask, 0)
+    logp = F.log_softmax(logits.float(), dim=-1).gather(-1, safe_labels.unsqueeze(-1)).squeeze(-1)
+    return logp, mask
 
 
-def grpo_loss_term(logp_new, logp_old, advantage, clip_eps: float = 0.2):
-    """PPO 风格标量示意：在序列级聚合 ratio 时需与课程公式一致。"""
-    ratio = torch.exp(logp_new - logp_old)
-    unclipped = ratio * advantage
-    clipped = torch.clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps) * advantage
-    return -torch.min(unclipped, clipped)
+def grpo_loss_term(logp_new, logp_old, advantage, response_mask, clip_eps: float = 0.2):
+    """logp: (B,T)，advantage: (B,)，response_mask 为 0/1，按有效长度平均。"""
+    mask = response_mask.bool()
+    counts = mask.sum(-1)
+    if (counts == 0).any():
+        raise ValueError("empty response")
+    # 必须在 exp 之前屏蔽 padding；最后才乘 mask 无法消除 inf/NaN。
+    log_ratio = (logp_new - logp_old.detach()).masked_fill(~mask, 0.0)
+    ratio = torch.exp(log_ratio)
+    adv = advantage.detach().unsqueeze(-1)
+    unclipped = ratio * adv
+    clipped = torch.clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps) * adv
+    token_loss = -torch.minimum(unclipped, clipped)
+    return (token_loss.masked_fill(~mask, 0.0).sum(-1) / counts).mean()
 
 
 # 单题多采样逻辑位置：generate G 次 -> 算 reward -> advantages -> 反传
 ```
 
 **检查点**：**旧策略** log prob 用于 ratio；**参考模型**仅用于 KL；**generate 与 log prob 路径**使用同一套 attention mask 与 special tokens。
+
+**数值边界**：上例在指数运算前屏蔽无效 token，避免 padding 的异常 log-ratio 污染损失与梯度；有效 token 的极端 log-ratio 仍可能溢出，PPO-style clip 并不保证所有 ratio 都有界。真实训练需监控非有限值、精度与更新幅度，不能把屏蔽 padding 当作所有 NaN 的修复。
 
 ---
 
@@ -11537,7 +11789,7 @@ def dpo_loss(
 1. **环境**：安装依赖、对齐 **CUDA / PyTorch**、能跑通 **预训练权重加载** 与 **单次 forward**。
 2. **数据**：准备数学指令 JSON/JSONL；划分 train/val；**打印一条** 经 `apply_chat_template` 后的 token 与 mask，确认 **assistant 段** 正确。
 3. **SFT**：实现 **masking + CE**；跑若干 step 后 **loss 下降**；在 val 上跑 **官方评测脚本** 得 **SFT 基线 EM**。
-4. **GRPO**：从 **SFT checkpoint** 初始化 policy 与 ref；实现 **G 次 generate → reward → advantage → loss**；记录 **reward 均值、KL、长度**。
+4. **GRPO**：按讲义从基座/SFT/EI checkpoint 初始化 policy，缓存旧策略 log-prob；实现 G 次 generate → reward → advantage → loss，记录 reward、长度、熵与梯度；仅在 KL 扩展中额外使用 reference。
 5. **对照**：同一评测协议下 **SFT vs SFT+GRPO**；保存 **最佳 checkpoint** 与 **超参表**。
 6. **可选 DPO**：构造安全偏好对；在 ref 上跑 **DPO**；小样本测 **拒答** 与 **数学 EM** 是否掉点。
 
@@ -11547,26 +11799,26 @@ def dpo_loss(
 
 | 主题 | 一句话 |
 |------|--------|
-| **为何先 SFT** | 冷启动策略、稳定格式、缩小 RL 探索空间，并提供 \(\pi_{\text{ref}}\)。 |
+| **为何先 SFT** | 冷启动策略、稳定格式、缩小 RL 探索空间，并提供 $\pi_{\text{ref}}$。 |
 | **GRPO 与 PPO** | GRPO 用**组内基线**处理稀疏奖励；未必省掉 clip，但弱化 **价值网络** 依赖叙事。 |
-| **KL** | 锚定 SFT，减轻遗忘与胡编。 |
+| **KL** | 可选 reference 正则；2025 主线省略，不保证消除遗忘或投机。 |
 | **DPO** | 离线偏好优化，无显式 RM rollout；数据需覆盖目标行为。 |
-| **评测** | 解析器、模板、采样与训练侧必须一致。 |
+| **评测** | 解析/奖励口径一致；对照实验固定评测模板与采样协议，训练探索温度可以不同。 |
 
 ### STAR 话术模板
 
 - **S（情境）**：课程要求完成数学推理上的对齐 pipeline：SFT + GRPO，可选 DPO。
 - **T（任务）**：提升 **EM / pass@k**，并保证可复现评测。
-- **A（行动）**：构造指令-CoT 数据；实现 **assistant-only loss**；GRPO **组采样、规则奖励、组优势、KL**；可选 **偏好对与 DPO**。
+- **A（行动）**：构造指令-CoT 数据与 response mask；比较 SFT/EI/GRPO，明确组优势、长度归一化和可选 KL 的配置；只陈述实际做过的扩展。
 - **R（结果）**：对照表汇报 **SFT vs SFT+GRPO**；复盘一次 **reward/KL** 问题与修复。
 
 ### 面试高频题（10+ 详解）
 
 **Q1：你是如何实现数学推理的 RL 训练的？**  
-**答**：先 **SFT** 学会指令格式与 CoT；奖励用 **规则验证**（解析后与金标比对）得稀疏 0/1；优化用 **GRPO**：每题采样 **G 条**，**组内标准化优势**，**策略梯度 +（常）PPO clip**，并对 **\(\pi_{\text{ref}}\)（SFT）** 加 **KL**。解析与评测 **同源**，并缓存 **旧策略 log prob**。
+**答**：比较 zero-shot、SFT 与 EI；GRPO 每题采 G 条，用规则奖励、组内去均值/可选标准差与 token 级策略梯度或 clip。缓存旧策略 log-prob，统一解析/评测口径。2025 主线不加 reference KL；若做扩展，另报告配置与消融。
 
 **Q2：组优势怎么算？全错一组怎么办？**  
-**答**：\(A_i=(r_i-\mu)/(\sigma+\epsilon)\)。若 **全同分**，\(\sigma\approx 0\)，应 **跳过梯度** 或 **不更新**，避免无效步。
+**答**：原版标准化为 $A_i=(r_i-\mu)/(\sigma+\epsilon)$，课程也比较仅去均值。全同分时 $A_i=0$，策略梯度为零，但 KL/weight decay 等仍可产生更新；是否跳过整个组要明确目标，不能一概而论。
 
 **Q3：奖励如何设计？**  
 **答**：主信号 **正确性**；辅助项谨慎；与 **EM** 一致；监控 **长度与投机**。
@@ -11595,8 +11847,8 @@ def dpo_loss(
 **Q11：G 与吞吐？**  
 **答**：每题 **G 次生成** 成本高；调参时可在相近 **采样预算** 下比较 **验证 EM**。
 
-**Q12：为何需要 \(\pi_{\text{ref}}\) 的 KL？**  
-**答**：RL **最大化奖励** 易 **偏离数据分布**；KL 正则保留 **LM 先验**，抑制 **遗忘与投机**。
+**Q12：GRPO 一定需要 $\pi_{\text{ref}}$ 的 KL 吗？**  
+**答**：不一定。KL 可限制相对参考的漂移，但也增加模型与前向开销，不保证安全/能力保留。2025 作业主线明确省略；是否启用应按任务验证和消融判断。
 
 ---
 
@@ -11605,7 +11857,7 @@ def dpo_loss(
 1. **Masking**：若把 system token 也计入 loss，优化目标偏到哪里？如何用最小单元测试发现？
 2. **优势**：某题 G 条全错，标准化后梯度是否应近似为 0？你的实现是否 **skip**？
 3. **KL**：β 过大与过小各表现为何？你最先改 **β** 还是 **RL LR**？
-4. **DPO**：β 增大时，策略更贴近还是更远离 \(\pi_{\text{ref}}\)？对安全数据意味着什么？
+4. **DPO**：β 增大时，策略更贴近还是更远离 $\pi_{\text{ref}}$？对安全数据意味着什么？
 5. **评测**：pass@32 升而 maj@1 降，可能说明什么（多样性 vs 一致性）？
 6. **解析**：若 `normalize` 把 `1/2` 与 `0.5` 判不等，训练与测试会怎样分叉？
 7. **分布式**：同一题 G 条 rollouts 若跨卡拆分，优势应在何处聚合？
@@ -11616,11 +11868,11 @@ def dpo_loss(
 
 | 上一节 | 下一节 |
 |--------|--------|
-| [← Lesson 18：RLHF / DPO / GRPO 对齐技术](./18-RLHF-DPO-GRPO对齐技术.md) | [Lesson 20：推理优化与模型部署 →](./20-推理优化与模型部署.md) |
+| [← Lesson 18：RLHF / DPO / GRPO 对齐技术](../docs/18-RLHF-DPO-GRPO%E5%AF%B9%E9%BD%90%E6%8A%80%E6%9C%AF.md) | [Lesson 20：推理优化与模型部署 →](../docs/20-%E6%8E%A8%E7%90%86%E4%BC%98%E5%8C%96%E4%B8%8E%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2.md) |
 
 ---
 
-**延伸阅读**：DeepMind GRPO；OpenAI InstructGPT；Rafailov et al. DPO。作业细节以 **CS336 官方 Assignment 5 说明与代码框架** 为准。
+**延伸阅读**：[DeepSeekMath（GRPO）](https://arxiv.org/html/2402.03300v3)、[InstructGPT](https://arxiv.org/abs/2203.02155)、[DPO](https://arxiv.org/html/2305.18290v2)。作业细节以官方对应年份讲义与代码为准。
 
 **文档版本**：Lesson 19 — Assignment 5 对齐实战（面试导向）。
 
@@ -11633,7 +11885,7 @@ def dpo_loss(
 
 > **Stanford CS336**：Language Modeling from Scratch — 面试导向学习指南（第 20 节）
 
-**先修**：[Lesson 10：FlashAttention 原理与 Triton](./10-FlashAttention原理与Triton.md)、[Lesson 05：RMSNorm / SwiGLU / GQA](./05-RMSNorm-SwiGLU-GQA.md)、[Lesson 09：GPU 架构与内存层级](./09-GPU架构与内存层级.md)、[Lesson 19：Assignment 5 对齐实战](./19-Assignment5对齐实战.md)。
+**先修**：[Lesson 10：FlashAttention 原理与 Triton](../docs/10-FlashAttention%E5%8E%9F%E7%90%86%E4%B8%8ETriton.md)、[Lesson 05：RMSNorm / SwiGLU / GQA](../docs/05-RMSNorm-SwiGLU-GQA.md)、[Lesson 09：GPU 架构与内存层级](../docs/09-GPU%E6%9E%B6%E6%9E%84%E4%B8%8E%E5%86%85%E5%AD%98%E5%B1%82%E7%BA%A7.md)、[Lesson 19：Assignment 5 对齐实战](../docs/19-Assignment5%E5%AF%B9%E9%BD%90%E5%AE%9E%E6%88%98.md)。
 
 **面试热度**：★★★★★（大模型推理 / 系统工程 / 云原生 ML 岗极高频；常与「训练」对照考查）
 
@@ -11641,7 +11893,7 @@ def dpo_loss(
 
 ## 导读
 
-大语言模型（LLM）在 **推理（inference）** 阶段与训练阶段面临截然不同的瓶颈：**自回归生成** 使计算与显存随 **生成长度** 线性累积；**KV Cache** 成为显存主因；**吞吐与延迟** 在在线服务中往往互相牵制。本节按 **概念 → 代码直觉 → 面试要点 → 练习 → 导航** 组织，系统覆盖 **KV Cache、量化、主流 Serving 框架、投机解码与连续批处理、部署架构与可观测性**，并附 **12+ 道高频面试题** 的「可背诵版」详细回答。
+大语言模型（LLM）在 **推理（inference）** 阶段与训练阶段面临截然不同的瓶颈：**自回归生成** 具有逐步依赖；使用 **KV Cache** 时，缓存大小随 **序列长度** 线性增长，但标准全注意力的累计计算量仍包含二次项（详见 2.1），不能把计算量与缓存显存一并视为线性；长上下文或高并发下，**KV Cache** 可能成为显存主因；**吞吐与延迟** 在在线服务中往往互相牵制。本节按 **概念 → 代码直觉 → 面试要点 → 练习 → 导航** 组织，系统覆盖 **KV Cache、量化、主流 Serving 框架、投机解码与连续批处理、部署架构与可观测性**，并附 **12+ 道高频面试题** 的「可背诵版」详细回答。
 
 **本节一句话**：把 LLM 从「能跑」变成「在成本与 SLA 约束下稳定、可扩展地服务」，核心是 **减少冗余计算与冗余显存、提高硬件利用率、用系统方法隐藏延迟**。
 
@@ -11653,7 +11905,7 @@ def dpo_loss(
 
 #### 1.1.1 自回归（Autoregressive）生成
 
-解码阶段模型以 **逐 token** 方式生成：第 \(t\) 步输出分布 \(p(x_t \mid x_{<t})\)，再采样或贪心得到 \(x_t\)，直至 EOS 或达到最大长度。与训练时 **并行 Teacher Forcing** 不同，推理时 **第 \(t\) 步依赖前 \(t-1\) 步已生成内容**，形成 **顺序依赖**。
+解码阶段模型以 **逐 token** 方式生成：第 $t$ 步输出分布 $p(x_t \mid x_{<t})$，再采样或贪心得到 $x_t$，直至 EOS 或达到最大长度。与训练时 **并行 Teacher Forcing** 不同，推理时 **第 $t$ 步依赖前 $t-1$ 步已生成内容**，形成 **顺序依赖**。
 
 **工程后果**：
 
@@ -11662,7 +11914,7 @@ def dpo_loss(
 
 #### 1.1.2 Memory-bound（访存受限）
 
-在 **单步解码** 中，当 **batch 较小**、**序列已较长** 时，算力（FLOPs）相对 **HBM 带宽** 不足，算子表现为 **访存受限**：GPU **算力未跑满**，时间花在 **读写 KV Cache、权重与激活** 上。这与 **FlashAttention** 在训练/长上下文推理中的分析一致（参见 Lesson 10）：优化重点常是 **减少内存流量、提高数据复用、融合内核**，而非单纯增加 FLOPs。
+在小 batch 的单步解码中，权重与历史 KV 的读取量较大，而每读取一字节完成的计算较少，即**算术强度偏低**。当它低于硬件“峰值 FLOP/s ÷ 带宽”的阈值时，性能更容易受 HBM 带宽限制，GPU 算力无法充分发挥。优化重点常是减少内存流量、提高复用与融合；长上下文 prefill 和大 batch 需要分别测量，不能一概认定为 memory-bound。
 
 **面试一句话**：推理阶段 **batch=1** 或小 batch 时，**内存带宽** 往往是第一瓶颈；提高 **吞吐** 常靠 **更大有效 batch、量化降带宽、PagedAttention 减少碎片与拷贝**。
 
@@ -11672,43 +11924,43 @@ def dpo_loss(
 
 #### 1.2.1 为什么需要 KV Cache：避免对历史 token 的重复计算
 
-在 Transformer 解码器中，第 \(t\) 步计算注意力时，**Query** 只来自 **当前位置**（或最后一步），但 **Key/Value** 需覆盖 **所有已生成位置** \(1..t\)。若每步 **重新计算** 过去位置的 K、V，则对第 \(i\) 层而言，历史位置会被重复计算 **多次**，复杂度与浪费随长度急剧上升。
+在 Transformer 解码器中，第 $t$ 步计算注意力时，**Query** 只来自 **当前位置**（或最后一步），但 **Key/Value** 需覆盖 **所有已生成位置** $1..t$。若每步 **重新计算** 过去位置的 K、V，则对第 $i$ 层而言，历史位置会被重复计算 **多次**，复杂度与浪费随长度急剧上升。
 
 **KV Cache** 的思想：**一旦某位置的 K、V 算出，就按层缓存**，后续步只算 **新 token** 的 Q、K、V，并将新 K、V **追加** 到 cache，注意力在 **缓存的历史 K、V** 与 **当前步** 之间进行。
 
 #### 1.2.2 KV Cache 如何工作（按层、按序列位置缓存）
 
-以 **Decoder-only** 模型为例，对层 \(l\)：
+以 **Decoder-only** 模型为例，对层 $l$：
 
-- 维护张量 **\(K^{(l)}\)**、**\(V^{(l)}\)**，形状在实现中常写为  
+- 维护张量 **$K^{(l)}$**、**$V^{(l)}$**，形状在实现中常写为  
   `[batch, num_kv_heads, seq_len, head_dim]`（具体维序因框架而异）。
-- **第 \(t\) 步前向**：根据当前输入 token 计算 **本步** 的 \(\mathbf{q}_t^{(l)}\)、\(\mathbf{k}_t^{(l)}\)、\(\mathbf{v}_t^{(l)}\)；将 \(\mathbf{k}_t,\mathbf{v}_t\) **写入** cache 的第 \(t\) 个位置；注意力 logits 由 \(\mathbf{q}_t\) 与 **整段** \(K^{(l)}_{:, :, :t, :}\) 计算得到。
+- **第 $t$ 步前向**：根据当前输入 token 计算 **本步** 的 $\mathbf{q}_t^{(l)}$、$\mathbf{k}_t^{(l)}$、$\mathbf{v}_t^{(l)}$；将 $\mathbf{k}_t,\mathbf{v}_t$ **写入** cache 的第 $t$ 个位置；注意力 logits 由 $\mathbf{q}_t$ 与 **整段** $K^{(l)}_{:, :, :t, :}$ 计算得到。
 
-**因果掩码**保证只看过去与当前位置；**RoPE** 等位置编码需与 **绝对位置索引** 一致地写入 cache（实现上常对 **新 token** 用位置 \(t\) 的 rope）。
+**因果掩码**保证只看过去与当前位置；**RoPE** 等位置编码需与 **绝对位置索引** 一致地写入 cache（实现上常对 **新 token** 用位置 $t$ 的 rope）。
 
 #### 1.2.3 KV Cache 显存估算（数量级公式）
 
-在 **多头注意力（MHA）** 下，每层、每 token 需存储 **K** 与 **V** 各一份，元素规模与 **隐藏维度** 同阶。记 **精度每个元素占 \(\texttt{precision}\) 字节**（如 FP16/BF16 为 2，INT8 为 1），一种常用的 **教学级** 估算为：
+在 **多头注意力（MHA）** 下，每层、每 token 需存储 **K** 与 **V** 各一份，元素规模与 **隐藏维度** 同阶。记 **精度每个元素占 $\texttt{precision}$ 字节**（如 FP16/BF16 为 2，INT8 为 1），一种常用的 **教学级** 估算为：
 
-\[
-\text{KV\_bytes} \approx 2 \times L_{\text{layer}} \times 2 \times d_{\text{model}} \times S \times B \times \texttt{precision}.
-\]
+$$
+\text{KV\_bytes} \approx 2 \times L_{\text{layer}} \times d_{\text{model}} \times S \times B \times \texttt{precision}.
+$$
 
-其中 **第一个因子 \(2\)** 可理解为 **K 与 V 两份**；**第二个 \(2\)** 在部分教材中与「每层两组张量」的写法合并出现——不同资料对常数 **\(2\times 2\)** 是否合并写法略有差异，**面试时建议同时说明维度来源**：本质是 **每层 × 每序列位置 × (K 张量 + V 张量)**，每张量元素量与 **\(d_{\text{model}}\)** 同阶（当 head 拼接为 \(d_{\text{model}}\) 时）。
+其中唯一的因子 **$2$** 表示 **K 与 V 两份**。本质是 **每层 × 每序列位置 × (K 张量 + V 张量) × 每元素字节数**；MHA 下每张量的头维拼接为 $d_{\text{model}}$。若为 FP16/BF16，字节数的另一个因子 2 已包含在 $\texttt{precision}=2$ 中，不能再额外乘一次。
 
 更 **标准、可推导** 的写法是直接用 **KV 头数** 与 **头维**：
 
-\[
+$$
 \text{KV\_bytes} \approx L_{\text{layer}} \times S \times B \times H_{\text{kv}} \times D_{\text{head}} \times 2 \times \texttt{precision},
-\]
+$$
 
-其中 **\(H_{\text{kv}}\)** 为 **KV 头数**，**\(D_{\text{head}}\)** 为每头维度，**中间的 \(2\)** 明确表示 **K 与 V**。对 **MHA**，\(H_{\text{kv}} = H_{\text{q}}\)，且 \(H \times D_{\text{head}} = d_{\text{model}}\)，两式在常数因子上可对齐。
+其中 **$H_{\text{kv}}$** 为 **KV 头数**，**$D_{\text{head}}$** 为每头维度，**中间的 $2$** 明确表示 **K 与 V**。对 **MHA**，$H_{\text{kv}} = H_{\text{q}}$，且 $H_{\text{kv}} \times D_{\text{head}} = d_{\text{model}}$，两式完全一致。以上只计张量数据，不含分页、预分配与管理元数据等开销；张量形状可对照 [Hugging Face Cache 文档](https://huggingface.co/docs/transformers/cache_explanation#cache-storage-implementation)。
 
 **直观结论**：KV Cache **随层数、batch、序列长度线性增长**；长上下文服务中 **KV 往往压过权重** 成为 **显存第一大户**。
 
 #### 1.2.4 GQA（Grouped-Query Attention）对 KV Cache 的影响
 
-**GQA**：Query 头数 **多于** KV 头数，多个 Q 头 **共享** 同一组 K、V。与 **MHA** 相比，**每层、每 token 的 K、V 元素量按 \(H_{\text{kv}}/H_{\text{q}}\) 比例下降**（通常 \(H_{\text{kv}}\) 远小于 \(H_{\text{q}}\)），故 **KV Cache 显存显著减小**、带宽压力下降；**精度**上可能略逊于全 MHA，但在大模型上常是 **显存-质量** 的划算折中（参见 Lesson 05）。
+**GQA**：Query 头数 **多于** KV 头数，多个 Q 头 **共享** 同一组 K、V。与 **MHA** 相比，**每层、每 token 的 K、V 元素量按 $H_{\text{kv}}/H_{\text{q}}$ 比例下降**（通常 $H_{\text{kv}}$ 远小于 $H_{\text{q}}$），故 **KV Cache 显存显著减小**、带宽压力下降；**精度**上可能略逊于全 MHA，但在大模型上常是 **显存-质量** 的划算折中（参见 Lesson 05）。
 
 ---
 
@@ -11719,7 +11971,7 @@ def dpo_loss(
 | 格式 | 典型用途 | 备注 |
 |------|----------|------|
 | **INT8** | 权重量化、激活量化；W8A8 等 | 需 **零点 / 缩放**；对多数模型 **PTQ** 即可接受 |
-| **INT4** | 权重量化（如 4bit 权重 + FP16 累加） | **显存与带宽** 降幅大；对 **极敏感层** 常 **保留 FP16** |
+| **INT4** | 常见 W4A16：4-bit 权重与 FP16/BF16 激活 | 计算/累加精度依内核而定，可能 FP32 累加；敏感层可保留高精度 |
 | **FP8（E4M3 / E5M2 等）** | H100 等 **Tensor Core** 原生支持 | 动态范围与 **缩放策略** 关键；训练与推理生态快速发展 |
 
 **核心矛盾**：量化 **降低存储与带宽、提高吞吐**，但引入 **舍入误差**；过强量化导致 **困惑度上升、事实错误增多**，需 **校准与混合精度**。
@@ -11736,12 +11988,12 @@ def dpo_loss(
 #### 1.3.3 代表性算法（简述）
 
 - **GPTQ**：逐层、逐列（或块）**贪心**选择量化参数，依赖 **Hessian** 近似衡量误差，**仅权重量化** 场景强；适合 **离线一次性** 得到 4bit 权重。
-- **AWQ（Activation-aware Weight Quantization）**：强调 **保护对激活幅度敏感** 的「显著」权重通道，**少而关键** 的权重保持高精度，提升 **4bit 下** 的稳定性。
+- **AWQ（Activation-aware Weight Quantization）**：用激活统计选择通道缩放，保护显著权重的量化精度。论文中保留少量 FP16 权重的实验用于说明动机，最终方法通过等价缩放避免这种混合存储，不能说 AWQ 必须保留显著权重为 FP16。参见 [AWQ 原论文](https://arxiv.org/html/2306.00978v2)。
 - **SmoothQuant**：通过 **数学等价变换** 把激活的难以量化部分 **平滑/迁移** 到权重侧，使 **INT8 权重与 INT8 激活** 同时可行，利于 **W8A8** 部署。
 
 #### 1.3.4 精度 vs 速度
 
-一般规律：**比特数越低，吞吐/显存越优，质量风险越大**。工程上常用 **困惑度、下游任务、人工抽检** 与 **延迟 SLO** 联合验收；对 **代码、数学、工具调用** 等场景往往对量化更敏感，需 **分层混合精度**。
+低比特通常减少权重存储与读流量，但吞吐不保证更高：取决于内核、反量化开销、硬件及 batch。权重量化也不会自动量化 KV Cache，缓存量化需单独实现并计入 scale 等开销。应联合验收困惑度、下游任务质量与延迟 SLO。
 
 ---
 
@@ -11838,7 +12090,7 @@ NVIDIA **推理优化栈**：**图优化、内核融合、量化（含 FP8）、
 
 | 阶段 | 在算什么 | 延迟关注点 | 备注 |
 |------|----------|------------|------|
-| **Prefill** | 对 **提示（prompt）** 全序列并行前向，**一次性填满** 各层 KV | **TTFT** 主要由本阶段 + 排队决定 | 计算形态接近 **训练前向**（无因果步进），**算术强度** 通常高于逐步解码 |
+| **Prefill** | 对 prompt 全序列并行前向，建立各层 KV | TTFT 主要由本阶段 + 排队决定 | 仍使用因果 mask，但无需逐 token 生成；算术强度通常高于逐步 decode |
 | **Decode** | **每步只追加 1 个 token**，读 **整段历史 KV** | **TBT / ITL**、生成长度 | 典型 **memory-bound**；**投机解码** 主要优化此阶段 wall-clock |
 
 **面试话术**：同一 **API 延迟** 中，**长 prompt** 拉高 **prefill**；**长续写** 拉高 **decode 步数**；优化需 **分开量测** 两类时间，避免「只优化 decode 却卡在 prefill」。
@@ -11864,9 +12116,12 @@ NVIDIA **推理优化栈**：**图优化、内核融合、量化（含 FP8）、
 
 ```python
 # 概念说明：单序列贪心解码；真实工程需 KV cache、停止条件、采样等
+import torch
 
 @torch.inference_mode()
 def greedy_decode(model, input_ids, max_new_tokens, eos_token_id):
+    model.eval()
+    assert input_ids.size(0) == 1
     generated = input_ids
     for _ in range(max_new_tokens):
         logits = model(generated).logits[:, -1, :]  # 未使用 KV cache 的朴素写法
@@ -11877,7 +12132,7 @@ def greedy_decode(model, input_ids, max_new_tokens, eos_token_id):
     return generated
 ```
 
-**说明**：朴素实现每步对 **整段序列** 重复计算，复杂度 \(O(T^2)\) 量级；**生产环境必须使用增量推理 + KV Cache**。
+**复杂度口径**：忽略固定 prompt，生成 $T$ 个 token，按单层隐藏维 $d$ 计：重复计算完整前缀的总注意力为 $\sum_tO(t^2d)=O(T^3d)$，线性投影/FFN 为 $O(T^2d^2)$。KV Cache 后每步注意力为 $O(td)$，总注意力仍为 $O(T^2d)$，投影/FFN 降为 $O(Td^2)$；它避免重算历史，不把完整生成的所有计算都变成线性。
 
 ### 2.2 KV Cache 增量步（伪代码）
 
@@ -11894,16 +12149,30 @@ def decode_step(model, token_id, past_kv, position):
 ### 2.3 投机解码（接受准则直觉）
 
 ```python
-# 直觉：draft 生成候选；target 批量验证；按接受概率推进
+# 伪代码接口；sample/categorical/uniform/normalized 需由实际实现提供。
 
 def speculative_step(draft_model, target_model, context, gamma):
-    drafts = [draft_model.sample_next(context) for _ in range(gamma)]
-    # target 并行评估 drafts 与上下文的一致性，决定接受长度 n_accept
-    n_accept = target_model.verify(context, drafts)
-    return drafts[:n_accept], n_accept
+    drafts, draft_probs = [], []
+    for _ in range(gamma):
+        q = draft_model.next_distribution(context + drafts)
+        token = categorical(q)
+        drafts.append(token)
+        draft_probs.append(q)
+    # causal target 前向得到每个候选前缀及完整候选后的分布 p_0...p_gamma
+    target_probs = target_model.distributions_for_prefixes(context, drafts)
+    accepted = []
+    for i, token in enumerate(drafts):
+        p, q = target_probs[i], draft_probs[i]
+        if uniform() <= min(1.0, p[token] / q[token]):
+            accepted.append(token)
+        else:
+            # 拒绝后从 max(p-q,0) 归一化分布采样，不是直接截断并退出
+            return accepted + [categorical(normalized((p - q).clamp_min(0)))]
+    # 全部接受时，再由 target 多采一个 token
+    return accepted + [categorical(target_probs[-1])]
 ```
 
-**面试强调**：实现细节（并行验证、分布匹配）决定 **是否无偏**；工业界也有 **接受近似** 以换 **更简单硬件调度**。
+**面试强调**：上例是接口伪代码；标准随机接受率为 $\min(1,p(x)/q(x))$，拒绝时使用归一化的 $(p-q)_+$，全部接受则额外采一个 target token。概率必须是实际温度/过滤后的分布，并正确回滚未接受的 KV。参见 [Speculative Decoding 原论文](https://arxiv.org/abs/2211.17192)。近似验证可能改变分布，需单独验收。
 
 ### 2.4 KV Cache 显存估算（Python 数量级）
 
@@ -11943,7 +12212,7 @@ def kv_cache_bytes_gqa(
 
 1. **为何推理常 memory-bound？** 小 batch、长 KV、权重读带宽；优化方向是 **量化、融合、PagedAttention、提高 batch**。
 2. **KV Cache 存什么？** 每层 **历史位置的 K 与 V**；新 token 只算当前步 QKV 并 **追加**。
-3. **KV 显存怎么估？** 线性于 **层数 × 序列长 × batch × 每 token KV 元素量 × 精度**；**GQA** 用 **\(H_{\text{kv}}\)** 取代 **\(H_{\text{q}}\)**。
+3. **KV 显存怎么估？** 线性于 **层数 × 序列长 × batch × 每 token KV 元素量 × 精度**；**GQA** 用 **$H_{\text{kv}}$** 取代 **$H_{\text{q}}$**。
 4. **PTQ vs QAT？** 成本与精度权衡；**GPTQ/AWQ/SmoothQuant** 各解决什么 **痛点**。
 5. **vLLM 两大支柱？** **PagedAttention** + **Continuous Batching**。
 6. **投机解码价值？** **并行验证** 减少步数；**小 draft + 大 target** 常见。
@@ -11956,8 +12225,8 @@ def kv_cache_bytes_gqa(
 
 ## 四、练习（Practice）
 
-1. **纸面推导**：给定 \(L=80\), \(d_{\text{model}}=4096\), \(S=8192\), \(B=1\), FP16，用两种公式估算 KV Cache，并核对常数因子。
-2. **对比题**：同一 70B 模型，**MHA vs GQA**，KV 显存差多少（设 \(H_{\text{kv}}=8\), \(H_{\text{q}}=64\)）？
+1. **纸面推导**：给定 $L=80$, $d_{\text{model}}=4096$, $S=8192$, $B=1$, FP16，用两种公式估算 KV Cache，并核对常数因子。
+2. **对比题**：同一 70B 模型，**MHA vs GQA**，KV 显存差多少（设 $H_{\text{kv}}=8$, $H_{\text{q}}=64$）？
 3. **设计题**：公司内部 **RAG** 聊天，**80% 请求共享 2K token 文档前缀**，如何设计 **前缀缓存键** 与 **失效策略**？
 4. **调参题**：在线服务 **P99 TTFT** 超标，**吞吐尚可**，列出 **至少 5 条** 可能原因与对应手段。
 5. **权衡题**：何时选 **TensorRT-LLM** 而非 **vLLM**？写清 **假设与约束**。
@@ -11971,15 +12240,15 @@ def kv_cache_bytes_gqa(
 
 ### Q1：LLM 推理为什么通常是自回归的？能否一步输出整句？
 
-**答**：自回归来自 **因果语言模型** 的因子分解 \(p(x_{1:T})=\prod_t p(x_t\mid x_{<t})\)，训练目标与此一致；**一步整句** 需 **非自回归** 或 **扩散式** 等另一类生成范式，与主流 Decoder 训练 **分布不一致**，需 **专门训练** 与 **解码算法** 配合。工业界主路径仍是 **自回归 + KV Cache + 各类加速**。
+**答**：自回归来自 **因果语言模型** 的因子分解 $p(x_{1:T})=\prod_t p(x_t\mid x_{<t})$，训练目标与此一致；**一步整句** 需 **非自回归** 或 **扩散式** 等另一类生成范式，与主流 Decoder 训练 **分布不一致**，需 **专门训练** 与 **解码算法** 配合。工业界主路径仍是 **自回归 + KV Cache + 各类加速**。
 
 ### Q2：KV Cache 解决的是什么冗余？
 
-**答**：没有 cache 时，每步前向会对 **历史 token** 重复计算 **各层 K/V**，复杂度随长度 **平方级** 浪费；cache 后历史 **只算一次**，后续只算 **新 token** 的 QKV，**单层每步** 近似 **\(O(t)\)** 注意力而非 **\(O(t^2)\)**（对当前步而言，与长度 \(t\) 线性）。
+**答**：没有 cache 时每步重算完整前缀的投影与注意力；有 cache 时只算新增 token，并读取历史 K/V。单层单步注意力从 $O(t^2d)$ 降为 $O(td)$，但生成总注意力仍为 $O(T^2d)$；详见 2.1 的总量与单步口径。
 
 ### Q3：写出 KV Cache 显存随哪些量线性变化？为什么 GQA 能省？
 
-**答**：随 **层数 \(L\)**、**batch \(B\)**、**当前缓存长度 \(S\)**、**每 token 每层的 K+V 元素量**、**精度字节数** 线性变化。**GQA** 减少 **KV 头数**，每 token 存更少的 K、V，故 **线性下降**。
+**答**：随 **层数 $L$**、**batch $B$**、**当前缓存长度 $S$**、**每 token 每层的 K+V 元素量**、**精度字节数** 线性变化。**GQA** 减少 **KV 头数**，每 token 存更少的 K、V，故 **线性下降**。
 
 ### Q4：INT8 与 INT4 部署时分别要注意什么？
 
@@ -12047,7 +12316,7 @@ def kv_cache_bytes_gqa(
 
 | 上一节 | 下一节（建议） |
 |--------|----------------|
-| [Lesson 19：Assignment 5 对齐实战](./19-Assignment5对齐实战.md) | 回到 [课程总览](./00-课程总览与学习路线.md) 或继续补充「生产监控与压测」专题 |
+| [Lesson 19：Assignment 5 对齐实战](../docs/19-Assignment5%E5%AF%B9%E9%BD%90%E5%AE%9E%E6%88%98.md) | 回到 [课程总览](../docs/00-%E8%AF%BE%E7%A8%8B%E6%80%BB%E8%A7%88%E4%B8%8E%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF.md) 或继续补充「生产监控与压测」专题 |
 
 **建议延伸阅读**：Hugging Face `generate` 与 **KV cache** 实现；vLLM / SGLang 官方文档中的 **PagedAttention、RadixAttention**；NVIDIA TensorRT-LLM **Release Notes** 中的 **FP8、并行模式**。
 
@@ -12065,823 +12334,3282 @@ def kv_cache_bytes_gqa(
 
 # CS336 学习指南：面试八股文大全（简体中文）
 
-> 面向 Stanford CS336《从零构建语言模型》及 LLM 工程/研究岗的综合复习资料。本题库含 **105 道**高频问答，每题给出 **5–15 行**可直接口述的详细答案，按主题分八章，便于系统背诵与模拟面试。
+> 面向 Stanford CS336《从零构建语言模型》及 LLM 工程/研究岗的综合复习资料。本题库含 **110 道**高频问答，按主题分八章，便于系统复习与模拟面试。
 
----
+> **范围说明**：主要参考 [CS336 Spring 2025](https://cs336.stanford.edu/spring2025/)；本仓库的 20 篇学习笔记不是官方课次划分。LoRA、推理部署等包含延伸学习，DPO 属于该年 A5 的选做部分。“高频”表示复习建议，不是面试题频率统计；掌握概念也不等于完成了对应实验。
 
 ## 文档约定与符号
 
-- **序列长度** \(T\)，模型宽度 \(d\) 或 \(d_{\text{model}}\)，注意力头数 \(h\)，每头维度 \(d_k \approx d/h\)，FFN 隐层宽度常记 \(d_{\text{ff}}\)（如 \(4d\) 或 SwiGLU 下的 \(\frac{8}{3}d\) 等变体）。
+### Transformer 核心维度符号说明
+
+在 Self-Attention 与 Transformer 的复杂度分析中，常用符号及其含义如下：
+
+| 符号                      | 含义                  | 典型取值 / 说明                                              |
+| ------------------------- | --------------------- | ------------------------------------------------------------ |
+| $T$                       | 序列长度（token 数）  | 输入序列的维度，如 512、1024、2048                           |
+| $d$ 或 $d_{\text{model}}$ | 模型宽度 / 隐藏维度   | 每个 token 的向量维度，如 768（BERT-base）、4096（LLaMA）    |
+| $h$                       | 注意力头数            | 多头注意力并行头数，如 12（BERT-base）、32（LLaMA）          |
+| $d_k$                     | 每个头的 Q/K 投影维度 | 通常 $d_k = d / h$，如 768/12 = 64                           |
+| $d_v$                     | 每个头的 V 投影维度   | 通常 $d_v = d / h$，与 $d_k$ 保持一致                        |
+| $d_{\text{ff}}$           | FFN 隐层宽度          | 前馈网络中间层维度，如 $4d$（标准 Transformer）或 $\frac{8}{3}d$（SwiGLU 变体） |
+
+### 常用关系式
+
+- **每头维度**：
+
+    $$
+    d_k = d_v = \frac{d}{h}
+    $$
+
+  即模型宽度被均匀分配到各个注意力头上。
+
+- **标准 FFN 宽度**：
+
+    $$
+    d_{\text{ff}} = 4d
+    $$
+
+  这是原始 Transformer 论文中的配置（两层线性层 + ReLU）。
+
+- **SwiGLU 变体 FFN 宽度**：
+
+    $$
+    d_{\text{ff}} = \frac{8}{3}d \approx 2.67d
+    $$
+
+  这是在 LLaMA 等模型中使用 SwiGLU 激活函数时的常见配置，为保证参数量与标准 FFN 大致持平而调整。
+
+### 代入复杂度公式
+
+将上述符号代入 Self-Attention 的时间复杂度公式：
+
+- **单头 Self-Attention**：
+
+    $$
+    O(T \cdot d \cdot d_k + T^2 \cdot d_k + T^2 \cdot d_v) = O(T \cdot d^2 / h + T^2 \cdot d / h)
+    $$
+
+- **多头 Self-Attention（$h$ 个头并行）**：
+
+    $$
+    O(T \cdot d^2 + T^2 \cdot d)
+    $$
+
+- **完整 Transformer 层（含 FFN）**：
+
+    $$
+    O(T \cdot d^2 + T^2 \cdot d + T \cdot d \cdot d_{\text{ff}})
+    $$
+
+当 $d_{\text{ff}} = 4d$ 时：
+
+$$
+O(T \cdot d^2 + T^2 \cdot d)
+$$
+
+即标准 Transformer 中，Self-Attention 和 FFN 的时间复杂度在 $T$ 和 $d$ 的量级上相当，但 Self-Attention 多出 $T^2$ 项，是长序列场景下的主要瓶颈。
+
 - **答题结构建议**：一句话定义 → 关键公式或步骤 → 直觉解释 → 工程取舍/常见追问。
 
----
+## 一、Transformer 架构（Q1–Q20）
 
-# 一、Transformer 架构（Q1–Q20）
+### Q1：Transformer 的核心创新是什么？
 
-## Q1：Transformer 的核心创新是什么？
+**答：**
 
-**答：**  
-Transformer 用 **纯注意力机制** 替代 RNN/CNN 作为序列建模骨干，使任意位置对之间的依赖可在 **\(O(1)\) 深度** 内直接建模（相对 RNN 的逐步传播），并行度高、适合 GPU 训练。核心组件是 **Scaled Dot-Product Self-Attention**：用 \(Q,K,V\) 线性投影、点积相似度、缩放与 softmax 得到权重，再对 \(V\) 加权求和；配合 **多头** 子空间、**残差** 与 **LayerNorm**（或 RMSNorm）使深层网络稳定。位置信息通过 **绝对/相对位置编码**（如正弦或 RoPE）注入。整体上，Transformer 把「长程依赖 + 可并行 + 可扩展深度」统一到一个模块化块（Attention + FFN）中，成为现代 LLM 的基础。
+Transformer 的核心创新是用 **纯自注意力机制** 替代 RNN/CNN 作为序列建模主干，使任意位置对可在 **O(1) 路径长度** 内直接交互（RNN 需经过 O(n) 个顺序步骤），极大提升并行性和长程依赖建模能力。核心操作是 **Scaled Dot-Product Attention**：Q、K、V 线性投影后计算点积相似度，经缩放和 softmax 得到权重，再对 V 加权求和；**多头机制**允许模型在不同子空间关注不同模式。配合**残差连接**与 **LayerNorm**（原始为 Post-Norm，现代常用 Pre-Norm）稳定深层训练，**前馈网络（FFN）**提供逐位置的非线性变换。位置信息通过**绝对正弦位置编码**（原始方案）或后续的**相对位置编码/RoPE** 注入，弥补无位置编码的自注意力缺少顺序信息这一缺陷。整体上，Transformer 将“长程依赖 + 高并行 + 可扩展深度”统一为模块化结构，成为现代 LLM 的基础。**代价是稠密自注意力包含 O(n²) 的序列长度项，限制了超长序列处理。**
 
----
+### Q2：Self-Attention 的计算流程？（Q/K/V → 点积 → 缩放 → Softmax → 加权求和）
 
-## Q2：Self-Attention 的计算流程？（Q/K/V → 点积 → 缩放 → Softmax → 加权求和）
+**答：**
 
-**答：**  
-对输入 \(X\in\mathbb{R}^{T\times d}\)，先线性投影得到 \(Q=XW^Q\)、\(K=XW^K\)、\(V=XW^V\)。计算注意力分数 \(S = QK^\top\)（形状 \(T\times T\)），再 **缩放** \(S \leftarrow S/\sqrt{d_k}\) 防止点积过大。对每一行（对每个 query 位置）在 key 维度上做 **softmax**，得到权重矩阵 \(A=\mathrm{softmax}(S)\)（行和为 1）。最后 **加权求和** 输出 \(O = AV\)。批量情形下在 batch 维独立重复；多头时各头并行后再经 \(W^O\) 融合。因果解码时还在 softmax 前对非法位置加 \(-\infty\) 掩码。
+对输入 $X \in \mathbb{R}^{T \times d}$，先通过三个线性投影矩阵得到：
 
----
+$$
+Q = XW^Q,\quad K = XW^K,\quad V = XW^V
+$$
 
-## Q3：Self-Attention 的时间复杂度和空间复杂度？
+其中 $W^Q, W^K \in \mathbb{R}^{d \times d_k}$，$W^V \in \mathbb{R}^{d \times d_v}$，通常 $d_k = d_v = d/h$（$h$ 为头数）。
 
-**答：**  
-**时间**：瓶颈在 \(QK^\top\) 与 \(AV\)，均为 \(O(T^2 d_k)\) 量级；多头合计 \(O(T^2 d)\)（\(d_k=d/h\) 时）。若考虑 FFN 子层，每层还有 \(O(T d \cdot d_{\text{ff}})\)。故 **长序列** 时 \(T^2\) 项主导。  
-**空间**：若 **物化** 完整 \(T\times T\) 注意力矩阵，额外 **\(O(T^2)\)** 显存；加上激活与中间张量，峰值可能很高。**FlashAttention** 等通过分块重算降低 HBM 读写与峰值。推理时 Decoder 还可用 **KV Cache** 避免重复计算历史 \(K,V\)。
+计算注意力分数：
 
----
+$$
+S = QK^\top \in \mathbb{R}^{T \times T}
+$$
 
-## Q4：为什么要除以 \(\sqrt{d_k}\)？
+再除以 $\sqrt{d_k}$ 进行缩放（目的是控制点积大小，避免 softmax 梯度进入饱和区）。对每一行做 softmax，得到权重矩阵：
 
-**答：**  
-点积 \(q^\top k\) 可看作 \(d_k\) 个分量乘积之和；若各分量方差为 \(\sigma^2\)，则和的方差约为 **\(d_k \sigma^2\)**，随维度增大 softmax 输入 **幅值爆炸**，进入饱和区导致梯度极小。除以 \(\sqrt{d_k}\) 使点积尺度与维度无关，近似 **单位方差**，训练更稳定。也可理解为在内积核上控制「尖锐程度」，避免某一维主导。实践中与多头设计配套：\(d_k = d/h\)。
+$$
+A = \text{softmax}\left(\frac{S}{\sqrt{d_k}}\right)
+$$
 
----
+（行和为 1），最后加权求和：
 
-## Q5：多头注意力（MHA）比单头好在哪里？
+$$
+O = AV \in \mathbb{R}^{T \times d_v}
+$$
 
-**答：**  
-多头将 \(h\) 组独立 \((W_i^Q,W_i^K,W_i^V)\) 并行注意力，再拼接经 \(W^O\) 融合。不同头可学习 **不同子空间** 的关系（局部搭配、句法、长距共指等），表达能力比单一大矩阵更丰富。单头需在同一 \(d_k\) 维里挤所有模式，易相互干扰。复杂度上多头总计算量与单头「宽矩阵一次算」同阶，但 **表示多样性** 更强。实证上多头可提升困惑度与下游任务，是 Transformer 标配。
+多头注意力则将 $h$ 个头的结果拼接后经 $W^O \in \mathbb{R}^{h d_v \times d}$ 映射回 $T \times d$：
 
----
+$$
+\text{MultiHead}(Q, K, V) = \text{Concat}(\text{head}_1, \dots, \text{head}_h) W^O
+$$
 
-## Q6：Encoder-only vs Decoder-only vs Encoder-Decoder 各自适用场景？
+因果解码时在 softmax 前对非法未来位置加 $-\infty$ 掩码，即：
 
-**答：**  
-**Encoder-only（如 BERT）**：双向上下文，适合 **分类、检索、表示学习**；预训练常为 MLM。  
-**Decoder-only（如 GPT、LLaMA）**：**因果** 自注意力，统一 **下一 token 预测** 预训练，与自回归生成一致，工程简单、Scaling 友好，**现代 LLM 主流**。  
-**Encoder-Decoder（如 T5、原始翻译）**：编码器双向、解码器因果 + **交叉注意力** 读源端，适合 **seq2seq**（翻译、摘要、带条件的生成）。选型看任务：仅需理解选 Encoder-only；开放域对话/续写选 Decoder-only；显式源→目标对齐选 Encoder-Decoder。
+$$
+M_{ij} =
+\begin{cases}
+0, & i \ge j \\
+-\infty, & i < j
+\end{cases}
+$$
 
----
+若计入 Q/K/V 与输出投影，多头注意力的总时间复杂度为 $O(Td^2+T^2d)$：前一项来自线性投影，后一项来自注意力分数及对 V 的聚合。长序列时 $T^2d$ 常成为瓶颈，短而宽的模型中 $Td^2$ 也可能占主导。
 
-## Q7：为什么现代 LLM 都用 Decoder-only？
+### Q3：Self-Attention 的时间复杂度和空间复杂度？
 
-**答：**  
-（1）**预训练目标统一**：自回归语言建模与推理形式一致，无需额外任务头。（2）**工程简单**：单栈模块、KV Cache 路径清晰，易于分布式与推理优化。（3）**Scaling Laws** 下大规模数据+算力下 Decoder-only 扩展性经验上更成熟。（4）Encoder-Decoder 需维护两套栈与交叉注意力，参数量与实现复杂度更高；许多「翻译式」能力可被大 Decoder-only + 指令微调覆盖。研究上也有用 Encoder-only 做嵌入、Decoder-only 做生成的混合系统，但 **基座 LLM** 以 Decoder-only 为主流。
+**答：**
 
----
+**一、时间复杂度**
 
-## Q8：残差连接的作用？
+对于单头自注意力，输入 $X \in \mathbb{R}^{T \times d}$，投影到 $Q, K, V \in \mathbb{R}^{T \times d_k}$，其时间复杂度分解如下：
 
-**答：**  
-层输出常写为 \(x_{l+1} = x_l + F_l(\mathrm{Norm}(x_l))\)（Pre-Norm）或 Post-Norm 变体。残差提供 **恒等捷径**，使梯度可直接回传，缓解深层 **梯度消失**，并让子层学习 **对恒等的修正** 而非从零映射整个函数，优化曲面更平滑。在 Transformer 中，残差保证信息可跨层直通，有利于深层堆叠（数十层）。初始化适当时，网络近似逐步 **叠加** 小扰动，训练更稳。
+| 步骤           | 操作                                  | 时间复杂度               |
+| -------------- | ------------------------------------- | ------------------------ |
+| Q/K/V 投影     | $XW^Q, XW^K, XW^V$                    | $O(T \cdot d \cdot d_k)$ |
+| 注意力分数计算 | $QK^\top \in \mathbb{R}^{T \times T}$ | $O(T^2 \cdot d_k)$       |
+| Softmax        | 对 $T \times T$ 矩阵每行做 softmax    | $O(T^2)$                 |
+| 加权求和       | $AV \in \mathbb{R}^{T \times d_v}$    | $O(T^2 \cdot d_v)$       |
 
----
+其中 $QK^\top$ 和 $AV$ 的矩阵乘法是主要瓶颈，均为 $O(T^2 \cdot d_k)$ 量级。
 
-## Q9：LayerNorm vs BatchNorm，为什么 Transformer 选 LN？
+当 $d_k = d_v = d$ 时（单头情况），总时间复杂度为：
 
-**答：**  
-**BatchNorm** 在 batch 维统计均值方差，依赖 batch 大小，且对序列长度变化、小 batch、分布式 **同步统计** 不友好。**LayerNorm** 在 **单样本、特征维** 上归一化，与 batch 无关，适合 **变长序列** 与 **自回归** 训练。Transformer 中 token 独立同分布假设弱，LN 稳定每步激活尺度。RNN 时代已常用 LN；CV 中 BN 更常见。现代 LLM 也广泛使用 **RMSNorm**（去掉均值中心化）进一步简化。
+$$
+O(T \cdot d^2 + T^2 \cdot d)
+$$
 
----
+对于多头注意力（$h$ 个头，$d_k = d_v = d/h$），各个头并行计算，总时间复杂度为：
 
-## Q10：Pre-Norm vs Post-Norm 哪个更好？
+$$
+O(T \cdot d^2 + T^2 \cdot d)
+$$
 
-**答：**  
-**Post-Norm**（原始 Transformer）：\(x_{l+1}=\mathrm{LN}(x_l+F_l(x_l))\)，残差在 Norm 外，深层训练有时需 **warmup** 等技巧。**Pre-Norm**：\(x_{l+1}=x_l+F_l(\mathrm{LN}(x_l))\)，先 Norm 再子层，**梯度更稳定、更易训练极深模型**，但表示上有人认为 Post-Norm 略强（有争议）。大模型实践（GPT-3、LLaMA 等）普遍采用 **Pre-Norm** 或 Pre-Norm + 其他技巧。结论：**训练稳定性与深度扩展优先时选 Pre-Norm**；若复现老论文或特定结构可用 Post-Norm。
+即多头机制不增加额外的 $T^2$ 项复杂度，只是将 $d$ 分配到各个头上。
 
----
+若考虑 Transformer 整层（含 FFN 子层），还需加上：
 
-## Q11：RMSNorm 和 LayerNorm 的区别？
+$$
+O(T \cdot d \cdot d_{\text{ff}})
+$$
 
-**答：**  
-**LayerNorm**：对最后一维去均值、除标准差：\(\hat{x}=(x-\mu)/\sigma\)。**RMSNorm** 省略重中心化，仅用均方根缩放：\(\mathrm{RMS}(x)=\sqrt{\frac{1}{d}\sum x_i^2+\epsilon}\)，\(\hat{x}_i = x_i/\mathrm{RMS}(x)\)，有时乘可学习增益。直觉：Transformer 中 **去均值** 贡献有限，RMSNorm **计算更少、速度略快**，效果常与 LN 相当或略优。LLaMA 等采用 RMSNorm。两者都是 **逐 token、特征维** 归一化。
+其中 $d_{\text{ff}}$ 为前馈网络的隐层维度（通常 $d_{\text{ff}} = 4d$）。
 
----
+**结论**：对于长序列（大 $T$），$T^2$ 项主导复杂度，这是 Self-Attention 的主要瓶颈。
 
-## Q12：SwiGLU 激活函数的公式和优势？
+**二、空间复杂度**
 
-**答：**  
-SwiGLU 将 FFN 写为 **门控线性单元** 形式：\(\mathrm{SwiGLU}(x) = (\mathrm{Swish}(xW_1) \odot (xW_2))W_3\)，其中 \(\mathrm{Swish}(t)=t\cdot\sigma(t)\)。相比 ReLU/GELU 单路，**双投影 + 逐元素乘** 提供更强非线性与 **门控**（选择性通过信息）。PaLM、LLaMA 等采用后，经验上 **相同宽度下困惑度更好**；为保持参数量可比，中间维常调整为约 **\(\frac{2}{3}\times 4d\)** 等（相对标准 \(4d\) FFN）。代价是 **多一次矩阵乘** 与显存。
+主要显存占用来源：
 
----
+| 占用项                                            | 空间复杂度     | 说明           |
+| ------------------------------------------------- | -------------- | -------------- |
+| 注意力分数矩阵 $S = QK^\top$                      | $O(T^2)$       | 若不物化可优化 |
+| 注意力权重矩阵 $A = \text{softmax}(S/\sqrt{d_k})$ | $O(T^2)$       | 同上           |
+| Q/K/V 中间激活                                    | $O(T \cdot d)$ | 三份           |
+| 输出 $O$                                          | $O(T \cdot d)$ |                |
 
-## Q13：GQA / MQA / MHA 的区别和各自优缺点？
+如果**物化完整注意力矩阵**（标准实现），额外显存占用为：
 
-**答：**  
-**MHA（Multi-Head Attention）**：每组 \(Q,K,V\) 独立，表达力最强，但 **KV 参数量与缓存** 随头数增加。  
-**MQA（Multi-Query Attention）**：**多 Q、共享一组 K/V**，大幅减少 KV 投影参数与 **推理 KV Cache**，速度提升，但可能略损质量。  
-**GQA（Grouped-Query Attention）**：折中——**K/V 分组共享**，组数少于头数，平衡 **质量与吞吐**。  
-总结：**MHA** 训练最灵活；**MQA** 推理最省 KV；**GQA** 工业界常用（如 LLaMA 2/3）。选型看 **延迟与显存** 约束。
+$$
+O(T^2)
+$$
 
----
+加上 Q/K/V 和输出，总空间复杂度约为：
 
-## Q14：RoPE 旋转位置编码的核心思想？
+$$
+O(T^2 + T \cdot d)
+$$
 
-**答：**  
-RoPE（Rotary Position Embedding）将 \(q,k\) 拆成二维子空间对，对每个位置 \(m\) 施加 **二维旋转**，旋转角随 \(m\) 与频率变化。等价于在 **复数域** 用 \(e^{im\theta}\) 调制。这样 **相对位置** 体现为旋转差：内积只依赖 **\(m-n\)**，天然适合自注意力。实现上常对 \(Q,K\) 应用旋转再算点积，无需在 embedding 层加绝对位置向量。外推性可通过 **NTK**、缩放基频等改进。**长上下文** 模型广泛采用 RoPE。
+以上空间量级按单头或把头数视为常数书写。显式计入 $B$ 个样本、$h$ 个头时，物化注意力矩阵为 $O(BhT^2)$，Q/K/V 和输出为 $O(BTd)$；估算实际显存时不能漏乘 batch 和头数。
 
----
+对于长序列，$T^2$ 项是主要瓶颈。仅计算**单个样本、单个头的一张** FP16 注意力矩阵，$T=4096$ 时约为 32 MiB，$T=65536$ 时约为 8 GiB；朴素多头、批量训练还会随 batch size 和头数增加，并包含反向传播所需的其他激活。
 
-## Q15：RoPE vs 绝对位置编码 vs 相对位置编码？
+**三、复杂度优化方法**
 
-**答：**  
-**绝对位置编码**（如正弦）：直接加到输入 embedding，实现简单，但相对关系需网络间接学。  
-**相对位置编码**（如 Shaw、T5 偏置）：在注意力 logits 上加只依赖 \(i-j\) 的项，显式建模相对距离。  
-**RoPE**：通过旋转注入位置，**内积即编码相对位置**，与注意力形式统一，不增加额外 attention bias 表。  
-对比：**RoPE** 在 LLM 中最流行（实现简洁、与 FlashAttention 兼容好）；**ALiBi** 等也是相对方案。选型取决于框架与 **长度外推** 需求。
+| 方法                   | 核心思想                                                    | 效果                                                         |
+| ---------------------- | ----------------------------------------------------------- | ------------------------------------------------------------ |
+| **FlashAttention**     | 分块计算 + 不物化完整 $T \times T$ 矩阵 + 重计算            | 算术复杂度仍为 $O(T^2d)$；在论文设定下 HBM 访问量为 $\Theta(T^2d_k^2/M)$（$M$ 为片上存储容量），同时显著降低峰值显存 |
+| **稀疏注意力**         | 只计算部分位置的注意力（如局部窗口、块稀疏模式）            | 注意力对数与权重存储由 $O(T^2)$ 降至 $O(Tw)$；计入头维的打分与聚合算术量约为 $O(Twd)$，另有投影项 $O(Td^2)$ |
+| **线性注意力**         | 用可分解核/特征映射等替代标准 softmax attention，再重排乘法 | 典型算术量可降至关于 $T$ 线性、如 $O(Td^2)$；它改变或近似注意力形式，不能越过 softmax 直接套用 $(QK^\top)V=Q(K^\top V)$ |
+| **KV Cache**（推理时） | 缓存历史 token 的 K 和 V，避免重复投影和完整前缀重算          | 第 $t$ 个解码步的注意力项由完整重跑的 $O(t^2d)$ 降为 $O(td)$；生成 $T$ 个 token 的注意力总量由 $O(T^3d)$ 降为 $O(T^2d)$，缓存空间为 $O(Td)$ |
 
----
+**四、总结**
 
-## Q16：因果掩码（causal mask）如何实现？
+| 维度             | 复杂度                                 | 瓶颈                                 |
+| ---------------- | -------------------------------------- | ------------------------------------ |
+| **时间复杂度**   | $O(T^2 \cdot d + T \cdot d^2)$         | $T^2$ 项（长序列时）                 |
+| **空间复杂度**   | $O(T^2 + T \cdot d)$                   | $T^2$ 项（标准实现物化注意力矩阵时） |
+| **主要优化方向** | FlashAttention、稀疏注意力、线性注意力 | 减少或避免 $T^2$ 项                  |
 
-**答：**  
-自回归训练中，位置 \(i\) 的 query **只能** attend 到 \(j\le i\) 的 key。实现上在 **softmax 前** 将非法位置 \((j>i)\) 的 logits 设为 **\(-\infty\)**（或极大负数），softmax 后权重为 0。张量形式：构造 **下三角** 掩码或与 `torch.triu` 生成的上三角布尔矩阵相乘。推理时若用 KV Cache，新 token 只与历史缓存算注意力，**等价于动态扩展的下三角**。训练时常用 **融合内核** 避免显式 \(T\times T\) 大张量。
+### Q4：为什么要除以 $\sqrt{d_k}$？
 
----
+**答：**
 
-## Q17：Transformer 的参数量如何计算？
+点积 $q^\top k$ 可看作 $d_k$ 个分量乘积之和。若 $q_i$、$k_i$ 相互独立、均值为 0，方差分别为 $\sigma_q^2$、$\sigma_k^2$，则：
 
-**答：**  
-粗略估算（单层、Decoder block）：**Attention** 含 \(W^Q,W^K,W^V,W^O\) 各 \(d\times d\)（或按头拆分等价），约 **\(4d^2\)**；**FFN** 两层约 **\(2d\cdot d_{\text{ff}}\)**（SwiGLU 为三路投影，系数不同）；**Norm** 可忽略或很小。总参数量 \(\approx L \times (\text{Attn}+\text{FFN}) + \text{词嵌入 } Vd + \text{输出层}\)（常 **权重共享** 则少一层 \(Vd\)）。实际还需加 **bias、GQA 共享** 等修正。面试可说：**主导项是 \(L\cdot d^2\) 与嵌入 \(Vd\)**，与论文 reported params 数量级一致即可。
+$$
+\operatorname{Var}(q^\top k)=d_k\sigma_q^2\sigma_k^2
+$$
 
----
+在常用的单位方差假设下，未缩放点积的方差为 $d_k$；随维度增大，softmax 输入幅值增大，容易进入饱和区。除以 $\sqrt{d_k}$ 后方差约为 1，使分数尺度不随头维度增长，训练更稳定。实践中它与多头设计配套：
 
-## Q18：Feed-Forward Network 在 Transformer 中的作用？
+$$
+d_k = d/h
+$$
 
-**答：**  
-Attention 主要做 **token 间信息路由与混合**（谁看谁），**FFN** 对每个位置 **独立** 做高维非线性变换，增强 **逐位置表示能力**（记忆、词汇、局部模式）。可理解为：**Attention 聚合上下文，FFN 处理聚合后的特征**。标准 FFN 为两层 MLP：\(d \to d_{\text{ff}} \to d\)，中间维常取 \(4d\)。没有 FFN，纯注意力在固定深度下表达力受限。SwiGLU 等变体进一步强化非线性与门控。
+缩放操作使得不同头数的设置保持一致的尺度。
 
----
+### Q5：多头注意力（MHA）比单头好在哪里？
 
-## Q19：Embedding 层的作用和实现？
+**答：**
 
-**答：**  
-将离散 token ID（\(0..V-1\)）映射为 **连续向量** \( \mathbb{R}^d\)，作为模型输入；输出层常将隐藏状态映射回 **词表 logits**（可与输入 embedding **权重共享** 以减少参数）。实现为 **`nn.Embedding(V,d)`** 查表。子词词表大时，embedding 参数量 **\(Vd\)** 可观。质量上，embedding 学习 **符号→语义几何**；位置信息可由 **位置编码** 叠加（Decoder-only 中常见）或 RoPE 在 \(Q,K\) 上处理。
+多头将 $h$ 组独立投影矩阵并行计算注意力：
 
----
+$$
+\text{head}_i = \text{Attention}(XW_i^Q, XW_i^K, XW_i^V)
+$$
 
-## Q20：GPT vs BERT vs LLaMA vs T5 的主要区别？
+再将 $h$ 个头输出拼接后经 $W^O$ 融合：
 
-**答：**  
-**GPT**：Decoder-only，自回归预训练，生成强。  
-**BERT**：Encoder-only，MLM/NSP，理解任务强，不直接自回归生成。  
-**T5**：Encoder-Encoder，统一 text-to-text，所有任务转成字符串生成。  
-**LLaMA**：开源 Decoder-only 系列，**RMSNorm + SwiGLU + RoPE + GQA** 等现代配方，规模与效率兼顾。  
-面试总结：**架构（Enc/Dec）**、**预训练目标**、**位置编码与 Norm**、**开源生态** 四点对比即可。
+$$
+\text{MultiHead}(X) = \text{Concat}(\text{head}_1, \dots, \text{head}_h) W^O
+$$
 
----
+不同头可学习 **不同子空间** 的关系（局部搭配、句法、长距共指等），表达能力比单一大矩阵更丰富。单头需在同一 $d_k$ 维里挤所有模式，易相互干扰。复杂度上多头总计算量与单头「宽矩阵一次算」同阶，即：
 
-# 二、分词器（Q21–Q30）
+$$
+O(T^2 \cdot d + T \cdot d^2)
+$$
 
-## Q21：BPE（Byte Pair Encoding）训练流程是什么？
+多头结构提供更丰富的表示子空间，实证上通常能改善任务效果或**降低困惑度**。但它不天然保证降低过拟合，头数过多还可能产生冗余，需要与模型宽度和任务共同设计。
 
-**答：**  
-（1）语料 **预分词**（空格、规则）成词或子串序列。（2）初始词表常为 **字符级** 或字节级符号。（3）迭代：统计 **相邻符号对** 频率，合并 **最高频** 一对为新符号，更新语料表示。（4）重复至达到 **合并次数** 或 **词表大小** 上限。推理时用 **确定性的最长匹配** 或按合并规则编码。BPE 在 **未登录词** 上通过子词拆分避免 OOV，平衡词表大小与覆盖率。
+### Q6：Encoder-only vs Decoder-only vs Encoder-Decoder 各自适用场景？
 
----
+**答：**
 
-## Q22：字节级 BPE（byte-level BPE）有什么优势？
+三种架构的差别不只在注意力掩码，还包括单栈或双栈结构、是否具有 Encoder-Decoder Cross-Attention，以及相应的预训练目标；这些设计共同决定信息流和适用任务。
 
-**答：**  
-以 **字节**（256 类）为基础 alphabet，任何 Unicode 文本可 **无损** 编码，**无 OOV**。对多语言、emoji、噪声 URL 友好。合并规则在字节序列上学习，与具体脚本无关。代价是英文等语言 **序列略长**（每字符多字节），但总可控。GPT-2/3、许多开源 tokenizer 采用 **BPE on bytes** 或类似策略，工程鲁棒性高。
+**1. Encoder-only（如 BERT、RoBERTa）**
 
----
+**核心机制**：双向自注意力，每个 token 能同时看到**左右两侧**的所有 token。
 
-## Q23：中文为什么往往 token 消耗更高？
+**预训练任务**：MLM（Masked Language Model，掩码语言模型），即随机掩盖 15% 的 token，让模型根据上下文还原。
 
-**答：**  
-中文以 **字/词** 为基本单位，若子词词表对汉字覆盖靠 **字级或常见双字**，则 **每语义单位对应 token 数** 常高于英文（英文多音节词被整词或长子词吸收）。Unicode 下字节级编码也会拉长序列。结果：**同样信息量，中文 prompt 的 token 数更多**，计费和上下文窗口占用更高。缓解：更大中文语料训练 tokenizer、专用中文词表、或业务侧 **压缩提示**。
+**适用场景**：分类、信息检索、文本相似度、序列标注（NER、词性标注）等"理解型"任务。
 
----
+**代表模型**：BERT、RoBERTa、ALBERT。
 
-## Q24：BPE 与 WordPiece 的主要区别？
+**选型理由**：如果任务主要需要双向上下文表示并输出标签或向量，Encoder-only 通常是高效且常见的选择，但并非所有理解任务的必然最优方案。
 
-**答：**  
-两者都是 **数据驱动子词** 合并。**BPE** 通常按 **最高频相邻对** 贪心合并。**WordPiece**（BERT）常用 **最大化语言模型概率增益** 或基于互信息等准则选择合并，倾向于合并能 **最大幅度降低困惑度** 的 pair。实现细节与 **## 前缀**（表示空格）等有关。实际效果：**大同小异**，BERT 系用 WordPiece，GPT 系多用 BPE。面试点：**合并准则不同**，但目标都是子词平衡。
+**2. Decoder-only（如 GPT、LLaMA、Qwen）**
 
----
+**核心机制**：因果自注意力（Causal Attention），每个 token 只能**看到自己及之前的 token**，未来 token 被掩码遮住，保证自回归生成时不会"作弊"。
 
-## Q25：词表大小如何选择？
+**预训练任务**：Next Token Prediction（下一 token 预测），即给定前文预测下一个 token。训练和生成都使用相同的条件语言模型分解，但训练通常使用真实前缀（teacher forcing），生成时使用模型自己产生的前缀，因此仍存在暴露偏差和解码策略差异，不能说两阶段过程完全一致。
 
-**答：**  
-**更大词表**：每 token 信息量大，序列短，但 **embedding/softmax** 参数与计算重，低频 token 估计差。**更小词表**：序列长，注意力/FFN 随 \(T\) 变慢。经验上 **32k–100k+** 常见，与语料语言分布、产品 **延迟** 权衡相关。需与 **模型宽度** 联合考虑（大模型可撑更大词表）。评估指标：**压缩率**（bytes/token）、**OOV 率**、下游困惑度。
+**适用场景**：开放域对话、文本续写、代码生成、推理等"生成型"任务。
 
----
+**代表模型**：GPT 系列、LLaMA 系列、Qwen、DeepSeek。
 
-## Q26：预分词（pre-tokenization）的作用？
+**选型理由**：预训练任务与下游生成任务一致，工程简单，Scaling Law 友好，是**现代 LLM 的主流架构**。注意：Decoder-only 也可通过"前缀提示"来执行翻译、摘要等任务，只是不如 Encoder-Decoder 显式对齐。
 
-**答：**  
-在 BPE/Unigram 学习前，用 **规则**（空格分词、语言特定、标点处理）把原始文本切成 **粗粒度单元**，再在单元内部做子词统计。作用：**注入人类先验**（英文空格边界）、**减少无意义跨空格合并**、与 **SentencePiece** 的 `user_defined_symbols` 等协同。预分词不同会导致 **同一算法不同词表**，训练 tokenizer 需 **固定管线** 可复现。
+**3. Encoder-Decoder（如 T5、BART、原始 Transformer）**
 
----
+**核心机制**：Encoder 采用双向注意力，负责**理解源端**；Decoder 采用**因果注意力** + **交叉注意力（Cross-Attention）**，在生成每一步时主动"查询"源端信息。
 
-## Q27：特殊 token 如何处理？
+**预训练任务**：Span Corruption（如 T5 的随机 span 掩码 + 预测）或 Denoising（如 BART）。
 
-**答：**  
-常见：`<pad>` 填充、`<bos>/<eos>` 起止、`<unk>`（应尽量少用）、`[MASK]`（BERT）、对话 **角色/工具** 专用 token。实现：**预留 ID**，在词表合并后固定；训练时 **注意力掩码** 忽略 pad；损失 **不计算** pad 位置。模板化对话（ChatML 等）用 **结构化特殊串** 帮助模型区分轮次。**Tokenizer 与模型训练必须同源**，否则 ID 错位。
+**适用场景**：机器翻译、文本摘要、语音识别等"输入-输出有明确对应关系"的 Seq2Seq 任务。
 
----
+**代表模型**：T5、BART、原始 Transformer。
 
-## Q28：SentencePiece 是什么？与裸 BPE 关系？
+**选型理由**：当输入和输出的结构和长度差异较大，且需要显式的"源→目标"对齐时，Encoder-Decoder 是最自然的选择。
 
-**答：**  
-SentencePiece 是 **训练与编码库**，内置 **BPE、Unigram** 等算法，把 **原始句子** 当输入（可先 **空格转 underscore** 再学），**逆概率** 编码。优势：**语言无关**、端上 **自包含**（无需预分词与外部工具一致）。HuggingFace 中 `LlamaTokenizer` 等常基于它。与裸 BPE 关系：**算法可等价**，SP 提供工程封装与 **确定性** 编码 API。
+**总结对比表**
 
----
+| 架构                | 注意力             | 预训练任务                  | 适用场景             | 代表模型         |
+| ------------------- | ------------------ | --------------------------- | -------------------- | ---------------- |
+| **Encoder-only**    | 双向               | MLM                         | 分类、检索、表示学习 | BERT、RoBERTa    |
+| **Decoder-only**    | 因果（单向）       | Next Token Prediction       | 对话、续写、推理     | GPT、LLaMA、Qwen |
+| **Encoder-Decoder** | 双向 + 因果 + 交叉 | Span Corruption / Denoising | 翻译、摘要、Seq2Seq  | T5、BART         |
 
-## Q29：Tokenizer 对训练与推理性能有什么影响？
+**面试时的一句话总结**
 
-**答：**  
-（1）**序列长度**：词表影响 \(T\)，进而影响 **\(O(T^2)\)** 注意力成本。（2）**词表大** → softmax 与 embedding 大，**吞吐**下降。（3）**中英文本 token 比** 影响 **计费与缓存**。（4）**低质量分词** → 更高困惑度、更差对齐。优化：**词表与模型协同设计**、推理侧 **融合内核**、批处理时长度分桶。CS336 强调：**Tokenizer 是系统的一部分**。
+> "Encoder-only 适合'读'，Decoder-only 适合'写'，Encoder-Decoder 适合'读完再写'。其中 Decoder-only 因预训练-生成一致性强、Scaling 友好，已成为现代 LLM 的主流选择。"
 
----
+### Q7：为什么现代通用 LLM 多采用 Decoder-only？
 
-## Q30：Unigram 分词（SentencePiece Unigram）原理简述？
+**答：**
 
-**答：**  
-Unigram 从 **大词表** 出发（所有字符与常见片段），通过 EM 思想 **迭代删除** 子词，使语料 **似然最大**。与 BPE **从底向上合并** 相反，是 **自上而下删减**。优势：对 **多语言** 与 **概率编码**（多种分段取概率最大）较灵活。缺点：训练 **更慢**、实现复杂。T5、mT5 等使用 Unigram。面试：**BPE 合并 vs Unigram 删减** 对比即可。
+（1）**目标形式统一**：预训练和生成都使用因果 next-token 条件分布，通常无需为开放式生成增加任务头；但 teacher forcing 与自由生成的输入分布不同，仍可能存在暴露偏差。
 
----
+（2）**工程简单**：单栈模块、KV Cache 路径清晰，易于分布式与推理优化。Encoder-Decoder 还需维护编码器及交叉注意力；其 Cross-Attention 复杂度为 $O(T_{\text{tgt}}T_{\text{src}}d)$。固定 Encoder 输出的 K/V 可以预计算并缓存，但每个解码步仍需让 query 访问源序列。
 
-# 三、训练优化（Q31–Q45）
+（3）**Scaling 经验充分**：大量公开的 Decoder-only 模型验证了这一路线在规模扩展、上下文学习和统一生成接口上的有效性。对未公开详细结构的闭源模型，不应仅凭产品名称断言其具体架构。
 
-## Q31：Adam 与 SGD 的区别？
+（4）**参数分配与实现取舍**：Encoder-Decoder 需要在两套栈及 Cross-Attention 间分配参数；Decoder-only 则把主要容量集中在单一自回归栈。许多翻译、摘要和问答能力可以通过预训练与指令微调获得，但在输入输出明确分离的条件生成任务上，Encoder-Decoder 仍有自身优势。
 
-**答：**  
-**SGD**：沿梯度方向更新，简单但对 **稀疏/病态曲率** 敏感，需调 **学习率与动量**。  
-**Adam**：自适应 **一阶矩（动量）** 与 **二阶矩（逐参数缩放）** 估计，对学习率 **鲁棒**，收敛快，是深度学习默认之一。  
-缺点：Adam 在部分任务上 **泛化** 略逊于调好动的 SGD；Transformer 训练中 **AdamW + 调度** 更常见。大模型常 **全局/分组** 调参。
+（5）**研究上也有混合系统**：如 Encoder-only 做嵌入检索、Decoder-only 做生成，但 **基座 LLM** 的主流仍是 Decoder-only。
 
----
+### Q8：残差连接的作用？
 
-## Q32：AdamW 与「在 Adam 里加 L2」有何不同？解耦权重衰减？
+**答：**
 
-**答：**  
-传统做法把 L2 当作 **梯度加项**，与 **自适应缩放** 耦合，**权重衰减效果被扭曲**。**AdamW** 将 **权重衰减** 从梯度更新中 **解耦**，在参数更新步 **直接减 \(\lambda w\)**（与自适应步长分离）。直觉：衰减应 **均匀作用于权重范数**，不应被二阶矩放大缩小。实践：**Transformer 标准配置** 几乎都用 AdamW + wd。
+层输出常写为（以 Pre-Norm 为例）：
 
----
+$$
+x_{l+1} = x_l + F_l(\text{Norm}(x_l))
+$$
 
-## Q33：学习率 warmup 的作用？
+或 Post-Norm 变体。残差提供 **恒等捷径**，使梯度可直接回传，缓解深层 **梯度消失**：
 
-**答：**  
-训练初期参数随机，梯度高方差，**大学习率** 易 **发散**。Warmup 在最初 **若干步** 将 lr 从 0 线性或非线性升到目标值，让 **二阶矩估计**（Adam）稳定，避免早期 **过大更新**。大 batch、混合精度下尤其重要。之后常接 **cosine decay** 或 **constant with decay**。DeepSpeed 等分布式也推荐 warmup **与 global batch 对齐**。
+$$
+\frac{\partial x_{l+1}}{\partial x_l} = I + \frac{\partial F_l}{\partial x_l}
+$$
 
----
+雅可比中的恒等项为梯度提供了更直接的传播路径，通常能改善深层网络的条件数并缓解梯度消失。不过 $I+\partial F_l/\partial x_l$ 仍可能发生方向抵消或数值放大，因此残差连接并不从数学上保证梯度“无损”。
 
-## Q34：Adam 中的偏差校正（bias correction）是什么？
+同时，子层只需学习 **对恒等的修正**（即 $F_l$），而非从零映射整个函数，优化曲面更平滑，训练更稳定。
 
-**答：**  
-一阶矩 \(m_t\)、二阶矩 \(v_t\) 初始为 0，早期 **系统性低估**。Adam 使用 \(\hat{m}_t=m_t/(1-\beta_1^t)\)、\(\hat{v}_t=v_t/(1-\beta_2^t)\) 修正。这样 **前几步** 更新不会过小。面试：说明 **冷启动** 问题与 **\(\beta^t\)** 公式即可。
+在 Transformer 中，残差保证信息可跨层直通，有利于深层堆叠（数十层甚至上百层）。初始化适当时，网络近似逐步 **叠加** 小扰动，训练更稳。
 
----
+残差也有助于跨层保留信息，使每层主要学习相对输入的增量更新。但它不保证不同层一定保持特征多样性；深层 Transformer 仍可能出现表示趋同或残差流尺度失衡，需要归一化、初始化和残差缩放共同处理。
 
-## Q35：\(\beta_1\)、\(\beta_2\) 的含义？
+### Q9：LayerNorm vs BatchNorm，为什么 Transformer 选 LN？
 
-**答：**  
-\(\beta_1\) 控制 **梯度历史指数衰减**（动量），越大越平滑；典型 **0.9**。  
-\(\beta_2\) 控制 **梯度平方** 的指数衰减（二阶矩），典型 **0.95–0.98**（大模型有时调高 \(\beta_2\) 以 **减少早期噪声**）。二者共同决定 **有效步长** 与 **噪声鲁棒性**。调参属于 **经验+消融**。
+**答：**
 
----
+**① 归一化维度不同（根本差异）**
 
-## Q36：梯度裁剪（gradient clipping）的常见方式？
+BatchNorm 在 **batch 维** 上统计均值和方差（跨样本、同通道），依赖 batch 内样本间的统计关系；LayerNorm 在 **特征维** 上统计均值和方差（单样本、跨通道），与 batch 内其他样本无关。这是两者一切差异的根源。
 
-**答：**  
-**按全局范数**：计算所有参数梯度 **L2 范数** \(g\)，若 \(g>\text{threshold}\) 则整体缩放 \(g \leftarrow \text{threshold}\cdot g/g\)。  
-**按值裁剪**：逐元素截断到 \([-\tau,\tau]\)（较少用于大模型）。  
-目的：**抑制 loss spike、爆炸梯度**，尤其 **RNN/深层 Transformer** 与 **混合精度** 下。常与 **loss scaling** 配合。
+**② BatchNorm 的三大缺陷，在 Transformer 中被放大**
 
----
+- **对 batch size 敏感**：小 batch 下统计量抖动剧烈，训练不稳定；大 batch 又受显存限制。LN 与 batch 无关，batch size=1 也能稳定训练。
+- **对变长序列不友好**：NLP 中序列长度动态变化，BN 需要 padding 对齐，填充 token 会污染统计量。LN 逐样本归一化，天然适配变长序列。
+- **训练与推理行为不匹配**：BN 依赖 mini-batch 统计量，并在推理时改用运行统计量；若还跨时间位置统计，实现不当也可能耦合不同 token。LN 只在单个 token 的特征维上归一化，不依赖其他样本或序列长度，更适合变长序列和逐 token 解码。
 
-## Q37：混合精度训练 FP16 / BF16 的原理与取舍？
+**③ Transformer 内部特征分布的特殊性**
 
-**答：**  
-用 **16 位** 存前向/反向激活与部分计算，**32 位** 存主权重与 **master weights**（可选），降低 **显存与带宽**。  
-**FP16**：动态范围小，易 **溢出/下溢**，需 **loss scaling**。  
-**BF16**：指数位与 FP32 相同，**动态范围大**，常 **无需 loss scaling**，训练稳定，**略粗尾数**。  
-A100/H100 等上 **BF16 训练** 很常见。CS336 实验常对比二者 **数值行为**。
+Transformer 中不同 token 位置共享参数，但各位置输入分布差异较大（尤其深层），BN 强制拉齐会扭曲位置信息；LN 保留个体特征尺度差异，更符合“每个 token 独立处理”的设计哲学。此外，LN 对每个样本的梯度路径更干净，避免 BN 中 batch 内样本相互依赖带来的梯度噪声（分布式训练时同步统计量额外增加通信开销）。
 
----
+**④ 现代演进：RMSNorm**
 
-## Q38：Loss scaling 是什么？为何需要？
+不少现代大模型（如 LLaMA）采用 **RMSNorm**，即省略 LN 的均值中心化，只根据均方根进行缩放。其动机是保留重缩放不变性并简化计算；实际速度收益依模型、张量形状和内核实现而定，不能用固定百分比概括。GPT 各代具体配置应按公开实现或技术报告分别判断。
 
-**答：**  
-FP16 表示下，许多梯度 **幅值过小** 变为 0（**下溢**）。**Loss scaling**：前向正常，反向时将 loss 乘 **大常数 \(S\)**，梯度同比例放大，再在权重更新前 **除以 \(S\)**。这样小梯度在 FP16 可表示。动态 scaling 根据溢出情况调整 \(S\)。**BF16** 往往可省此步骤。
+**⑤ 补充：CV 中为何常见 BN？**
 
----
+在许多卷积网络与足够大、统计稳定的 batch 设置中，BN 有成熟实现并可提供良好优化效果；小 batch 或不同视觉架构也常采用 GroupNorm、LayerNorm 等。两者各有所长，并非 LN 绝对优于 BN。
 
-## Q39：常见学习率调度策略？
+**一句话总结：** BatchNorm 使用跨样本统计，LayerNorm 在单个 token/样本的特征维归一化。LN 不依赖 batch 统计、训练推理规则一致，因此更适合多数 Transformer；这是一种稳定且成熟的架构选择，不是数学上唯一可行的归一化方案。RMSNorm 则省略均值中心化，进一步简化计算。
 
-**答：**  
-**Warmup + Cosine**：最常用，lr 按余弦从峰值降到接近 0。  
-**Warmup + Linear decay**、**inverse sqrt**、**constant**（小任务）。  
-大模型还讨论 **WSD**（warmup-stable-decay）等。**总步数、batch size** 与 **Chinchilla 最优 token 数** 联合决定调度形状。面试：**cosine + warmup** 说出即可。
+### Q10：Pre-Norm vs Post-Norm 哪个更好？
 
----
+**答：**
 
-## Q40：AdamW 的「内存开销」主要在哪里？
+**① 定义与公式**
 
-**答：**  
-AdamW 需 **动量 \(m\)** 与 **二阶矩 \(v\)**（或与 FP32 master weights），每参数常 **额外 2–3 倍** 优化器状态显存。大模型训练中 **优化器状态** 是 **ZeRO** 等分片的主要目标。对比 SGD+Momentum 仅多一倍动量。推理 **不需要** 这些状态。
+**Post-Norm**（原始 Transformer）：先残差后归一化。
 
----
+$$
+x_{l+1} = \text{LN}(x_l + F_l(x_l))
+$$
 
-## Q41：语言建模中的交叉熵损失？
+**Pre-Norm**（现代主流）：先归一化后残差。
 
-**答：**  
-下一 token 分类，真实类别 \(y\)，模型 logits \(z\)，**交叉熵** \(\mathcal{L} = -\log p(y|x) = -\log \mathrm{softmax}(z)_y\)。全序列平均（常 **per-token** 平均，忽略 pad）。训练目标即 **最大化似然**。**label smoothing** 有时用于正则。多任务时在损失上加权。
+$$
+x_{l+1} = x_l + F_l(\text{LN}(x_l))
+$$
 
----
+**② 训练稳定性**
 
-## Q42：困惑度（Perplexity, PPL）？
+- **Post-Norm**：深层训练通常更敏感，往往需要更谨慎的初始化、学习率和 warmup。
+- **Pre-Norm**：恒等残差路径改善了梯度传播，通常更容易训练，并可降低对 warmup 的依赖；但它并不保证无需 warmup，许多大型预训练仍会保留 warmup。
 
-**答：**  
-\(\mathrm{PPL} = \exp\left(\frac{1}{N}\sum_i -\log p(x_i|\text{context})\right)\)，即 **平均负对数似然的指数**。直觉：**模型在下一步平均有多「犹豫」**；PPL 越低越好。与 **交叉熵** 单调对应。比较模型需在 **相同 tokenizer 与测试集** 上，否则 **不可比**。
+**③ 效果争议**
 
----
+部分实验中 Post-Norm 或改进的归一化布局在充分调参后取得更好最终指标，但这不是“Post-Norm 表达能力必然更强”的通用结论；架构深度、初始化、残差尺度和训练配方都会影响比较。
 
-## Q43：Top-p（nucleus）与 Top-k 采样？
+**④ 工业界选择**
 
-**答：**  
-**Top-k**：每步只在 **概率最高的 k 个** token 上重新归一化采样，简单但 **k 固定** 不适应分布形状。  
-**Top-p**：按概率从大到小累加，取 **最小集合** 使累积概率 \(\ge p\)，再归一化采样，**自适应宽度**。  
-二者均为 **减少长尾低质 token**、增加多样性的 **局部截断**。工业生成常 **temperature × top_p** 联用。
+GPT-3、LLaMA 等公开架构采用 Pre-Norm，主要考虑训练稳定性和深度扩展。未公开完整架构的模型不宜据此归类。
 
----
+**⑤ 补充**
 
-## Q44：Temperature 在采样中的作用？
+还有残差缩放、DeepNorm、Sandwich Norm 等变体，用于控制激活/梯度尺度或改善深层训练。不能把它们统一解释成“弥补 Pre-Norm 的表达能力损失”。
 
-**答：**  
-对 logits 除以 \(T\)：\(z' = z/T\)，再 softmax。**\(T>1\)** 分布更 **平坦**（更随机、更多样）；**\(T<1\)** 更 **尖锐**（更确定）。\(T\to 0\) 接近贪心。训练时 **softmax 温度** 有时用于知识蒸馏；**推理采样** 温度是 **多样性旋钮**。
+**一句话总结：** Pre-Norm 通常更易稳定扩展，Post-Norm 在部分设置下最终效果可能更好；实际选择还需配合初始化、残差缩放和学习率调度。
 
----
+### Q11：RMSNorm 和 LayerNorm 的区别？
 
-## Q45：训练中的 loss spike（损失尖峰）原因与应对？
+**答：**
 
-**答：**  
-**原因**：异常 batch、学习率过大、**数值问题**（FP16）、数据噪声、**梯度爆炸**。  
-**应对**：**梯度裁剪**、降低 lr、**更长 warmup**、检查 **数据**、**BF16**、**跳过异常 batch**、重启 from checkpoint。大集群上还需排查 **硬件错误**。稳定性是 **大模型训练** 工程核心之一。
+**① 公式对比**
 
----
+**LayerNorm（LN）**：先中心化（减均值），再缩放（除标准差）。
 
-# 四、系统工程（Q46–Q60）
+$$
+\hat{x} = \frac{x - \mu}{\sigma}, \quad \mu = \frac{1}{d}\sum_{i=1}^{d} x_i, \quad \sigma = \sqrt{\frac{1}{d}\sum_{i=1}^{d}(x_i - \mu)^2 + \epsilon}
+$$
 
-## Q46：FlashAttention 的核心思想？
+**RMSNorm（RMS）**：去掉均值中心化，仅用均方根做缩放。
 
-**答：**  
-标准 attention 在 HBM 上 **反复读写** 大张量，**内存带宽** 瓶颈。FlashAttention **分块计算** softmax（见 online softmax），在 **SRAM** 上完成局部归一化与对 \(V\) 的加权，**减少 HBM 读写次数**，并 **融合** 多步为一个内核。思想：**IO 感知**，用算力换带宽。**FlashAttention-2** 进一步优化并行与 work partitioning。
+$$
+\text{RMS}(x) = \sqrt{\frac{1}{d}\sum_{i=1}^{d} x_i^2 + \epsilon}, \quad \hat{x}_i = \frac{x_i}{\text{RMS}(x)}
+$$
 
----
+两者最后均可乘以可学习增益参数 $g$（即 $\hat{x} \cdot g$）。
 
-## Q47：标准 Attention 的访存瓶颈为何严重？
+**② 核心区别**
 
-**答：**  
-计算 \(QK^\top\) 写回 \(T\times T\) 矩阵，再 softmax，再乘 \(V\)，多次 **全量读写** \(O(T^2)\) 中间结果。GPU 上 **算术强度** 低时，性能由 **HBM 带宽** 限制（内存墙）。长序列时 **读写量** 远超必要，故需 **融合与分块**。
+- **LN**：先减均值，标准化结果在 affine 变换前为零均值；应用逐维可学习增益和偏置后，最终输出均值不保证为 0；
+- **RMSNorm**：不减均值，只按均方根缩放；应用增益后也不要求输出均值为 0。
 
----
+**③ 为什么 RMSNorm 有效？**
 
-## Q48：分块 Softmax / online softmax 的思想？
+RMSNorm 的出发点是：许多网络主要需要归一化带来的**重缩放不变性**，未必需要 LayerNorm 的重中心化。它省略均值计算和减法，计算更简单；论文在多个模型上观察到可保持相近效果并带来不同程度的运行时间收益，但收益不是固定比例，也不能归因于 FFN 对平移不敏感。
 
-**答：**  
-全局 softmax 需 **整行最大值** 与 **分母**。分块时可在块间 **递推更新** max 与 sum：新块来后修正 **归一化因子**，从而 **无需一次读入整行** 到 SRAM。这是 FlashAttention **数值正确** 且 **省内存** 的关键数学。与 **并行扫描** 思想相关。
+**④ 工业界选择**
 
----
+LLaMA 使用 RMSNorm，T5 使用不减均值、仅带缩放参数的 RMS 风格归一化。其他模型需按具体版本判断，例如 GPT-NeoX-20B 使用的是 LayerNorm。
 
-## Q49：FlashAttention 的内存复杂度（相对物化 \(T\times T\)）？
+**⑤ 相同点**
 
-**答：**  
-**不物化** 完整注意力矩阵时，峰值可降至 **\(O(T)\)** 量级（与实现与分块有关），相对 **\(O(T^2)\)** 显存大幅下降。训练时还可 **重算** 部分中间值以换显存。推理解码场景另有 **KV cache** 讨论。
+两者都是**逐 token、在特征维上**归一化（与 BatchNorm 无关），都适用于变长序列和自回归生成。
 
----
+**一句话总结：** RMSNorm 可理解为省略均值中心化、按均方根缩放的归一化方法；它计算更简单，并已被 LLaMA 等模型采用，但是否更快、效果是否相当需结合具体模型和实现评估。
 
-## Q50：FlashAttention 的 IO 复杂度直觉？
+### Q12：SwiGLU 激活函数的公式和优势？
 
-**答：**  
-通过分块使 **HBM 访问次数** 与块数、块大小匹配 **SRAM 容量**，在理想分析下可达 **次二次方级** 的 IO 或接近 **理论下界** 的常数因子改进（具体常数依赖硬件）。论文给出 **IO 复杂度** 与标准实现的对比。面试：**减少 HBM round-trip** 一句话抓住。
+**答：**
 
----
+**① 公式定义**
 
-## Q51：FlashAttention-2 相对 FA1 的主要改进？
+SwiGLU 是一种 **门控线性单元**（GLU）变体，将标准 FFN 的单路投影改为双路门控结构：
 
-**答：**  
-更好 **工作划分** 与 **warp 级调度**，减少空转；**序列长度维度** 并行更充分；整体 **更高吞吐**、更低延迟。API 上仍保持 **数值与 FA1 一致**（在相同配置下）。工业训练 **FA2** 已成为标配之一。
+$$
+\text{SwiGLU}(x) = (\text{Swish}(xW_1) \odot (xW_2)) W_3
+$$
 
----
+其中：
 
-## Q52：Triton vs CUDA 简述？
+- $\text{Swish}(t) = t \cdot \sigma(t)$（$\sigma$ 为 Sigmoid），作为门控激活；
+- $\odot$ 为逐元素乘；
+- $W_1, W_2, W_3$ 为可学习权重矩阵。
 
-**答：**  
-**CUDA**：NVIDIA 底层并行语言，灵活极致，手写 **tile、shared memory、指令**。**Triton**：Python 式 DSL，编译到 GPU，适合 **融合算子** 快速迭代，屏蔽部分硬件细节。PyTorch 2 生态大量内核用 **Triton** 编写。**FlashAttention** 等也可用 CUDA 手写极致优化。选型：**性能极限 vs 开发效率**。
+**② 相比 ReLU/GELU 的优势**
 
----
+| 对比项         | ReLU/GELU 单路 FFN | SwiGLU 双路门控 FFN                        |
+| -------------- | ------------------ | ------------------------------------------ |
+| **非线性来源** | 单次激活函数变换   | 激活值 × 门控值（逐元素乘），非线性更强    |
+| **信息流控制** | 无选择性，全量通过 | 门控机制**选择性过滤**信息，类似 LSTM 思想 |
+| **表达能力**   | 中等               | 更强，相同宽度下困惑度（PPL）更低          |
 
-## Q53：什么是 IO 感知算法？
+> **“困惑度（PPL）本质上是语言模型对下一个词预测不确定性的量化，数值越低表示模型对语言规律拟合得越好。大模型用它来衡量‘信息压缩能力’——PPL 降低，意味着模型用更少的‘惊讶’就学会了数据分布。**
 
-**答：**  
-不仅分析 **FLOPs**，还分析 **内存层次** 中数据移动代价，算法设计 **最小化慢速存储访问**（如 HBM），尽量在 **SRAM/寄存器** 完成重用。FlashAttention、部分 **GEMM 分块** 均属此类。与 **roofline 模型** 一致：若算子 **内存带宽 bound**，减 IO 比减 FLOPs 更有效。
+**③ 参数量与工程调优**
 
----
+- 标准 FFN：中间维 $4d$，参数量 $d \times 4d + 4d \times d = 8d^2$
+- SwiGLU：三路投影（$W_1, W_2, W_3$），为保证参数量可比，中间维调整为 $\frac{2}{3} \times 4d = \frac{8d}{3}$，参数量约为 $d \times \frac{8d}{3} \times 2 + \frac{8d}{3} \times d \approx 8d^2$（与标准 FFN 持平）
 
-## Q54：FlashAttention 的精度损失问题？
+**④ 代价**
 
-**答：**  
-官方实现追求 **与标准 attention 数值一致**（同一数学语义）。极端情况下 **累加顺序** 不同会有 **微小 FP 误差**，但通常 **远小于训练噪声**。若开启 **FP16/BF16**，问题在 **通用混合精度**，非 Flash 独有。推理 **INT8 量化 attention** 是另一话题。
+- 相比两投影的标准 FFN，SwiGLU 有三路投影；但当中间维从 $4d$ 调为约 $8d/3$ 时，主导参数量和矩阵乘 FLOPs 与标准 FFN 大致相当，并非必然“多一次等宽矩阵乘”后整体算力更高。
+- 朴素实现需保存门和值两路中间激活，激活显存可能更高；融合算子、激活重计算等实现可改变这一开销。
 
----
+**⑤ 工业界选择**
 
-## Q55：GPU SRAM vs HBM？
+PaLM、LLaMA 等多种现代大模型采用 SwiGLU 或相近的门控 FFN；具体激活函数和门控形式仍因模型而异，不能概括为所有主流模型都采用同一实现。
 
-**答：**  
-**HBM**：容量大（数十 GB），**带宽高但延迟与能耗** 相对片上存储仍差一个量级。**SRAM（shared memory/L1）**：容量小（KB 级 per SM），**极快**，适合 **分块重用**。内核设计目标：**让热数据留在 SRAM**，减少 HBM 往返。FlashAttention 的分块尺寸受此约束。
+**一句话总结：** SwiGLU = 用“Swish 门 × 变换值”的门控结构替代普通激活；通常通过缩小中间维保持与标准 FFN 相近的参数量和主导 FLOPs，实际速度与激活显存取决于具体内核实现。
 
----
+### Q13：GQA / MQA / MHA 的区别和各自优缺点？
 
-## Q56：DDP（DistributedDataParallel）工作原理？
+**答：**
 
-**答：**  
-每进程 **完整模型副本**，各进程处理 **不同数据 batch**，前向反向本地计算梯度，再通过 **AllReduce** 对梯度 **求平均**，各进程 **同步更新** 相同参数。PyTorch 中 **bucket 化异步通信** 与 **overlap** 计算。需 **每进程一个 GPU** 常见配置。
+**① 三者核心区别（一句话定义）**
 
----
+三者的本质区别在于 **K、V 在不同注意力头之间是否共享**：
 
-## Q57：AllReduce 常见算法？
+- **MHA（Multi-Head Attention）**：每个头独立拥有自己的 Q、K、V 投影矩阵，头与头之间完全独立。
+- **MQA（Multi-Query Attention）**：所有头共享**同一组 K 和 V**，只有 Q 是每个头独立拥有。
+- **GQA（Grouped-Query Attention）**：介于两者之间，将头分成若干组，**组内共享 K 和 V**，组与组之间独立。
 
-**答：**  
-**Ring AllReduce**：节点排成环，分块 **流水线传递**，通信量 **\(O(2(N-1)/N \cdot M)\)** 量级（与实现有关），带宽利用高。  
-**Tree / Halving-doubling**：低延迟场景。  
-大集群上 **NCCL** 自动选择拓扑感知算法。面试：**Ring** 能讲清楚即可。
+**② MHA（Multi-Head Attention）**
 
----
+- **做法**：每组 Q、K、V 独立投影，各自做注意力计算，最后拼接输出。
+- **优点**：每个头拥有独立 K/V，可保留更充分的头间表示容量，在一些模型和任务上具有质量优势。
+- **缺点**：推理时每个头都需要缓存独立的 K 和 V，KV Cache 和解码访存开销较大。相同 query 头数与头维下，三种结构的注意力打分主项接近，但 MHA 的 K/V 投影、缓存容量和内存带宽开销更高。
 
-## Q58：DDP 与 DP（DataParallel）区别？
+**③ MQA（Multi-Query Attention）**
 
-**答：**  
-**DP**：单进程多 GPU，**scatter/replicate** 在单线程，**梯度聚合** 常经 **主卡**，**扩展性差**、GPU 利用率低。  
-**DDP**：**多进程** 每卡一进程，**梯度 AllReduce** 去中心化，**可扩展性好**。现代训练 **只用 DDP/FSDP**，不用 DP。
+- **做法**：所有头共享一组 K 和 V，只有 Q 独立。即 K 和 V 只算一次，复制给所有头用。
+- **优点**：KV Cache 减少为原来的 1/h（h 为头数），显存大幅降低；推理速度显著提升，尤其适合长序列生成。
+- **缺点**：共享 K/V 减少了表示自由度，在部分配置上可能相对 MHA 损失质量；下降幅度和是否下降需由训练方式、模型规模与任务评测确定。
 
----
+**④ GQA（Grouped-Query Attention）**
 
-## Q59：FSDP 与 DDP 区别？
+- **做法**：将 h 个头分成 g 组（g < h），每组内共享 K 和 V，组之间独立。当 g = h 时退化为 MHA，当 g = 1 时退化为 MQA。
+- **优点**：是 MHA 和 MQA 的**折中方案**，在推理速度和模型质量之间取得平衡。KV Cache 降为 MHA 的 g/h，比 MHA 省显存，比 MQA 保留更多表达能力。
+- **缺点**：实现略复杂（需要分组逻辑），超参数 g 需要调优。
 
-**答：**  
-**DDP**：每卡 **完整参数**。  
-**FSDP（Fully Sharded Data Parallel）**：参数、梯度、优化器状态 **分片** 到各卡，前向反向时 **按需 all-gather** 子层参数，类似 **ZeRO-3** 思想。  
-**显存更省**，可训 **更大模型 per GPU**，但通信模式更复杂。PyTorch FSDP 与 DeepSpeed ZeRO 常对比。
+**⑤ 工业界选择与建议**
 
----
+- **架构选择**：MHA、MQA、GQA 都可以从头预训练；不能笼统断言 MHA 的质量必然最高，应结合模型规模、KV 头数和评测结果判断。
 
-## Q60：DeepSpeed ZeRO Stage 1/2/3？
+- **推理阶段**：MQA 或 GQA 更受青睐，尤其在大模型部署场景（长上下文、高并发）。
 
-**答：**  
-**ZeRO-1**：分片 **优化器状态**。  
-**ZeRO-2**：再分片 **梯度**。  
-**ZeRO-3**：再分片 **参数**，前向反向 **动态收集**。  
-显存节省递增，**通信** 也增加。常与 **offload CPU/NVMe** 组合。面试：**分片什么** 三段背熟。
+- **实际落地**：Llama 2 的 34B/70B 使用 GQA，而 7B/13B 使用 MHA；Llama 3 的公开模型使用 GQA。闭源模型若未公开注意力结构，不应仅凭系列名称推断。
 
----
+  > **“MHA、MQA、GQA 是模型架构层面的设计选择，不是运行时的配置开关。模型一旦以某种架构完成训练，权重矩阵的结构就固定了，推理时只能沿用同一种架构。所谓‘训练用 MHA、推理用 GQA’，指的是在项目规划阶段，根据‘质量优先’还是‘效率优先’选择不同的架构方案来训练模型。”**
 
-# 五、Scaling Laws（Q61–Q70）
+**一句话总结：** MHA = 每个头独立 K/V、缓存最大；MQA = 所有 query 头共享一组 K/V、缓存最小；GQA = 分组共享，在缓存、带宽与模型质量之间折中。三者是训练时确定的架构选择，效果需通过具体模型评测判断。
 
-## Q61：Scaling Laws 描述什么规律？
+### Q14：RoPE 旋转位置编码的核心思想？
 
-**答：**  
-在合理范围内，模型性能（如 **test loss**）随 **模型参数量 \(N\)**、**数据量 \(D\)**、**计算量 \(C\)** 幂律改善，且存在 **最优配比**：给定 \(C\)，\(N\) 与 \(D\) 太小或太大都会 **次优**。指导 **算力预算** 下如何选模型大小与训练 token 数。
+**答：**
 
----
+**① 背景：为什么需要位置编码？**
 
-## Q62：Chinchilla 最优配比是什么？
+不含位置编码的逐 token 自注意力对输入排列是**置换等变**的：打乱输入位置后，输出会按相同方式打乱，但模型本身无法区分先后顺序。语言具有顺序性，因此需要注入位置信息。传统方案有**绝对位置编码**（如原始 Transformer 的 Sin/Cos 编码）和**相对位置编码**（如 T5 的偏置项）。
 
-**答：**  
-Chinchilla 工作指出：以往许多模型 **训练不足**（相对规模而言）；在 **固定计算** 下，**更小模型 + 更多数据** 往往优于 **过大模型 + 不足数据**。经验法则：**参数量（十亿）与训练 token 数（万亿）同量级** 的讨论常引用（如 **20 token / param** 量级，具体以论文曲线为准）。面试：**数据应随模型一起 scale**。
+**② 核心思想（一句话概括）**
 
----
+RoPE 的核心思路是：**不把位置编码加到 embedding 上，而是对 Q 和 K 向量做旋转，让旋转角度随位置变化，从而使 Q·K 的内积结果自动包含相对位置信息。**
 
-## Q63：给定计算预算，如何直觉上选「最优模型」？
+**③ 具体做法**
 
-**答：**  
-用 **IsoFLOP 曲线**：对多个 \((N,D)\) 组合算相同 **FLOPs**，找 **验证损失最低** 的点。通常 **中等规模模型 + 更长训练** 在相同算力下优于 **过大模型早停**。需 **实测** 与 **搜索**，非闭式解。
+- 将 $d$ 维的 $q$ 和 $k$ 向量，按两两一组拆成 $d/2$ 个二维子空间。
+- 对第 $i$ 组，旋转角度为 $m \cdot \theta_i$，其中 $m$ 是当前位置，$\theta_i$ 是预设频率（类似 Sin/Cos 里的 $1/10000^{2i/d}$）。
+- 数学上等价于：在复数域将 $q$ 和 $k$ 乘以 $e^{im\theta_i}$ 进行旋转。
+- 做完旋转后，再计算 $q$ 与 $k$ 的点积。
 
----
+**④ 为什么它能表达相对位置？**
 
-## Q64：IsoFLOPs 方法？
+关键在于：旋转后的 $q_m$ 与 $k_n$ 做内积时，位置相关部分会出现 $(m-n)$ 的三角函数组合（如 $\cos((m-n)\theta_i)$），因此注意力分数能够显式感知相对位置差。需要注意，各频率分量具有周期性，RoPE **不保证任意一对 token 的注意力分数随距离单调下降**；长距离行为由频率设计、模型权重和训练共同决定。
 
-**答：**  
-固定 **总训练 FLOPs**（与硬件时间乘积相关），扫描不同 **\(N\)**，配套调整 **\(D\)** 使 FLOPs 恒定，比较 **loss**。得到 **U 形曲线**，最低点为 **该算力下最优 \(N\)**。是 Chinchilla 类实验的核心方法。
+**⑤ 相比传统位置编码的优势**
 
----
+| 对比项           | 绝对位置编码                         | 相对位置方法                         | RoPE                         |
+| ---------------- | ------------------------------------ | ------------------------------------ | ---------------------------- |
+| 位置注入方式     | 固定或可学习向量加到输入表示         | 相对向量、距离桶偏置、线性偏置等     | 对 Q/K 做位置相关旋转        |
+| 额外可学习参数   | 正弦编码无；learned absolute 有      | 依方法而定：T5 有，原始 ALiBi 斜率无 | 原始 RoPE 无                 |
+| 长度外推         | 依编码与训练范围而定                 | 依分桶/偏置形式与训练而定            | 原始 RoPE 也有限，常需缩放   |
+| 高效内核兼容性   | 通常简单                             | 取决于偏置形式和内核支持             | 已有广泛的融合内核支持       |
 
-## Q65：LLaMA 的「过训练」策略指什么？
+**⑥ 工业界应用与改进**
 
-**答：**  
-相对同等规模早期模型，LLaMA 在 **更多 token** 上训练（**compute-optimal 偏向数据**），使 **小模型** 在推理部署时 **性价比更高**。名称上常被称 **over-trained** 相对旧习惯，实为 **Chinchilla 最优区域** 的实践。强调 **推理成本** 时很有价值。
+RoPE 已被 **LLaMA、PaLM、Qwen、ChatGLM** 等主流大模型广泛采用。原始 RoPE 在长文本外推上存在局限，后续改进包括：
 
----
+- **NTK-aware RoPE**：通过缩放基频 $\theta_i$，让旋转频率适应更长序列；
+- **YaRN**：采用分频率的 RoPE 插值/外推策略，并配合 attention scaling，以改善长上下文扩展。
 
-## Q66：\(C \approx 6ND\) 公式是什么含义？
+**⑦ 面试官可能追问的坑**
 
-**答：**  
-粗略估计 **decoder-only Transformer 训练总 FLOPs** 与 **参数量 \(N\)**、**token 数 \(D\)** 成 **线性** 关系，**6** 来自前向约 2 倍 \(ND\)、反向约 4 倍 \(ND\) 的经验分解（系数因架构与是否算重注意力等略有出入）。用于 **从预算估 token** 或 **反推**。面试说 **数量级估计工具** 即可，勿背死精确 6。
+**追问：RoPE 和绝对位置编码能共存吗？**
+可以。实践中（如 LLaMA）就是用 RoPE 替代绝对位置编码，不需要额外加位置向量。但有些模型会同时使用 RoPE + 可学习偏置，但这并非 RoPE 必需。
 
----
+**一句话总结：** RoPE = **在 Q/K 上做位置相关旋转**，让内积的位置项依赖**相对位置差**，无需学习位置向量；它被许多现代大模型采用，但原始版本的长度外推仍需专门处理。
 
-## Q67：Scaling Laws 的局限性？
+### Q15：RoPE vs 绝对位置编码 vs 相对位置编码？
 
-**答：**  
-（1）**数据质量** 非同质，脏数据多不一定等效于多 token。（2）**超参、架构** 变化会移动曲线。（3）**推理与部署成本** 不在 loss 里。（4）**小尺度** 外推到大尺度可能失效。（5）**多模态、工具、对齐** 后行为不只看预训练 loss。
+**答：**
 
----
+**① 绝对位置编码（Absolute Positional Encoding）**
 
-## Q68：数据质量 vs 数量？
+- **做法**：为每个位置 $pos$ 生成一个固定或可学习的向量，直接加到 token embedding 上。原始 Transformer 使用正弦/余弦函数生成固定编码，后续模型（如 BERT）采用可学习位置编码。
+- **优点**：实现简单，直接相加即可，计算量几乎为零。
+- **缺点**：只编码绝对位置，**相对位置关系需要网络从数据中间接学习**，缺乏显式的位置差归纳偏置；外推性较差，遇到比训练时更长的序列时性能明显下降。
 
-**答：**  
-Scaling Laws 假设 **数据 i.i.d. 且干净**；真实网络数据需 **过滤、去重、毒性控制**。**高质量少数据** 有时胜过 **低质量大数据**。实践：**质量加权、课程学习、合成数据** 与 **重复 epoch** 谨慎处理（**去重** 防过拟合记忆）。
+**② 相对位置编码（Relative Positional Encoding）**
 
----
+- **做法**：不同方法实现不同。Shaw 等方法把可学习的相对位置向量加入 key 兼容度，并可在 value 聚合中加入相对位置表示；T5 则把相对距离分桶，为每个注意力头学习标量偏置并加到 logits 上。标量偏置形式可写为：$\text{logit}_{i,j}=q_i k_j^T+b_{\text{bucket}(i-j)}$。
+- **优点**：显式建模相对距离，更符合语言中“词与词的关系依赖相对顺序”的直觉；某些设计具有较好的长度外推表现。
+- **缺点**：代价依实现而异。Shaw/T5 类方法需要相对向量或偏置表，ALiBi 使用固定斜率而无需可学习表；额外存储和计算也因是否融合进内核而不同。现代 FlashAttention 实现已支持 ALiBi 等部分偏置，不能笼统说相对位置编码都难以融合。
 
-## Q69：Scaling 对推理成本的影响？
+**③ RoPE（旋转位置编码）**
 
-**答：**  
-训练可 Chinchilla 最优，但 **部署** 时 **大 \(N\)** 仍贵。**小模型过训练** 可降低 **服务 GPU 时延与成本**。产品需在 **训练算力** 与 **推理算力生命周期** 间权衡。**MoE** 等架构试图分离 **总参数** 与 **激活参数**。
+- **做法**：不改变输入 embedding，而是在计算 $Q$ 和 $K$ 之后，对每个位置的 $q$ 和 $k$ 向量施加二维旋转（旋转角度随位置变化），使旋转后的 $q_m$ 与 $k_n$ 内积结果天然依赖 $m-n$。
+- **优点**：
+  - 使注意力分数显式依赖相对位置差，同时保留通过旋转频率表示位置的结构；
+  - 不增加额外参数和注意力偏置表，实现简洁；
+  - 与 FlashAttention 等高效注意力实现兼容性好。
+- **缺点**：
+  - 原始版本在长度外推上有限制（需配合 NTK/YaRN 等改进）；
+  - 对 $Q/K$ 施加旋转带来少量额外计算开销。
 
----
+**④ 补充：ALiBi（Attention with Linear Biases）**
 
-## Q70：2026 年前后 Scaling 的新挑战（面试可谈方向）？
+- ALiBi 也是一种相对位置方案，不做旋转也不加位置向量，而是在注意力 logits 上加入随距离线性变化的偏置；因果场景常写为 $-m_h(i-j)$。
+- 原始 ALiBi 为不同注意力头**预设不同且固定的斜率** $m_h$，训练时不学习这些斜率。它实现轻量、长度外推表现较好，但具体质量需结合任务评估。
 
-**答：**  
-**数据枯竭与版权**、**合成数据** 边际收益、**能源与合规**、**多模态与 agent** 行为不可单用 loss 衡量、**测试时计算**（推理 scaling）、**专用芯片与互联** 改变 \(C\) 的性价比。回答时强调：**从「唯规模」到「规模 + 数据管线 + 对齐 + 系统」** 的综合竞争。
+**⑤ 工业界选择**
 
----
+- **RoPE** 被 LLaMA、Qwen、PaLM 等许多模型采用，是常见选择之一；具体实现与长上下文缩放方案因模型而异。
+- **ALiBi** 在某些注重外推的场景（如 BLOOM）中仍有使用。
+- 可学习绝对位置编码仍见于 BERT 类和其他架构；新模型也会使用 RoPE、相对偏置、ALiBi 或混合方案，不能概括为全部转向一种方案。
 
-# 六、数据工程（Q71–Q80）
+**一句话总结：** 绝对编码把位置加入输入；相对方法把距离信息加入注意力；RoPE 则旋转 Q/K，使内积依赖相对位置差且不引入可学习位置参数。三者的外推性和内核效率都取决于具体实现，RoPE 是常见方案而非唯一默认答案。
 
-## Q71：预训练数据来源一般有哪些？
+### Q16：因果掩码（causal mask）如何实现？
 
-**答：**  
-**Common Crawl** 网页、**书籍、论文、代码仓库、维基、对话数据** 等。多语言需 **分层采样**。企业还会加 **私有业务日志**（脱敏）。来源决定 **知识与偏见**，需 **许可与合规**。
+**答：**
 
----
+**① 为什么要做因果掩码？**
 
-## Q72：Common Crawl 是什么？
+自回归语言模型通常把位置 $t$ 的隐藏状态用于预测 $x_{t+1}$，因此该位置只能关注 $x_{\le t}$；等价地，预测 $x_t$ 时只能以 $x_{<t}$ 为条件。若允许关注目标 token 之后的位置，训练时就会泄露未来信息。
 
-**答：**  
-非营利组织 **定期抓取** 全球网页的 **开放数据集**，体量大、噪声高（HTML、导航、广告）。LM 训练需 **清洗、去重、质量打分、语言识别**。是 **开放网络语料** 的主要入口之一。
+**② 具体实现方式（核心操作）**
 
----
+因果掩码在 **softmax 之前** 施加于注意力分数矩阵上：
 
-## Q73：典型数据处理流程？
+- 正常计算得到注意力 logits：$\text{logits}_{i,j} = q_i \cdot k_j^T$
+- 对所有非法位置（$j > i$），将 logits 设为 $-\infty$（实际代码中常用一个极大的负数，如 `-1e9` 或 `-inf`）
+- 然后过 softmax：$\text{softmax}(-\infty) = 0$，非法位置的注意力权重归零
 
-**答：**  
-**下载 → 解压缩 → 文本提取（trafilatura 等）→ 语言识别 → 启发式/模型质量过滤 → 去重（MinHash/SimHash）→ PII 与毒性处理 → 分桶混合 → tokenizer**。每步都影响 **分布与偏见**。CS336 强调 **可复现流水线**。
+**张量构造方式**：
 
----
+- 生成一个**下三角矩阵**（包含对角线），位置 $i \ge j$ 为 0（保留），$i < j$ 为 $-\infty$（屏蔽）
+- PyTorch 中常用：`mask = torch.triu(torch.ones(T, T), diagonal=1).bool()`，生成上三角的 True 掩码，再通过 `masked_fill` 将 True 位置填为 `-inf`
 
-## Q74：HTML 文本提取注意什么？
+**③ 训练 vs 推理的差异**
 
-**答：**  
-去除 **脚本、样式、导航、页脚**，保留 **正文**。错误提取会引入 **SEO 垃圾、重复模板**。工具与规则需 **版本固定**。表格、列表是否保留视任务而定。
+| 阶段                    | 实现方式                                 | 说明                                                         |
+| ----------------------- | ---------------------------------------- | ------------------------------------------------------------ |
+| **训练**                | 一次性构造完整的 $T \times T$ 下三角掩码 | 序列固定长度，并行计算所有位置，掩码矩阵统一应用             |
+| **推理（无 KV Cache）** | 同训练，但逐 token 生成                  | 每步重新计算全序列注意力，效率低                             |
+| **单 token 推理（有 KV Cache）** | 新 token 只与历史缓存及自身的 K/V 计算注意力 | 通常无需显式三角掩码，因为缓存中不存在未来位置；若一次解码多个 token，仍需对该块内部施加因果约束 |
 
----
+**④ 工程优化**
 
-## Q75：语言识别的作用？
+- 大模型训练时，$T \times T$ 的掩码张量会占用大量显存（如 $4096 \times 4096$ 的 bool 矩阵约 16MB，长序列时更大）。**FlashAttention** 等融合内核采用**因果掩码 + 注意力计算**的融合策略，不显式构造掩码矩阵，而是通过循环或分块时自动跳过未来位置，大幅节省显存和计算。
+- 在分布式训练中，掩码逻辑需与序列并行/张量并行的切分方式配合，确保各设备只计算自己负责的块，且跨块时仍遵循因果约束。
 
-**答：**  
-多语言语料需 **按语言打标签**，用于 **混合比例控制**、**去偏**、**分语言评估**。fastText、cld3 等常用。误判会导致 **语言污染** 与 ** tokenizer 效率** 问题。
+**⑤ 容易混淆的点**
 
----
+- **Padding Mask**：用于屏蔽变长序列中的填充 token，与因果掩码可以**叠加使用**（取并集）。两者都是通过将对应位置设为 $-\infty$ 实现。**因果掩码是标配，Padding Mask 按需启用（仅在 batch 内有变长 padding 时）。**
+- 因果掩码不仅用于训练，也用于推理。即便有 KV Cache，注意力计算时仍需确保新 token 不会"回头看"未来——只不过在 Cache 场景下，这个约束由"只取历史缓存"天然保证，无需显式构造三角掩码。
 
-## Q76：数据配比（data mixing）？
+**一句话总结：** 因果掩码在 softmax 前将未来位置的 logits 置为 $-\infty$，使权重归零，保证自回归模型只看到过去。训练时用下三角矩阵，推理时用 KV Cache 天然等效于动态掩码，FlashAttention 等融合内核可避免显式构造大掩码矩阵以提升效率。
 
-**答：**  
-不同来源 **按权重采样**（如 web:book:code = x:y:z）。影响 **推理、代码能力、事实性**。通常 **网格/贝叶斯优化** 小规模实验再放大。与 **课程学习** 可结合。
+### Q17：Transformer 的参数量如何计算？
 
----
+**答：**
 
-## Q77：预训练数据规模量级？
+![image-20260905232618047](../interview/images/image-20260905232618047.png)
 
-**答：**  
-顶级开源模型常 **数 T tokens** 量级（随时间增长）。具体数字随项目变，面试说 **Chinchilla 量级关系** 比背一个固定 T 更重要。**小模型** 可用 **数百 B** 仍强，取决于质量。
+![image-20260905232714038](../interview/images/image-20260905232714038.png)
 
----
+**① 核心原则**
 
-## Q78：数据质量如何评估？
+参数量由 **模型深度（层数 L）**、**隐藏维度（d）**、**词表大小（V）** 和 **FFN 中间维（d_ff）** 共同决定，主导项是 **多层叠加** 与 **词嵌入层**。
 
-**答：**  
-**启发式**：长度、困惑度、重复率、符号比例。**模型式**：用小分类器打分 **教育性/毒性**。**下游**：MMLU、HumanEval 等探针。**人工审计** 小规模。无单一度量。
+**② 单层 Decoder 参数量（以 MHA + 标准 FFN 为例）**
 
----
+- **多头注意力（MHA）**：
 
-## Q79：常见开源数据集与资源？
+  - 包含 $W_Q, W_K, W_V, W_O$ 四个投影矩阵，每个尺寸为 $d \times d$。
+  - 小计：$4 \times d^2 = 4d^2$。
 
-**答：**  
-**The Pile、C4、ROOTS、RedPajama、FineWeb** 等（随时间更新）。许可证各异（**商用需法律审**）。HuggingFace Hub 聚合。**企业** 常基于开源管线自建。
+- **前馈网络（FFN）**：
 
----
+  - 两层线性层：第一层 $d \times d_{\text{ff}}$，第二层 $d_{\text{ff}} \times d$。
+  - 小计：$2 \times d \times d_{\text{ff}}$。通常 $d_{\text{ff}} = 4d$，即 $8d^2$。
 
-## Q80：数据偏见与风险？
+- **层归一化（Layer Norm）**：
+  - 每层有两个 LN，各含可学习缩放参数 $\gamma$ 和平移参数 $\beta$，均为 $d$ 维。
+  - 小计：$2 \times (d + d) = 4d$，相对于 $d^2$ 项可忽略。
 
-**答：**  
-网络数据含 **刻板印象、仇恨、隐私、错误信息**。模型会 **放大** 分布偏见。缓解：**过滤、RLHF/安全对齐、拒绝策略、红队**。**地域与语言** 覆盖不均导致 **能力倾斜**。合规与 **价值观** 是产品问题。
+  > **Pre-Norm 改变的是归一化相对残差分支的位置，并不把两个 Norm 合并。标准 Decoder block 通常仍有两个独立 Norm：Attention 前一个、FFN 前一个。普通 LayerNorm 若含 scale 和 bias，共约 $4d$ 个参数；LLaMA 的两个 RMSNorm 只有 scale，共约 $2d$。它们相对 $d^2$ 主导项通常可忽略。**
 
----
+**单层合计**：
 
-# 七、对齐技术（Q81–Q95）
+$$
+\text{单层} = 4d^2 + 2d \cdot d_{\text{ff}} + 4d \approx 12d^2 \quad (\text{当 } d_{\text{ff}}=4d \text{ 时})
+$$
 
-## Q81：SFT（监督微调）的定义和作用？
+**③ 整体参数量（含嵌入层）**
 
-**答：**  
-在 **指令-回答**、对话等 **高质量标注** 数据上 **继续训练**（通常全参或 LoRA），优化 **交叉熵**，教会模型 **遵循格式、任务类型、基本有用性**。是 **对齐流水线第一步**，把「续写」变成「助手」。数据质量 **决定上限**。
+若模型包含 $L$ 层：
 
----
+$$
+\text{总参数} \approx L \times (4d^2 + 2d \cdot d_{\text{ff}}) + V \times d + \text{输出层（若未共享）}
+$$
 
-## Q82：LoRA 原理？
+其中：
 
-**答：**  
-冻结原权重 \(W\)，引入 **低秩分解** \(\Delta W = BA\)（\(r\ll d\)），训练 \(B,A\)。前向 \(h = W x + B A x\)。**参数量与优化器状态** 大幅减少，**显存友好**。秩 \(r\) 与 **目标模块**（常 attention 的 \(q,v\)）可调。推理可 **合并** \(\Delta W\) 回 \(W\) 无延迟。
+- $V \times d$ 为词嵌入矩阵（token embedding table）。
 
----
+  > 词嵌入矩阵的本质是一张尺寸为 **[词表大小 × 隐藏维度]** 的查找表，Token ID 就是行索引。它不存储 Token 本身，而是存储每个 Token 对应的稠密向量——即每一行就是一个 Token 的向量表示。模型拿到 Token ID 后不做任何复杂运算，直接按索引把那一行的浮点数向量拷贝出来，作为该 Token 的输入表示。它的作用是将离散的文本符号（BPE 分词后的 Token ID）转换为模型可计算的连续向量空间，是模型处理文本输入的入口。
+  >
+  > **输出向量经过 `lm_head` 映射为词表大小的 logits，采样策略据此选出 Token ID；随后由 tokenizer 的词表及解码规则把 ID 还原成字节或字符串，而不是查询浮点 embedding 矩阵。**
+  >
+  > **标准精确 softmax 通常先计算完整的 $d\times V$ 输出投影及词表 logits，再执行 Top-K/Top-p 等采样；这些采样方法一般不会减少前面的全词表投影。FlashAttention 优化的是注意力，MoE 优化的是 FFN 专家计算，也不会直接消除 LM Head 开销。词表并行、分层/自适应 softmax 或候选词近似才是更直接的优化方向。**
 
-## Q83：QLoRA 是什么？
+- 输出层（lm_head）**可以**与输入嵌入层做权重共享，此时无需重复计入；是否共享取决于具体模型。GPT-2/T5 等采用共享，而 LLaMA/Llama 2 的官方实现使用独立的输入 embedding 与输出投影，需额外计入 $V \times d$。
 
-**答：**  
-**量化基础模型**（如 4-bit NF4）+ **LoRA 适配器 FP16/BF16 训练**。极大降低 **显存**，使 **单卡微调大模型** 可行。需注意 **量化误差** 与 **学习率** 设置。HuggingFace PEFT 常用实现。
+**④ 常见大模型修正系数**
 
----
+| 组件       | 标准 FFN                 | SwiGLU（LLaMA 等）                            |
+| ---------- | ------------------------ | --------------------------------------------- |
+| 投影层数   | 2 层                     | 3 层（$W_1, W_2, W_3$）                       |
+| 参数量     | $2d \cdot d_{\text{ff}}$ | $3d \cdot d_{\text{ff}}$                      |
+| 实际中间维 | $4d$                     | $\frac{8}{3}d$（保持总参数量与标准 FFN 相当） |
+| 等价贡献   | $8d^2$                   | $8d^2$（因 $3d \times \frac{8}{3}d = 8d^2$）  |
 
-## Q84：全参微调 vs LoRA 对比？
+- 若采用 **GQA**（分组查询注意力），$K, V$ 的投影矩阵维度缩减，$W_K, W_V$ 参数量会低于 $d^2$，具体取决于分组数 $g$。
+- **Bias 项**：现代大模型（如 LLaMA）通常**不加 bias**，若加上则每层线性层额外增加 $O(d)$ 量级参数，相对 $d^2$ 可忽略。
 
-**答：**  
-**全参**：容量最大，易 **过拟合小数据**，显存与存储高。  
-**LoRA**：省资源、多任务可 **多适配器切换**，大任务可能 **略逊全参**。  
-选型：**数据量、任务难度、基础设施**。**重要任务** 可全参或 **更大 rank**。
+**⑤ 快速估算口诀（面试防懵）**
 
----
+> **“总参数 ≈ 层数 × 12d² + 词表相关参数”**
+> （标准 FFN、MHA 时；词表项在权重共享时约为 $Vd$，不共享时约为 $2Vd$）
 
-## Q85：灾难性遗忘（catastrophic forgetting）？
+例如：对 $L=32,d=4096,V=32000$ 的标准近似，Transformer 层约为 $32\times12\times4096^2\approx6.4\text{B}$。若输入和输出词表权重共享，再加约 $0.13\text{B}$；若像 LLaMA 一样不共享，则词表相关参数约为 $0.26\text{B}$。精确值还会受 SwiGLU 中间维、GQA 和其他投影尺寸影响。
 
-**答：**  
-微调新分布后，模型在 **旧任务** 上性能 **下降**。缓解：**混合旧数据重放**、**KL 到参考模型**、**较小学习率**、**LoRA 限制更新子空间**、**多任务均衡**。是 **持续学习** 核心问题。
+**⑥ 面试回答策略**
 
----
+- 面试官问“怎么算参数量”，**先给主导公式** $L \times (4d^2 + 2d \cdot d_{\text{ff}}) + Vd$；
+- 再**补充修正项**（SwiGLU 三路投影、GQA 缩减、权重共享等）；
+- 最后**给个具体数**（如 LLaMA 7B 估算过程），展示你能把公式落地到实际模型。
 
-## Q86：RLHF 三步流程？
+**一句话总结：** 参数量看 **层数 × (注意力 + FFN)** 加上 **词嵌入**；标准结构约 $L \times 12d^2 + Vd$，SwiGLU 等价替换 $d_{\text{ff}}$ 保持总量相当，GQA/权重共享/无 bias 再做修正即可。
 
-**答：**  
-（1）**SFT** 有监督微调。（2）**训练奖励模型 RM** 学人类偏好排序。（3）**RL 优化策略**（如 PPO）提高奖励，同时 **KL 惩罚** 防偏离 SFT 过远。可选 **拒绝采样**、**迭代** 多轮。
+### Q18：Feed-Forward Network 在 Transformer 中的作用？
 
----
+**答：**
 
-## Q87：PPO 目标（直觉）？
+在 Transformer 中，**Attention** 的核心职责是 **token 间的信息路由与混合**（即决定“谁看谁”以及如何加权聚合），而 **FFN（Feed-Forward Network）** 则负责对每个位置的聚合结果进行 **独立、非线性的高维变换**，以增强该位置的表示能力。两者分工明确：**Attention 聚合上下文，FFN 处理聚合后的特征**，共同构成 Transformer 的基本计算单元。
 
-**答：**  
-**策略梯度** 方法，带 **裁剪 surrogate objective** 限制策略更新幅度，**价值函数 baseline** 减方差。平衡 **探索与稳定**。在 RLHF 中 **对 LM 策略** 优化奖励，实践中 **调参复杂**（优势估计、裁剪系数 \(\epsilon\)）。
+具体来说，FFN 的作用可展开为以下几点：
 
----
+1. **逐位置独立变换**
+   FFN 对序列中的每个 token 位置单独作用，不跨位置共享信息（与 Attention 的跨位置交互互补）。它采用两层 MLP 结构：$d \to d_{\text{ff}} \to d$，其中中间隐层维度 $d_{\text{ff}}$ 通常取 $4d$ 左右，通过大幅扩维再压缩，为每个位置提供丰富的特征重组空间。
 
-## Q88：DPO vs RLHF？
+2. **引入关键非线性**
+   自注意力并非线性映射：权重由输入相关的 softmax 决定。但它的输出主要沿 token 维聚合 Value；FFN 则通过 ReLU、GELU、SwiGLU 等在每个位置进行非线性的通道变换，两者提供不同且互补的表达能力。
 
-**答：**  
-**DPO（Direct Preference Optimization）**：用 **偏好对** 直接优化策略，**无需显式 RM** 与强化学习采样环，把问题转为 **分类式损失**，**稳定简单**。  
-**RLHF**：显式 RM + PPO，**灵活**（可接复杂奖励），但 **工程重**。  
-趋势：**DPO/IPO** 等简化对齐；复杂场景仍可能 **混合**。
+3. **存储与检索知识**
+   在标准 $d_{\text{ff}}=4d$ 的 Transformer block 中，FFN 权重约占该 block 主要矩阵参数的 $2/3$。一些分析把 FFN 解释为键值记忆，并发现事实关联可定位到部分 FFN 参数；但知识也分布在 Attention、Embedding 和残差表示中，不能把 FFN 称为唯一知识存储位置。
 
----
+4. **补充 Attention 的表达局限**
+   即使没有 FFN，自注意力中的 softmax 权重仍依赖输入，因此整个网络**不是线性变换的组合**。但缺少逐 token 的非线性通道混合后，模型的表达能力和特征变换能力会受到明显限制；FFN 让每层都能对聚合后的上下文表示进行更丰富的“精加工”。
 
-## Q89：GRPO 原理（Group Relative Policy Optimization）？
+5. **常见变体与改进**
+   标准 FFN 为 $\text{FFN}(x) = W_2 \cdot \text{Act}(W_1 x + b_1) + b_2$。**SwiGLU** 等门控变体在多项实验中优于对应的非门控基线，因而被 LLaMA 等模型采用；收益大小取决于中间维、参数预算和训练配置，不能保证所有任务都更好。
 
-**答：**  
-（常见于 DeepSeek 等工作）对 **同一 prompt 采样一组输出**，用 **组内相对奖励** 归一化优势，**减少 critic 网络** 依赖，降低 **显存与实现复杂度**。属于 **方差缩减与基线设计** 的变体。细节以原论文为准。
+综上，FFN 不是简单的“附属组件”，而是 Transformer 中与 Attention 并重的核心模块，负责 **逐位置特征精炼、非线性映射和知识存储**，两者交替堆叠，共同构成强大的深度表示学习架构。
 
----
+### Q19：Embedding 层的作用和实现？
 
-## Q90：GRPO vs PPO（面试对比）？
+**答：**
 
-**答：**  
-**PPO**：通用策略优化，常需 **价值网络**。  
-**GRPO**：**组采样相对排名**，面向 **LLM 序列奖励** 场景 **简化**。  
-取舍：**实现成本 vs 通用性**。
+Embedding 层是 Transformer 模型中最基础也最关键的数据入口模块，其核心作用是将离散的 token ID（$0 \sim V-1$)，其中 $V$ 为词表大小）映射为 **稠密、连续的向量表示**$\mathbb{R}^d$（$d$ 为隐层维度），从而将符号化的文本转换为模型能够进行数学运算的数值形式。这一映射过程可以抽象为一个可训练的查找表（lookup table），即：
 
----
+$$
+\text{Embedding}(x) = E[x], \quad E \in \mathbb{R}^{V \times d}
+$$
 
-## Q91：奖励模型（RM）如何训练？
+其中 $E$ 即为 embedding 矩阵，每一行对应一个 token 的 $d$ 维向量。这些向量通过反向传播与模型其他参数共同学习，可编码有用的词法、句法或语义特征；但上下文化含义主要由后续层形成，静态 token embedding 的距离和向量类比并不是 next-token 训练直接保证的性质。
 
-**答：**  
-人类标注 **同一 prompt 下 A/B 优劣**，训练 **Bradley-Terry / pairwise** 模型：\(r_\phi(x,y_w) > r_\phi(x,y_l)\)。损失常为 **ranking loss**。数据 **覆盖域** 决定 RM **盲区**；**长度偏见** 需防范。
+为了更全面地理解，可以从以下几个维度展开：
 
----
+**1. 基本实现：`nn.Embedding` 查表**
 
-## Q92：KL 散度惩罚在对齐中的作用？
+在深度学习框架（如 PyTorch）中，标准实现为 `nn.Embedding(V, d)`，其参数通常是一个**稠密存储**的 $V\times d$ 矩阵，前向通过索引/gather 取出对应行；它也可视为 one-hot 与矩阵相乘的高效实现。只有被访问的行会产生非零梯度，但是否使用稀疏梯度由框架配置决定。
 
-**答：**  
-防止策略为 **刷高奖励** 而 **胡言乱语或模式崩塌**，约束 **\(\pi_\theta\)** 接近 **参考模型 \(\pi_{\text{ref}}\)**（常为 SFT）。项 \(\beta \mathrm{KL}(\pi_\theta \|\pi_{\text{ref}})\)。\(\beta\) **权衡** 有用性与 **忠实度**。
+**2. 参数量与显存影响**
 
----
+Embedding 层的参数量为 $V \times d$，在子词分词（如 BPE、SentencePiece）下，词表 $V$ 通常为 3 万～10 万甚至更大（如 50k、100k），与隐层维度 $d$（如 4096、8192）相乘后，参数量可达数亿至数十亿。例如，$V=50,000$、$d=4096$ 时，embedding 参数量约为 2.05 亿（约 0.8 GB，FP32），这是一个不小的开销，尤其在大词表多语言模型中更为突出。
 
-## Q93：RLAIF 是什么？
+**3. 输入 embedding 与输出层的权重共享（Weight Tying）**
+Transformer 的输出层通常也需要将最后一层隐藏状态映射回词表大小 $V$ 的 logits，即一个 $d \to V$ 的线性层，其参数量同样为 $V \times d$。部分模型采用 **权重共享（Weight Tying）**，让输入 embedding 矩阵 $E$ 与输出投影层共享参数（输出 logits = $H \cdot E^\top$），从而减少参数并约束输入输出空间。它并非现代 LLM 的统一做法：GPT-2、T5 等采用共享，而 LLaMA/Llama 2 官方实现不共享。
 
-**答：**  
-用 **AI 模型**（而非纯人类）生成 **偏好或评分** 训练 RM 或直接 DPO，**降低成本、加速迭代**。风险：**AI 偏见叠加**；常 **与人类数据混合**。
+**4. 与位置信息的结合方式**
+Embedding 层本身只编码 token 的语义信息，不包含任何位置顺序，因此必须叠加位置信息。常见做法有两种：
 
----
+- **绝对位置编码（如可学习位置编码或 Sinusoidal）**：将 position embedding 直接加在 token embedding 上，得到最终输入 $X_{\text{final}} = E[x] + P_{\text{pos}}$，例如 GPT-1/2。LLaMA 从第一代起就使用 RoPE，并不存在“早期 LLaMA 使用绝对位置编码”这一阶段。
+- **旋转位置编码（RoPE）**：不修改输入 embedding，而是在每层 Attention 计算 Query 和 Key 时，通过旋转矩阵对 $Q$、$K$ 施加相对位置信息，这种方式避免了额外的位置 embedding 参数，且能更好地捕捉相对位置关系，已成为现代模型（如 LLaMA、PaLM）的主流选择。
 
-## Q94：安全对齐（safety alignment）常见手段？
+**5. Embedding 的语义学习本质**
+语言模型直接优化的是序列的 next-token 对数似然，而不是 token embedding 的欧氏/余弦距离或“国王－男人＋女人”类比。Embedding 会为了整体预测目标学习可用表示，相似 token 有时会形成几何结构，但关系依模型、层和度量而异；许多语义信息存在于上下文化隐藏状态而非输入查找表本身。
 
-**答：**  
-**安全 SFT**、**红队数据**、**拒绝回答**、**宪法 AI/自我批评**、**推理时护栏**、**监控与熔断**。与 **有用性** 可能冲突，需 **产品政策**。
+**6. 特殊 token 与 embedding 初始化**
+词表通常包含模型所需的特殊 token（如 BOS、EOS；是否存在 PAD、UNK 取决于 tokenizer）。它们有相应 embedding，但 padding 行可能被 mask 或配置为不更新。常见初始化使用正态或均匀分布；是否采用外部预训练词向量及其效果取决于模型和数据，不能断言随机初始化必然更好。
 
----
+**7. 大词表下的优化策略**
+当 $V \times d$ 过大（如多语言模型词表达 200k 以上）时，可采用以下优化：
 
-## Q95：指令数据如何构建？
+- **Adaptive Embedding**（如 Transformer-XL）：将词表按频率分组，高频词用大维度，低频词用小维度，减少总参数量。
+- **嵌入降维**：先通过较小的投影矩阵（如 $V \times d'$，$d' < d$）再线性映射到 $d$，但会增加计算步骤。
+- **输入输出共享 + 低秩分解**：在共享基础上，对 $E$ 进行低秩近似（如 SVD）以减少存储。
 
-**答：**  
-**人工撰写**、**模型蒸馏**、**多轮对话合成**、**工具调用轨迹**、**领域模板**。关键：**多样性、难度曲线、格式统一**、**去毒与隐私审查**。开源 **ShareGPT、Alpaca 系** 可参考结构。
+**总结**：Embedding 层是 Transformer 的“符号转数值”入口，通过 **可训练查找表 $E \in \mathbb{R}^{V \times d}$** 将 token ID 映射为连续向量，参数量为 $Vd$，并可选择与输出层共享权重。位置可通过输入位置向量、RoPE 或注意力偏置等方式注入；Embedding 与全模型共同为语言建模目标优化，并不单独承担全部语义表示。
 
----
+### Q20：GPT vs BERT vs LLaMA vs T5 的主要区别？
 
-# 八、推理部署（Q96–Q105）
+**答：**
 
-## Q96：KV Cache 原理？
+这四类模型代表了 Transformer 时代最具影响力的架构路线，它们在设计哲学、训练目标、适用场景和工程实现上均有显著差异。简要对比如下：
 
-**答：**  
-自回归解码每步只新增一个 query，历史 token 的 **K、V** 不变。缓存每层的 **\(K,V\)** 张量，下一步 **只算新 token 的 \(q\)** 与 **历史 K 点积**，避免重复前向。**复杂度** 从 \(O(T^2)\) 逐步生成变为 **每步 \(O(T)\)**（相对序列长度线性增长）。**显存** 随 \(T\) 线性增。
+- **GPT（Generative Pre-trained Transformer）**：公开的 GPT-1/2/3 采用 **Decoder-only** 架构和自回归语言建模目标，擅长续写与生成；InstructGPT/ChatGPT 等后续系统再加入指令微调和偏好对齐。GPT-4 等闭源模型的完整架构未公开，不应把早期 GPT 的每项实现细节直接外推给所有产品。
 
----
+- **BERT（Bidirectional Encoder Representations from Transformers）**：**Encoder-only** 架构，使用 **MLM（Masked Language Modeling）** + **NSP（Next Sentence Prediction）** 进行预训练，通过双向注意力获得深层上下文表示，在自然语言理解（NLU）任务（如分类、问答、命名实体识别）上表现优异。但它不直接支持自回归生成（除非额外附加生成头），且预训练目标和下游任务之间存在一定 gap。
 
-## Q97：KV Cache 内存如何估算？
+- **T5（Text-to-Text Transfer Transformer）**：**Encoder-Decoder** 架构，将所有 NLP 任务统一为“文本到文本”的生成范式（输入是文本，输出也是文本）。采用 **Span Corruption** 预训练目标（类似 MLM 但随机掩码连续片段），既能理解也能生成，具有极强的任务统一性和迁移能力。模型规模覆盖 base 到 11B，是早期多任务学习的典范。
 
-**答：**  
-每层缓存形状约 **`2 × batch × heads × seq × head_dim`**，再乘 **层数 \(L\)**，再乘 **精度字节数**（FP16 为 2）。**GQA** 减少 K/V 头数则 **KV 显存** 下降。长上下文 **百万 token** 时 KV 是 **主要瓶颈**，推动 **PagedAttention、量化 KV**。
+- **LLaMA（Large Language Model Meta AI）**：**Decoder-only** 架构，使用 RMSNorm、SwiGLU 和 RoPE。注意不同代际和规模的配置并不完全相同：第一代主要使用 MHA；Llama 2 仅 34B/70B 使用 GQA；Llama 3 的公开模型使用 GQA。训练 token 数也从 LLaMA 1 的约 1.0～1.4T、Llama 2 的 2T 增长到 Llama 3 的约 15T，不能把整个系列统一描述为“数万亿 token”。
 
----
+**面试总结（四点对比框架）**：
 
-## Q98：量化方法 INT8 / INT4？
+|      对比维度       |                       GPT                       |                       BERT                        |                   T5                    |                           LLaMA                           |
+| :-----------------: | :---------------------------------------------: | :-----------------------------------------------: | :-------------------------------------: | :-------------------------------------------------------: |
+| **架构（Enc/Dec）** |                  Decoder-only                   |                   Encoder-only                    |             Encoder-Decoder             |                       Decoder-only                        |
+|   **预训练目标**    |          自回归 LM（预测 next token）           |             MLM + NSP（双向掩码预测）             |     Span Corruption（片段掩码生成）     |              自回归 LM（预测 next token）                 |
+| **位置编码与 Norm** |         早期可学习绝对编码 + LayerNorm          |            可学习绝对编码 + LayerNorm             | 相对位置偏置 + RMS 风格归一化           |              RoPE + RMSNorm                                |
+| **开放性与适用**    | GPT-3/4 等权重未开放，后续产品推动指令对齐范式  | 模型与代码生态丰富，适合 NLU                      | T5、Flan-T5 权重可获取，适合统一生成任务 | Meta 提供权重和代码，但不同代际使用自定义许可证，需逐版确认用途限制 |
 
-**答：**  
-**INT8**：权重量化 + **动态或静态激活量化**，用 **缩放因子**；精度损失通常可控。**INT4（NF4/GPTQ/AWQ）**：更小，**仅权重** 或 **组合**，需 **校准集**。推理 **吞吐提升、显存下降**；极低比特需 **内核支持**。
+**更深层的差异点**（可补充）：
 
----
+- **注意力掩码**：GPT 使用**因果掩码（causal mask）**，只允许 token 关注左侧上下文；BERT 使用**双向掩码**（无因果限制），允许完整序列双向交互；T5 在 Encoder 中用双向，Decoder 中用因果；LLaMA 同 GPT 为因果掩码。
 
-## Q99：PTQ vs QAT？
+- **参数效率与训练数据**：BERT 使用 BooksCorpus + Wikipedia；GPT-3 实际训练约 300B token，论文中的 45TB 是 Common Crawl 原始数据量，过滤后数据规模更小，不能说成“在 45TB 文本上训练”；T5 使用 C4；LLaMA 家族的训练 token 数随代际从约 1T 级增长到 15T 以上。
 
-**答：**  
-**PTQ（训练后量化）**：训练完再校准，**快**。**QAT（量化感知训练）**：训练时模拟量化，**精度更好** 但贵。大模型部署 **PTQ** 更常见；**关键层** 可保留 FP16。
+- **下游任务迁移方式**：BERT 需在任务特定数据上微调（加分类头）；GPT 和 LLaMA 可通过 **上下文学习（In-Context Learning）** 和 **指令微调** 直接适配新任务；T5 通过“任务前缀 + 输入文本 → 输出文本”的统一格式进行 fine-tuning，迁移最为简洁。
 
----
+- **生成能力**：GPT、LLaMA 和 T5 都原生支持生成；BERT 本身不是自回归生成模型，通常需要附加 Decoder 或改造训练目标。Encoder-Decoder 与 Decoder-only 在条件生成上的优劣取决于任务、参数分配、训练数据和推理约束，不能笼统断言同参数规模下 T5 通常更差。
 
-## Q100：vLLM 的 PagedAttention？
+**总结**：GPT 和 LLaMA 代表了 **纯自回归生成路线**（Decoder-only），BERT 代表了 **双向理解路线**（Encoder-only），T5 则试图 **统一理解与生成**（Encoder-Decoder）。现代趋势明显偏向 **Decoder-only 架构**（如 LLaMA 系列），因其更好的扩展性、更灵活的上下文学习和更统一的训练范式。面试中从“架构、目标、位置编码/Norm、开源生态”四方面展开，即可覆盖核心差异。
 
-**答：**  
-类比 **OS 虚拟内存分页**，把 KV cache **非连续块** 分配，减少 **padding 浪费** 与 **碎片**，提高 **batch 内可变长度** 推理 **吞吐**。动态请求长度下 **GPU 利用率** 更高。
+## 二、分词器（Q21–Q30）
 
----
+### Q21：BPE（Byte Pair Encoding）训练流程是什么？
 
-## Q101：投机解码（speculative decoding）？
+**答：**
 
-**答：**  
-用小 **草稿模型** 快速生成多 token，大模型 **并行验证** 接受前缀。**不损失分布**（在特定算法下）可提高 **每步有效 token**。需 **草稿与目标模型协同**。降低 **每 token 延迟**。
+BPE（Byte Pair Encoding）是一种基于数据压缩思想的子词分词算法，广泛应用于现代大语言模型的 tokenizer（如 GPT、LLaMA 等）。其核心思想是通过迭代合并高频相邻符号对，构建一个大小可控且覆盖力强的词表。具体训练流程如下：
 
----
+（1）**预分词（Pre-tokenization，可选且实现相关）**：GPT-2 风格 byte-level BPE 会先用正则划分片段，传统 subword BPE 也常按词边界处理；SentencePiece 等实现则可直接从原始文本学习并把空格显式编码。是否允许合并跨越空格或其他边界由具体 tokenizer 的规范决定。
 
-## Q102：连续批处理（continuous batching）？
+（2）**初始化词表**：将所有词单元拆分为 **字符级（character-level）** 或 **字节级（byte-level）** 符号作为初始词表。例如，英文中初始符号为 "a", "b", ..., "z" 及空格、标点等；字节级则直接用 256 个字节值。
 
-**答：**  
-传统 **静态 batch** 等最长序列结束，**GPU 空转**。**连续批处理** 动态插入新请求、移除完成序列，**提高 GPU 利用率**，降低 **平均延迟**。vLLM、TGI 等实现。
+（3）**迭代合并相邻符号对**：重复执行以下步骤直到达到预设的 **合并次数（merge operations）** 或目标词表大小：
+- 统计当前语料表示中所有 **相邻符号对（adjacent symbol pairs）** 的出现频率；
+- 选出频率最高的那一对符号（如 ("h", "e")）；
+- 将该符号对合并为一个新的符号（如 "he"），并更新语料中所有出现该对的位置；
+- 将新符号加入词表。
 
----
+（4）**输出合并规则与最终词表**：训练完成后，得到一组有序的合并规则（按合并顺序编号）和最终的子词词表。这些规则在推理时用于对未见文本进行编码。
 
-## Q103：推理吞吐 vs 延迟？
+**推理时编码**：对新输入文本先执行相同的预分词，再从基础符号开始，依据训练得到的 **merge rank/有序合并规则**，反复合并当前优先级最高的合法相邻符号对，直到不能继续。经典 BPE 的这一过程不等价于直接做 greedy longest-match；最长匹配更接近 WordPiece 等词表编码策略。对于未登录词，BPE 可退回到更小的字符或字节单元以保证覆盖。
 
-**答：**  
-**吞吐**：tokens/s，**批处理大、利用率高** 时高。**延迟**：首 token、每 token，**交互式** 敏感。优化目标不同：**聊天** 重 TTFT；**离线批处理** 重吞吐。需 **分场景调 batch 与内核**。
+**核心优势**：BPE 通过数据驱动的方式自动平衡 **词表大小**（可固定为 3 万～10 万）与 **文本覆盖率**（极少出现完全无法编码的 token），同时保留高频词作为整体以减少序列长度，低频词则拆为更小单元以共享参数。
 
----
+### Q22：字节级 BPE（byte-level BPE）有什么优势？
 
-## Q104：典型模型服务架构？
+**答：**
 
-**答：**  
-**负载均衡 → 多副本 GPU 推理进程 → 可选路由器（MoE/多模型）→ 批调度器 → 模型引擎（TensorRT-LLM、vLLM）→ 监控与限流**。大流量加 **KV 缓存层（如 Redis）** 对 **相同前缀** 复用（需谨慎一致性）。
+字节级 BPE（byte-level BPE）是指在初始化词表时，使用 **256 个基础字节值（0x00～0xFF）** 作为基础符号，而非把所有 Unicode 码点列入基础表。它以固定的小字母表覆盖任意字节序列；文本如何转换成字节、是否规范化以及怎样预分词仍由 tokenizer 规范决定。
 
----
+- **可用很小基础表实现无 OOV**：对采用已知字节编码（通常是 UTF-8）的文本，任意字节都能由 256 个基础符号表示，因此不会因未见字符产生 `<UNK>`。码点级 tokenizer 若覆盖全部允许码点或提供 byte fallback 也能做到无损；字节级方案的优势是基础字母表固定且很小。
 
-## Q105：TTFT vs TBT 指标？
+- **多语言与噪声文本友好**：字节级表示天然统一了所有语言和特殊符号，无需针对不同语言设计不同的预处理规则。对于包含 emoji（如 "😊" 占 4 字节）、混杂多种脚本的文本，都能以统一方式处理，工程鲁棒性极高。
 
-**答：**  
-**TTFT（Time To First Token）**：请求到 **首个输出生成** 的时间，受 **排队、预填充 prefill、内核** 影响。**TBT（Time Between Tokens）** 或 **TPOT**：**相邻 token 间隔**，反映 **解码阶段** 自回归速度。SLA 常同时规定二者。优化：**连续批处理、投机解码、量化、KV 优化**。
+- **与具体脚本弱耦合**：合并规则在字节序列上学习，同一套基础编码可覆盖多种语言。不过正则预分词、Unicode 归一化和训练语料配比仍会引入语言相关行为，不能说完整 tokenizer 与语言先验完全解耦。
 
----
+- **代价：基础字节序列可能更长**：ASCII 字符通常占 1 字节；常用中日韩字符通常占 3 个 UTF-8 字节，扩展平面字符可占 4 字节。最终 token 数并不等于字节数，因为 BPE 会把高频多字节序列继续合并；实际压缩率取决于训练语料与词表。
+
+- **工程应用广泛**：GPT-2/3、Llama 3 等采用 byte-level BPE 或近似方案；LLaMA 早期代际使用 SentencePiece BPE 并支持 byte fallback。Unigram、码点级子词和混合方案也广泛存在，因此不宜把 byte-level BPE 称为唯一标准。
+
+### Q23：中文为什么往往 token 消耗更高？
+
+**答：**
+
+中文是否比英文消耗更多 token **取决于具体 tokenizer、训练语料和文本领域**。以英文为主、中文覆盖不足的词表往往对中文压缩较差，但为中文或多语言充分训练的 tokenizer 可以显著缩小甚至改变这一差距，主要影响因素包括：
+
+- **中文基本书写单位（汉字）密度高**：英文常用词（如 "information"）常作为完整 token 或高频子词被吸收，而中文大部分单字及常见双字词虽可被编码，但大量三字及以上词或罕见字需拆分为更细的子词或字节片段，导致语义信息被分散到更多 token 上。
+- **字节级 BPE 的 UTF-8 基础长度**：常用中文字符通常占 3 个 UTF-8 字节，而 ASCII 英文字母占 1 个字节。高频字节组合可以合并成单个 token，低频字符或组合则可能保留为多个 token。
+- **词表覆盖决定最终比例**：相同语义的中英文 token 数没有通用的固定倍数，应针对目标 tokenizer 和代表性语料实测，并用 bytes/token、characters/token 等指标说明。
+
+**影响**：如果目标 tokenizer 对中文压缩率较低，中文 prompt 会带来更高的按 token 计费和更快的上下文占用；是否如此需要以所用 tokenizer 的实际编码结果为准。
+
+**缓解策略**：
+- 使用 **大规模中文语料训练专属 tokenizer**，让高频中文词组合被充分合并，提高压缩率；
+- 在业务侧对用户输入进行 **提示压缩（prompt compression）**，如去除冗余表达、精简指令；
+- 采用 **多语言词表扩展**（如 LLaMA 原版词表对中文支持不足，开源社区扩展了中文词表版本，显著降低中文 token 消耗）。
+
+### Q24：BPE 与 WordPiece 的主要区别？
+
+**答：**
+
+BPE 和 WordPiece 都是数据驱动的子词分词算法，目标都是在固定词表大小下平衡“序列长度”与“覆盖率”，但它们的 **合并准则** 存在本质区别：
+
+- **BPE（Byte Pair Encoding）**：采用 **贪心频率准则**。每次迭代统计当前语料中所有相邻符号对的频次，选择 **出现频率最高** 的一对进行合并，加入词表。该过程基于纯粹的统计计数，计算简单且高效，适用于大规模语料。GPT 系列及 LLaMA 等主流 Decoder-only 模型普遍采用 BPE。
+
+- **WordPiece（如 BERT 所用）**：原始方法以提升训练语料的语言模型似然为目标；常见复现会用类似 $\text{freq}(ab)/(\text{freq}(a)\text{freq}(b))$ 的关联分数近似选择候选 pair，而不是简单选最高频 pair。不同工具的训练实现存在差异，不应概括成“每次为所有 pair 重训完整语言模型”或与互信息严格等价。
+
+**实现细节差异**：
+- WordPiece 常使用特殊前缀（如 `##`）标记非开头的子词片段，以区分词边界（如 `play` + `##er`），而 BPE 通常依赖空格预分词或直接按字节序列合并，边界管理方式不同。
+- BPE 的合并顺序固定且可逆（可通过规则还原），而 WordPiece 的合并决策更依赖全局似然，实现相对复杂。
+
+**实际效果**：两者在多数任务上表现 **大同小异**，均能有效解决 OOV 问题并保持合理词表大小。面试时记住核心差异在于 **合并选择准则不同**——BPE 基于频次，WordPiece 基于似然增益；但两者目标一致：子词平衡与覆盖率最大化。
+
+### Q25：词表大小如何选择？
+
+**答：**
+
+词表大小（Vocabulary Size，记为 $V$）是 tokenizer 设计中最重要的超参数之一，直接影响模型容量、计算效率和泛化能力。选择时需要在以下因素间权衡：
+
+**更大词表的优缺点**：
+- **优点**：通常能提高文本压缩率、缩短序列，从而减少 Attention、FFN 和 KV Cache 在 token 维上的成本。
+- **缺点**：
+  - **Embedding 与输出投影参数随 $V$ 线性增长**：权重共享时词表相关矩阵约为 $Vd$，不共享时约为 $2Vd$，还可能有 output bias；
+  - 输出投影和 softmax 的计算量随 $V$ 增长，因此序列变短不保证端到端延迟一定下降；
+  - 很少出现的整词 token 获得的更新较少，可能降低参数利用率；
+  - 过大词表可能学到收益有限的低频合并，是否影响收敛需实测。
+
+**更小词表的优缺点**：
+- **优点**：参数少，存储和计算压力低；低频问题减轻，词嵌入更稳健。
+- **缺点**：序列 $T$ 变长，注意力复杂度 $O(T^2)$ 和 FFN 计算量随 $T$ 线性增长，导致 **训练和推理速度显著下降**；同时每个 token 信息量低，长上下文占用窗口。
+
+**实际经验值**：
+- 英文单语模型：常见 $32k \sim 50k$（如 GPT-2 用 50k，BERT 用 30k）。
+- 多语言或代码模型常使用更大的词表，但并非必须如此。公开示例应以具体 tokenizer 为准，不应根据闭源模型的产品表现猜测其词表大小。
+- 词表大小不应简单按参数规模决定。随着模型宽度 $d$ 增大，每增加一个词表项的 embedding/output 参数成本也更高；应结合语言覆盖、压缩率、训练/推理工作负载以及是否权重共享来选取。
+
+**权衡依据**：
+- **压缩率（bytes/token）**：评估在目标语言上每 token 平均压缩的字节数，压缩率越高越好。
+- **OOV 率**：在验证集上未登录词的比例，应尽量接近 0（字节级 BPE 天然可做到）。
+- **归一化语言模型指标**：不同 tokenizer 的 token 单位不同，原始 token-level PPL 不能直接横向比较。应使用 bits-per-byte、bits-per-character，或按同一原始文本单位归一化的 NLL，并结合下游任务指标评估。
+- **工程约束**：产品对延迟、显存和吞吐的要求，应与模型宽度 $d$、是否权重共享及目标硬件联合搜索；模型更大并不自动意味着词表就应更大。
+
+**总结**：词表大小需在“压缩率 vs 参数量/速度”之间折中，常见范围 32k～100k，多语言和大模型倾向更大值；最终选择应结合语料分布、硬件资源和下游任务指标进行实验验证。
+
+### Q26：预分词（pre-tokenization）的作用？
+
+**答：**
+
+在采用预分词的 tokenizer 管线中，会先对规范化文本做规则化的粗粒度切分（例如处理空格、标点、数字或缩写），再在各片段内学习/应用子词规则。它用于定义候选 token 的边界并控制词表统计；但并非所有 BPE/Unigram 实现都要求外部预分词。
+
+- **注入边界先验**：可禁止跨越指定空格、标点或正则片段的合并，让词表更符合设计目标；这些边界是工程选择，并不保证语言学最优。
+- **控制压缩与泛化**：允许或禁止跨空格、数字内部等位置合并会改变序列长度和低频 token 数量，应在目标语料上评估，而不是把所有跨空格 token 都视为错误。
+- **与 SentencePiece 等工具的关系**：SentencePiece 可以直接从原始句子训练，不要求外部按空格预分词；它通常把空格转写为可见边界符 `▁`（U+2581），而不是普通下划线 `_`。
+- **保证可复现性**：不同预分词规则（如是否将标点与其前后词绑定）会导致同一语料下 BPE 学出的词表完全不同。因此，训练 tokenizer 时必须固定预分词管线（包括 Unicode 规范化、大小写处理、数字拆分等），以确保模型跨环境可复现。
+
+### Q27：特殊 token 如何处理？
+
+**答：**
+
+特殊 token 是 tokenizer 中预留的、不参与正常子词合并流程的控制符号，用于标记序列结构或辅助训练。常见类型包括：
+
+- `<pad>`：用于将不同长度的序列填充到同一长度，方便批量计算；
+- `<bos>` / `<eos>`：标记序列的开始与结束（尤其在生成任务中）；
+- `<unk>`：用于替换未登录词（OOV），但在字节级 BPE 下应尽量少用，因为理论上无 OOV；
+- `[MASK]`：BERT 类 MLM 预训练专用的掩码符号；
+- 对话角色/工具专用 token（如 `<|user|>`、`<|assistant|>`、`<|tool|>`），用于结构化多轮对话。
+
+**实现与使用规范**：
+- **预留 ID**：在初始化词表时预先分配固定 ID，并在 BPE 合并过程中锁定这些 ID（不参与合并），避免被合并或覆盖；
+- **注意力掩码**：在 softmax 前将指向 `<pad>` key 的 attention logits 置为 $-\infty$（或用布尔 mask 实现），使其 softmax 权重为 0；是否同时屏蔽 padding query 取决于实现，损失仍需单独 mask；
+- **损失掩码**：计算交叉熵损失时，需将 `<pad>` 位置的损失置零（通常通过 `ignore_index` 参数），否则模型会学习无意义的填充预测，干扰梯度更新；
+- **模板化对话**：不同模型使用不同 chat template，例如角色 token、回合边界 token 或 `[INST]...[/INST]`。ChatML 只是其中一种格式；训练和推理必须使用对应模型的模板。
+- **同源约束**：**训练模型所用的 tokenizer 必须与推理时完全一致**（包括特殊 token 定义和 ID 分配），否则会导致 ID 错位、乱码或崩溃，这是工程落地中最容易踩的坑之一。
+
+### Q28：SentencePiece 是什么？与裸 BPE 关系？
+
+**答：**
+
+SentencePiece 是 Google 开源的 **无监督文本 tokenization 库**，它封装了 BPE、Unigram 等多种分词算法，并提供统一的训练与编码 API。其核心设计特点是直接将原始 Unicode 字符串作为输入，不依赖语言特定的外部预分词；空格会被转写为可见边界符 `▁`，从而也能参与模型化。
+
+**与裸 BPE 的关系**：
+- **算法层面可等价**：SentencePiece 内置的 BPE 模式与标准 BPE 算法在合并逻辑上一致，但前者将空格作为普通字符参与统计（通过特殊下划线标记边界），避免了外部预分词器的依赖。
+- **工程封装优势**：SentencePiece 提供完整的训练、编码、解码流程，支持子词正则化（subword regularization）、采样编码、确定性解码等高级功能，且模型文件自包含（无需额外配置文件），便于端上部署。
+- **HuggingFace 集成**：`LlamaTokenizer`、`T5Tokenizer` 等许多流行 tokenizer 底层均基于 SentencePiece 实现，它已成为多语言大模型的 tokenization 标准工具。
+
+### Q29：Tokenizer 对训练与推理性能有什么影响？
+
+**答：**
+
+Tokenizer 的设计直接影响模型从输入到输出的全链路效率，具体体现在以下层面：
+
+- **序列长度与注意力成本**：词表大小和分词粒度决定了平均序列长度 $T$。注意力复杂度为 $O(T^2)$，更短的序列能显著降低训练/推理时的矩阵乘法和内存开销；反之，低压缩率（如中文）会大幅增加 $T$，直接拖慢整体吞吐。
+- **词表大小与参数计算**：词表 $V$ 越大，Embedding 层和输出 Softmax 层的参数量$(V \times d)$越大，前向/反向传播中这部分计算和显存占用也随之增加，尤其是在大模型宽维度下影响明显。
+- **计费与 KV Cache 占用**：按 token 计费的 API 服务中，中英文 token 比差异直接反映在成本上；同时，更长的序列会占用更多的 KV Cache 内存，限制 batch size 和最大上下文长度。
+- **分词质量与模型性能**：低质量分词（如过度碎片化或不合理合并）会使模型更难以捕捉语义边界，导致更高困惑度和更差的下游对齐效果，尤其在多语言混用场景中尤为突出。
+
+**优化策略**：
+
+- **词表与模型协同设计**：在确定模型宽度 $d$ 时，同步搜索最优词表大小，平衡参数增量和序列缩短带来的收益；
+- **推理侧融合内核**：将 tokenization 与模型 forward 流水线重叠，或使用 fused embedding lookup 减少内核启动开销；
+- **批处理长度分桶**：在训练/推理时对序列长度近似分桶，减少 padding 浪费，提升 GPU 利用率。
+
+### Q30：Unigram 分词（SentencePiece Unigram）原理简述？
+
+**答：**
+
+Unigram 分词是一种基于 **概率语言模型** 的子词分词算法，其基本思路不同于 BPE 的“从底向上合并”，而是 **自上而下删减**。具体原理如下：
+
+- **初始词表构建**：先启发式生成一个较大的候选词表，包含必须保留的基础字符和大量高频字符串片段。实际实现不会枚举语料中的“所有可能子串”，因为候选数量会过于庞大。
+- **迭代剪枝（EM 风格）**：通过期望最大化（Expectation-Maximization）的思想，对当前词表评估每个子词对整体语料对数似然的贡献，然后 **删除贡献最低的一批子词**（使得删减后语料似然损失最小），重复此过程直到词表达到目标大小。
+- **概率编码**：最终训练完成后，对于一段新文本，Unigram 可以基于词表中各子词的概率（通过 EM 估计得到）输出 **概率最大的切分路径**（类似维特比解码），并支持子词正则化（随机采样多种切分，用于增强鲁棒性）。
+
+**与 BPE 的对比**：
+- **BPE**：自底向上，基于频次贪心合并，简单高效；
+- **Unigram**：自顶向下，基于似然最优剪枝，对多语言和复杂形态学更灵活，但训练速度更慢、实现更复杂。
+
+**典型应用**：T5、mT5 等模型采用 Unigram 分词，因其在多语言场景下比 BPE 有更好的概率建模能力。面试时简明对比“**BPE 是合并，Unigram 是删减**”即可点明核心差异。
+
+## 三、训练优化（Q31–Q45）
+
+### Q31：Adam 与 SGD 的区别？
+
+**答：**
+
+**1. SGD（随机梯度下降Stochastic Gradient Descent）**
+
+SGD 的更新规则为：
+
+$$
+\theta_{t+1} = \theta_t - \eta \cdot g_t
+$$
+
+其中 $g_t$ 是当前 mini-batch 的梯度，$\eta$ 是学习率。
+
+**优点**：
+- 实现简单，计算开销极小，每个迭代只需一次梯度计算和一次参数更新。
+- 在精细调参（学习率 + 动量）下，SGD 的泛化性能通常优于自适应方法，尤其在图像分类等任务上表现突出。
+
+**缺点**：
+- **对学习率极其敏感**：学习率太大，loss 容易爆炸；太小则收敛极慢。
+- **对病态曲率敏感**：在损失函数的“峡谷”地形中（一个方向极陡、另一个方向极平），SGD 会沿陡峭方向剧烈震荡，沿平坦方向停滞不前。
+- **对稀疏特征不友好**：若某个特征（如 ID 特征）出现频率极低，其梯度更新次数少，但 SGD 给它与高频特征相同的学习率，导致稀疏特征难以学好。
+
+**2. Adam（自适应矩估计Adaptive Moment Estimation）**
+
+> Moment（矩）是统计学里的概念。Adam 的 $m_t$ 是梯度一阶原始矩的指数移动平均，$v_t$ 是梯度平方的指数移动平均，即**未中心化二阶原始矩** $E[g^2]$，不是统计学中的方差 $E[g^2]-E[g]^2$。
+
+Adam 的核心思想是：**为每个参数自适应地维护独立的学习率**。
+
+更新规则为：
+
+$$
+m_t = \beta_1 m_{t-1} + (1 - \beta_1) g_t
+$$
+
+$$
+v_t = \beta_2 v_{t-1} + (1 - \beta_2) g_t^2
+$$
+
+$$
+\theta_{t+1} = \theta_t - \eta \cdot \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon}
+$$
+
+其中 $\hat{m}_t$ 和 $\hat{v}_t$ 是经过偏差校正后的一阶矩和二阶矩估计（详见 Q34）。
+
+**直觉理解**：
+- **一阶矩 $m_t$（动量）**：如果某个方向的梯度长期同号，指数移动平均会逐步接近该方向的稳定值，减少随机波动并保持更新方向；它不会在恒定梯度下无限累积。若梯度符号来回振荡，正负项会部分抵消。
+- **二阶矩 $v_t$（自适应缩放）**：若某个参数的历史梯度很大（处于陡峭方向），则 $\sqrt{v_t}$ 较大，除以它后步长被压缩；若历史梯度很小（处于平坦方向），则 $\sqrt{v_t}$ 较小，步长被放大。这就是“逐参数自适应学习率”的本质。
+
+**优点**：
+- 为不同参数提供逐元素自适应缩放，通常比纯 SGD 更容易处理稀疏、噪声较大或模块间梯度尺度差异明显的目标；
+- 常在训练早期取得较快的损失下降，并适应非平稳梯度。
+
+**缺点**：
+- 仍需认真选择学习率，不存在 $10^{-4}$ 到 $10^{-2}$ 对所有任务都安全的保证；
+- 需要额外保存与参数同形状的一阶矩和二阶矩，即额外 $2P$ 个数值；若计入梯度、FP32 master weights 等，总训练显存还会更高；
+- 在部分任务上，充分调参的 SGD + Momentum 可能有更好的泛化。
+
+**3. 为什么 Transformer 训练用 AdamW 而非 SGD？**
+
+Transformer 不同参数、模块和训练阶段的梯度尺度可能差异较大，语言建模目标也具有较强噪声。Adam 的逐参数自适应缩放和动量在实践中通常比纯 SGD 更容易优化大型 Transformer；但不能断言“浅层梯度一定小、深层一定大”，其分布会随归一化布局、初始化和训练阶段变化。AdamW 还把 weight decay 与自适应梯度更新解耦，因此成为常见配置；这属于经验上验证充分的选择，不意味着 SGD 在理论上无法训练 Transformer。
+
+### Q32：AdamW 与「在 Adam 里加 L2」有何不同？
+
+**答：**
+
+**1. L2 正则化的本质**
+
+L2 正则化在原始损失函数上添加惩罚项 $\frac{\lambda}{2} \|\theta\|^2$，梯度变为：
+
+$$
+g_t' = g_t + \lambda \theta_t
+$$
+
+代入 SGD 更新：
+
+$$
+\theta_{t+1} = \theta_t - \eta (g_t + \lambda \theta_t) = (1 - \eta \lambda) \theta_t - \eta g_t
+$$
+
+可见，L2 正则化的效果是每一步将权重乘以 $(1 - \eta \lambda)$，即“权重衰减”，防止参数过大。
+
+**2. 直接在 Adam 中加 L2 有何问题？**
+
+> **范数，就是人类为了统一衡量“向量整体大小”而特意发明的数学工具。**
+
+Adam 的更新为：
+
+$$
+\theta_{t+1} = \theta_t - \eta \cdot \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon}
+$$
+
+若在梯度中直接加入 L2 项 $g_t' = g_t + \lambda \theta_t$，这个合成梯度会一起进入 $m_t$ 和 $v_t$ 的递推。特别是 $(g_t+\lambda\theta_t)^2$ 还包含平方项与交叉项，因此不能把 Adam 更新线性拆成“原梯度更新 + $\eta\lambda\theta_t/\sqrt{\hat v_t}$”两部分。
+
+**关键问题**：L2 项会经过 Adam 的动量累积和逐参数自适应预条件器，因而不再等价于 SGD 中统一的乘法式权重衰减。不同参数会受到不同的历史缩放，这使正则化强度与梯度统计耦合。
+
+**3. AdamW 的做法（AdamW 中的 W，代表 Weight Decay（权重衰减））**
+
+AdamW 将权重衰减从梯度更新中**解耦**。以下采用 [PyTorch AdamW](https://docs.pytorch.org/docs/stable/generated/torch.optim.AdamW.html) 的约定：衰减作用于本步更新前的参数，不进入梯度的一阶、二阶矩。
+
+1. 用原损失梯度计算标准 Adam 的矩估计和自适应更新量（不加入 L2 梯度）；
+2. 对旧参数独立应用衰减，再减去自适应更新量：
+
+$$
+\theta_{t+1} = \theta_t - \eta \cdot \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon} - \eta \lambda \theta_t
+$$
+
+等价地写为：
+
+$$
+\theta_{t+1} = (1 - \eta \lambda) \theta_t - \eta \cdot \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon}
+$$
+
+现在权重衰减系数不再进入 $m_t$ 和 $v_t$ 的估计，与梯度的自适应缩放解耦。实际训练中通常还会按参数类型决定是否衰减，例如常见做法是不给 bias 和 Norm scale 施加 weight decay。
+
+**直观比喻**：
+
+- **Adam + L2**：自适应变速器里混入刹车，不同档位刹车力度不同，车子跑偏。
+- **AdamW**：自适应更新与统一的参数衰减分开计算。若代码先减 Adam 更新量、再乘衰减因子，会把更新量也衰减，与上述公式相差交叉项 $\eta^2\lambda\hat m_t/(\sqrt{\hat v_t}+\epsilon)$，并非完全等价。
+
+因此，Transformer 训练标配 **AdamW + weight decay**（如 0.1），而非 Adam + L2。
+
+### Q33：学习率 warmup 的作用？
+
+**答：**
+
+**1. 为什么需要 warmup？**
+
+训练初期，模型参数随机初始化，梯度方向和大小均极不稳定。若一开始就用较大的学习率：
+- 参数可能朝随机方向猛冲，越过最优区域，甚至导致梯度爆炸（loss 变为 NaN）；
+- Adam 的 $v_t$（二阶矩）在早期估计严重不准——因样本量不足，无法准确判断各参数合适的步长。
+
+**Warmup** 在训练最初若干步将学习率从 0 缓慢提升至目标值，让模型“热身”，待梯度统计量稳定后再全速前进。
+
+**2. Warmup 对 Adam 尤为重要**
+
+Adam 的更新取决于 $\hat m_t/(\sqrt{\hat v_t}+\epsilon)$，不能只观察分母并把“有效步长”写成 $\eta/\sqrt{v_t}$。偏差校正会补偿零初始化带来的尺度偏差，但训练最初的梯度方向、激活尺度和矩估计仍可能快速变化；在大 batch、深层网络或较高峰值学习率下，直接使用目标学习率容易造成过大的参数漂移或 loss spike。
+
+Warmup 让全局学习率逐渐升高，为模型和优化器统计量提供过渡期。它是经验上常用的稳定化手段，但作用来自整体训练动力学，而不是简单因为“$v_t$ 从 0 开始所以分母必然异常小”。
+
+**3. 常见 Warmup + Decay 调度策略**
+
+| 策略        | 公式                                                         | 特点                       |
+| ----------- | ------------------------------------------------------------ | -------------------------- |
+| 线性 warmup | $\eta_t = \eta_{\text{target}} \cdot \dfrac{t}{T_{\text{warmup}}}$ | 最简单，最常用             |
+| 指数 warmup | $\eta_t = \eta_{\text{target}} \cdot (1 - e^{-t/\tau})$    | 更平滑，需调 $\tau$      |
+| 余弦 warmup | $\eta_t = \eta_{\text{target}} \cdot \dfrac{1 - \cos(\pi t / T_{\text{warmup}})}{2}$ | 平滑上升，适合搭配余弦衰减 |
+
+**Linear Warmup + Cosine Decay** 是 LLM 训练的经典配方：
+
+$$
+\eta_t =
+\begin{cases}
+\eta_{\text{target}} \cdot \dfrac{t}{T_{\text{warmup}}}, & t < T_{\text{warmup}} \\[10pt]
+\eta_{\text{target}} \cdot \dfrac{1 + \cos\left(\pi \cdot \dfrac{t - T_{\text{warmup}}}{T_{\text{total}} - T_{\text{warmup}}}\right)}{2}, & t \ge T_{\text{warmup}}
+\end{cases}
+$$
+
+**4. Warmup 长度如何设置？**
+
+Warmup 长度没有只由参数量决定的通用公式，还取决于 global batch size、每步 token 数、峰值学习率、初始化、归一化方式和总训练预算。更可比的单位通常是 warmup token 数或占总训练 token 的比例；实践中应结合小规模稳定性实验、loss 和 gradient norm 曲线选择。
+
+### Q34：Adam 中的偏差校正（bias correction）是什么？
+
+**答：**
+
+**1. 问题根源**
+
+Adam 维护两个指数移动平均：
+
+$$
+m_t = \beta_1 m_{t-1} + (1 - \beta_1) g_t
+$$
+
+$$
+v_t = \beta_2 v_{t-1} + (1 - \beta_2) g_t^2
+$$
+
+且 $m_0 = 0, \; v_0 = 0$。
+
+在 **前几步**，因初始值为 0，指数移动平均被严重拉向 0。
+
+以常用的 $\beta_1 = 0.9$、$\beta_2 = 0.999$ 和第 1 步为例：
+
+$$
+m_1 = 0.9 \times 0 + 0.1 \times g_1 = 0.1 g_1
+$$
+
+同时：
+
+$$
+v_1 = 0.999 \times 0 + 0.001 \times g_1^2 = 0.001 g_1^2
+$$
+
+二者都因零初始化而向 0 偏置，但缩放比例不同。
+
+**后果**：如果直接使用带偏的 $m_t$、$v_t$，它们不能正确反映相应矩的尺度；对更新量的影响不能简单判断为“必然偏小”。例如默认超参数下，不做校正的首步比例为 $0.1/\sqrt{0.001}\approx3.16$，反而可能比校正后更大。
+
+**2. 偏差校正如何解决？**
+
+Adam 对 $m_t$ 和 $v_t$ 进行校正：
+
+$$
+\hat{m}_t = \frac{m_t}{1 - \beta_1^t}, \qquad \hat{v}_t = \frac{v_t}{1 - \beta_2^t}
+$$
+
+验证：当 $t=1$ 时，
+
+$$
+\hat{m}_1 = \frac{0.1 g_1}{1 - 0.9} = \frac{0.1 g_1}{0.1} = g_1
+$$
+
+校正后 $\hat m_1=g_1$；同理，$\hat v_1=g_1^2$。这里被校正的是带帽变量，原始 $v_1$ 仍为 $0.001g_1^2$。
+
+当 $t$ 增大时，$\beta_1^t \to 0$，分母趋近于 1，校正项逐渐失效，$\hat{m}_t \approx m_t$。因此**偏差校正仅在训练早期起作用，后期自动退化**。
+
+**3. 若不进行偏差校正会怎样？**
+
+- $m_t$ 和 $v_t$ 都带有由零初始化引入的系统性偏差，且偏差程度由 $\beta_1$、$\beta_2$ 和步数共同决定；
+- 因为分子与分母的偏差比例不同，实际更新可能偏大也可能偏小，默认超参数的首步通常会偏大；
+- 这会让早期更新尺度依赖超参数和步数，破坏 Adam 设计中的尺度解释与训练稳定性。
+
+**4. 面试常见追问**
+
+**问**：为什么 Adam 需要偏差校正？
+**答**：因为 $m_t$ 和 $v_t$ 从 0 初始化，前几步的指数移动平均都会向 0 偏置；分别除以 $1-\beta_1^t$、$1-\beta_2^t$ 可恢复相应矩的正确尺度。未经校正的最终更新不一定偏小。
+
+**问**：偏差校正在后期还有影响吗？
+**答**：几乎无影响，因为 $\beta^t$ 随 $t$ 呈指数衰减至 0。
+
+**问**：AdamW 是否仍需偏差校正？
+**答**：是的。AdamW 仅在权重衰减层面做了修改，一阶矩和二阶矩的偏差校正机制完全保留，与标准 Adam 一致。
+
+### Q35：$\beta_1$、$\beta_2$ 的含义？
+
+**答：**
+
+$\beta_1$ 控制梯度一阶矩 EMA 的衰减速度。它越大，估计越平滑但对新变化响应越慢；常见取值为 **0.9**。
+
+$\beta_2$ 控制梯度平方，即未中心化二阶矩 EMA 的衰减速度。Adam 原论文默认值为 **0.999**；许多 LLM 配方使用 **0.95、0.98** 等更低值，让二阶矩更快响应非平稳梯度。更高的 $\beta_2$ 会提高平滑程度，也会增加响应滞后，不能简单概括为“越大越稳定”。
+
+二者共同影响 Adam 的有效更新尺度，应结合学习率、batch size、梯度噪声和训练稳定性通过实验选择。
+
+### Q36：梯度裁剪（gradient clipping）的常见方式？
+
+**答：**
+
+梯度裁剪主要防止梯度爆炸（gradient explosion），常见两种方式：
+
+> 梯度裁剪的核心目的，是为了应对深度神经网络训练中常见的 **梯度爆炸（gradient explosion）** 问题。梯度爆炸是指，在反向传播过程中，由于链式法则的连乘效应，梯度值会随着层数增加呈指数级增长，变得非常大（甚至溢出为 `NaN`）。
+
+- **按全局范数裁剪（global norm clipping）**：将所有参数梯度视为拼接后的向量 $\mathbf g$，计算 $G=\|\mathbf g\|_2$。给定阈值 $\tau$，统一缩放为：
+
+    $$
+    \mathbf g \leftarrow \mathbf g\cdot \min\left(1,\frac{\tau}{G+\epsilon}\right)
+    $$
+
+  这种方式保持了梯度方向不变，是**大模型训练中最常用的方式**。
+
+- **按值裁剪（value clipping）**：对每个梯度元素逐元素截断到 $[-\tau, \tau]$ 区间内。这种方式会破坏梯度方向，在大模型中较少使用。
+
+**目的**：抑制 **loss spike**（损失尖峰）和梯度爆炸，尤其在 **RNN / 深层 Transformer** 和 **混合精度训练** 中尤为重要。常与 **loss scaling** 配合使用。
+
+### Q37：混合精度训练 FP16 / BF16 的原理与取舍？
+
+**答：**
+
+混合精度训练的核心是：让适合低精度的矩阵乘等算子使用 FP16/BF16，以降低激活、带宽和计算成本；对数值敏感的归约、部分状态或参数更新保留更高精度。具体哪些张量以哪种精度持久存储，取决于训练框架，并不存在唯一固定布局。
+
+- **经典 FP16 master-weight 方案**：可维护低精度工作权重和 FP32 master weights，并配合 loss scaling；
+- **原生 autocast 方案**：例如常见 PyTorch AMP 用法通常让模型参数保持 FP32，只在算子执行时自动选择低精度输入，并不额外长期保存一整份 FP16 工作权重；
+- **BF16/分片训练方案**：部分系统可让参数、梯度或优化器状态采用不同精度，并结合 ZeRO/FSDP 分片，因此需按实现逐项计算显存。
+
+- **FP16（半精度）**：动态范围较小（约 $6 \times 10^{-8}$ 到 $6.5 \times 10^4$），容易发生**上溢（溢出到无穷）** 或**下溢（小梯度变为 0）**。因此需要配合 **loss scaling**（损失缩放）来避免梯度下溢。
+
+- **BF16（Brain Floating Point）**：指数位与 FP32 相同（8 位），动态范围接近 FP32，远大于 FP16，因此许多训练不需要 loss scaling。其尾数位较少（7 位 vs FP16 的 10 位），舍入误差更大；是否影响收敛仍需结合算子、累加精度和模型验证，不能概括为始终可忽略。
+
+在 A100 / H100 等现代 GPU 上，**BF16 已成为大模型训练的主流选择**。在 CS336 等实验课程中，常要求学生对比二者的数值行为和收敛差异。
+
+### Q38：Loss scaling 是什么？为何需要？
+
+**答：**
+
+在 FP16 混合精度训练中，许多梯度幅值可能小于 FP16 的最小可表示正数（约 $6 \times 10^{-8}$），从而导致**下溢（变为 0）**，使得模型参数无法更新。
+
+**Loss scaling** 的做法是：
+
+1. 前向传播正常计算 loss；
+2. 反向传播前，将 loss 乘以一个**大常数 $S$**（如 128、256 或 1024）；
+3. 进行反向传播，所有梯度被同比例放大，使其落入 FP16 可表示的有效范围；
+4. 在更新参数前，将放大的梯度**除以 $S$**，恢复到原始尺度，再更新主权重。
+
+**动态 loss scaling** 会在训练过程中根据是否发生溢出自动调整 $S$ 的大小。
+
+**BF16** 因为动态范围大（与 FP32 相同），通常**不需要 loss scaling**，这也是其广受欢迎的原因之一。
+
+### Q39：常见学习率调度策略？
+
+**答：**
+
+学习率调度器控制训练过程中学习率随 step 或 token 数的变化，需要与训练时长、global batch、优化器、初始化和模型规模共同设计，不存在对所有任务都最优的固定策略。
+
+**Warmup**
+
+训练初期模型表示与优化器统计尚未稳定，立即使用峰值学习率可能导致更新过猛。Warmup 通常让学习率从较小值逐步升到峰值；长度应通过稳定性实验确定，并非固定占比。
+
+**Warmup + Cosine Decay**
+
+Warmup 后按余弦曲线从峰值衰减到预设最小值：
+
+$$
+\eta_t=\eta_{\min}+\frac{1}{2}(\eta_{\max}-\eta_{\min})\left[1+\cos\left(\pi\frac{t-t_{\text{warmup}}}{T-t_{\text{warmup}}}\right)\right]
+$$
+
+它在许多预训练和微调配置中使用，但不是唯一正确方案。
+
+**其他常见策略**
+
+- **Linear Decay**：warmup 后线性降至最小学习率，适合总步数已知的任务；
+- **Inverse Square Root**：warmup 后近似按 $1/\sqrt t$ 衰减，原始 Transformer 使用这类形式；
+- **Constant**：warmup 后保持不变，在部分预训练和微调配置中都可能使用；
+- **WSD**：Warmup-Stable-Decay，增加较长稳定阶段，最后集中衰减，便于灵活延长训练。
+
+**如何选择**
+
+调度器的结束位置应匹配计划训练 token/step，而不是机械设在“Chinchilla token 数”附近。Chinchilla 描述的是特定实验条件下固定训练计算预算的模型—数据配比，不是学习率调度器的通用终点。峰值学习率、warmup 和最终学习率应参考同类模型并通过小规模消融确定。
+
+### Q40：AdamW 的「内存开销」主要在哪里？
+
+**答：**
+
+AdamW 相比无动量 SGD 的主要额外开销是两个与可训练参数同形状的状态：一阶矩 $m$ 和未中心化二阶矩 $v$。它们通常用 FP32 存储，因此优化器状态本身常为 **8 字节/参数**。
+
+![image-20260908084026820](../interview/images/image-20260908084026820.png)
+
+**1. 必须按具体精度布局逐项计算**
+
+- **纯 FP32 的常见估算**：参数 4B + 梯度 4B + $m$ 4B + $v$ 4B，合计约 **16B/参数**；若只讨论参数与优化器状态、不计梯度，则为 12B。
+- **经典 FP16 master-weight 方案**：低精度工作权重 2B + 低精度梯度 2B + FP32 master weight 4B + $m/v$ 8B，合计约 **16B/参数**。若梯度也保留 FP32，数值还会变化。
+- **原生 AMP/BF16、ZeRO/FSDP 或低精度优化器**：可能没有独立低精度工作权重，或会改变参数、梯度、状态的精度和分片方式。因此“14B/参数”“额外 2～3 倍”“master weights 永远是 FP32”都不是通用结论。
+
+以上只计算模型状态，不含激活、临时 buffer、通信 bucket、内存碎片和 CUDA workspace。
+
+**2. 与其他优化器的对比**
+
+- **SGD + Momentum**：通常只需一个动量状态；
+- **Adam/AdamW**：需要 $m$、$v$ 两个状态；
+- **Adafactor**：对 $n\times m$ 矩阵把二阶矩由 $O(nm)$ 因子化为约 $O(n+m)$，节省比例取决于参数形状以及是否保存一阶动量，不能固定说“约一半”；
+- **LoRA 等参数高效微调**：减少可训练参数数量，从而显著减少梯度和优化器状态。
+
+**3. 常见降低方法**
+
+- ZeRO/FSDP 按相应策略分片优化器状态、梯度和参数；
+- 将部分状态 offload 到 CPU/NVMe；
+- 使用低精度或因子化优化器状态；
+- 使用 activation checkpointing 等方法处理另一大显存来源——激活。
+
+**4. 推理阶段**
+
+推理不需要梯度、$m$、$v$ 或训练用 master weights，但仍需模型权重、KV Cache、激活和运行时 workspace。推理与训练显存的比例随 batch、上下文长度、量化和并行策略而变，不能统一写成 $1/4$～$1/3$。
+
+**总结**：AdamW 的固定核心状态是 $m$ 和 $v$；FP32 master weight 是否存在取决于实现。回答显存题时应列出“参数、梯度、master、$m/v$、激活”各项的 dtype 和是否分片，而不要套用单一倍数。
+
+### Q41：语言建模中的交叉熵损失？
+
+**答：**
+
+在语言建模中，交叉熵损失（Cross-Entropy Loss）是训练自回归语言模型时最核心的优化目标，其本质是 **最大化训练数据上的对数似然**。对于每个位置，模型将前文上下文 $x_{<i}$ 映射为一个 logits 向量 $z \in \mathbb{R}^{V}$（$V$ 为词表大小），真实下一个 token 为类别 $y$（对应索引 $c$），则该位置的交叉熵损失定义为：
+
+$$
+\mathcal{L}_i = -\log p(y \mid x_{<i}) = -\log \big(\text{softmax}(z)_y\big) = -z_c + \log\sum_{j=1}^{V} \exp(z_j)
+$$
+
+对整个序列（长度为 $N$）的损失，通常取 **逐 token 平均**（per-token averaging），并在计算时 **忽略 padding 位置**（通过 mask 将填充位置的损失置零，再除以有效 token 数），以保证不同长度样本间损失可比：
+
+$$
+\mathcal{L}_{\text{seq}} = \frac{1}{N_{\text{有效}}} \sum_{i=1}^{N} -\log p(x_i \mid x_{<i})
+$$
+
+上述公式也表明，**训练目标即为最大化似然估计（MLE）**，这一范式贯穿了从传统 n-gram 到现代大语言模型的预训练过程。
+
+为了更深入理解，可从以下几个维度展开：
+
+**1. 概率与信息论视角**
+交叉熵 $H(y, p) = -\sum_y y \log p$，在真实标签为 one-hot（即 $y_c = 1$）时退化为 $-\log p_c$。由于真实分布的熵 $H(y) = 0$，最小化交叉熵等价于最小化模型分布 $p$ 与真实分布 $y$ 之间的 **KL 散度**$D_{\text{KL}}(y \| p)$，即让模型分布尽可能逼近数据经验分布。这也是为何交叉熵能直接作为似然度量的原因。
+
+**2. 与困惑度（PPL）的单调对应关系**
+交叉熵损失的平均值 $\mathcal{L}_{\text{seq}}$ 取指数即为困惑度：$\text{PPL} = \exp(\mathcal{L}_{\text{seq}})$。在测试集、tokenizer、上下文和归约方式相同时，两者在模型排序上等价；“有效候选数”只是一种直觉解释，不代表模型真的在固定数量的等概率 token 中选择。
+
+**3. 正则化技巧：Label Smoothing**
+标准交叉熵易导致模型对正确类别赋予过高概率（logit 趋向 ±∞），造成过拟合和过度自信。**Label Smoothing** 将 hard one-hot 标签替换为软标签：
+
+**平滑强度 $\epsilon$（epsilon）**：下面采用“把 one-hot 标签与全类别均匀分布混合”的定义。
+
+$$
+\epsilon = 0
+$$
+
+退化为硬标签（无平滑）。
+
+$$
+\epsilon = 0.1
+$$
+
+表示以 $10\%$ 的权重混入均匀分布。
+
+$\epsilon$ 越大，模型越"不自信"，正则化越强。
+
+**词表大小 $V$**：均匀分布在全部 $V$ 个类别上，每个类别获得：
+
+$$
+\frac{\epsilon}{V}
+$$
+
+因此正确类的目标概率为 $1-\epsilon+\epsilon/V$，每个错误类为 $\epsilon/V$，错误类总概率质量为 $\epsilon(V-1)/V$。虽然单个错误类的概率很小，总体正则化强度仍约为 $\epsilon$，不能据此说影响很小。另一种常见定义是只把 $\epsilon$ 分给错误类，此时应使用 $\epsilon/(V-1)$；两套公式不能混用。
+
+**软标签公式**
+
+平滑后的软标签为：
+
+$$
+\tilde{y}_k = (1 - \epsilon) \cdot \mathbf{1}_{k=c} + \frac{\epsilon}{V}
+$$
+
+其中：
+
+- $\mathbf{1}_{k=c}$ 是指示函数：当 $k = c$（正确答案）时为 1，否则为 0。
+- $\tilde{y}_k$ 是平滑后第 $k$ 个词对应的标签值。
+
+**损失函数**
+
+Label Smoothing 对应的交叉熵损失变为：
+
+$$
+\mathcal{L}^{\text{LS}} = -\sum_{k=1}^{V} \tilde{y}_k \log p_k
+$$
+
+**4. 多任务场景下的损失加权**
+当模型同时优化多个子任务（如预训练中的 MLM + 文本生成、指令微调中的回答损失 + 辅助分类损失、多模态对齐损失等）时，总损失通常为各任务交叉熵损失的 **加权和**：
+
+$$
+\mathcal{L}_{\text{total}} = \sum_{t} \lambda_t \cdot \mathcal{L}_t
+$$
+
+权重 $\lambda_t$ 需根据任务难度、数据规模或验证集表现手动调节，也可采用 **同方差不确定性加权**（Uncertainty Weighting）自适应学习各任务权重，以避免某一任务梯度主导训练过程。
+
+**5. 数值稳定性实现**
+直接计算 softmax 后取负对数可能导致下溢或上溢。实际工程中，通常使用框架内置的交叉熵函数（如 PyTorch 的 `F.cross_entropy`），该函数内部采用 **Log-Sum-Exp 技巧**（先对所有 logits 减去最大值再取指数），同时将 logits 与标签索引直接传入，避免显式构造 one-hot 向量，提高内存效率和数值稳定性。此外，**温度系数** $T$（对 logits 缩放：$z/T$）可在训练或采样时软化概率分布，常用于知识蒸馏和可控生成。
+
+> **温度系数 T 是在 Softmax 之前对 logits 做缩放的参数：T>1让概率更"温和"（多样性↑），T<1让概率更"激进"（确定性↑），T=1就是标准 Softmax。**
+
+**6. 与信息论的联系**
+
+样本负对数似然是数据分布相对于模型分布的**条件交叉熵**的 Monte Carlo 估计。对固定数据分布，有：
+
+$$
+H(p_{\text{data}},p_\theta)
+=H(p_{\text{data}})
++D_{\mathrm{KL}}(p_{\text{data}}\|p_\theta)
+$$
+
+其中真实条件熵由数据分布决定，不随模型参数变化。因此，最小化训练交叉熵等价于减小模型条件分布与数据条件分布之间的 KL，而不是“最小化真实条件熵”或“最大化数据本身的互信息”。增加模型规模或上下文也不保证在所有设置下都降低验证交叉熵，效果还受数据、优化和泛化影响。
+
+**总结**：语言模型交叉熵是逐 token 负对数似然，并按实际参与训练的 token 数归约。它与 MLE、KL 散度和困惑度相关；Label Smoothing 是否改善校准或泛化取决于任务，不能保证始终有益。实现中需注意 label shift、损失 mask、归约口径和数值稳定性。
+
+### Q42：困惑度（Perplexity, PPL）？
+
+**答：**
+
+困惑度（Perplexity, PPL）是语言模型中最常用的评估指标之一，其定义为 **平均负对数似然（cross-entropy loss）的指数**，数学表达式为：
+
+$$
+\text{PPL}(x_1, \dots, x_N) = \exp\left(-\frac{1}{N}\sum_{i=1}^{N} \log p(x_i \mid x_{<i})\right) = \exp(\mathcal{L}_{\text{CE}})
+$$
+
+其中 $x_i$ 表示第 $i$ 个 token，$x_{<i}$ 表示其上下文，$N$ 是参与评估的 token 数。PPL 等于模型赋给真实 token 概率的**几何平均数的倒数**：
+
+$$
+\text{PPL}=\left(\prod_{i=1}^{N}p(x_i\mid x_{<i})\right)^{-1/N}
+$$
+
+若每个位置给真实 token 的概率都恰为 0.5，则 PPL 为 2；仅仅算术平均概率为 0.5 并不能推出 PPL 为 2。
+
+为了更透彻地理解 PPL，可以从以下几个角度展开：
+
+1. **与交叉熵的单调对应关系**
+   对同一个测试集而言，PPL 与交叉熵损失 $-\frac{1}{N}\sum \log p$ 呈严格单调指数关系，因此两者在模型排序上完全等价。训练时通常最小化交叉熵，而报告 PPL 只是将其映射到更直观的“候选词数量”尺度上。
+
+2. **“候选词数”的概率解释**
+   只有在每个位置都近似对 $K$ 个候选均匀分配概率、且真实 token 位于其中时，PPL 才可解释为约 $K$ 个等可能候选。一般模型分布并不均匀，因此“有效候选数”只是直觉，PPL=100 不能字面解释为每步从 100 个词中猜一次。
+
+3. **PPL 的局限性与比较前提**
+   PPL 是一个相对指标，**跨模型比较时必须满足严格的控制条件**，否则结果不可比：
+   - **相同 tokenizer（分词器）**：不同分词方式（如 BPE、SentencePiece、词级 vs 子词级）会导致词汇表大小和序列长度不同，PPL 会随之大幅变化，不能直接比较。
+   - **相同测试集 / 领域分布**：PPL 对数据分布极度敏感，在新闻语料上训练的模型在小说测试集上 PPL 可能飙升，因此必须在同一测试集上对比。
+   - **相同上下文长度**：更长的上下文通常能降低 PPL（信息更多），因此需保证评估时的截断窗口一致。
+
+4. **PPL 不能完全反映生成质量**
+   PPL 衡量的是“对给定文本的拟合程度”，但低 PPL 并不一定意味着高生成质量（如多样性、连贯性、事实准确性）。在对话、摘要、创意写作等任务中，PPL 只能作为基础参考，还需配合人工评估或其他任务特定指标（如 BLEU、ROUGE、BERTScore）。
+
+5. **不要背固定数值范围**
+   - PPL 强烈依赖 tokenizer、词表单位、数据集、预处理、上下文长度和是否有评测污染；字符级、词级与子词级 PPL 的数值尺度不同。
+   - 报告结果时应给出完整评测设置，并只在口径一致时比较。无法脱离这些条件断言“现代 LLM 的正常 PPL 是 5～20”。
+
+综上，**PPL 是平均 token 负对数似然的指数，也是模型赋给真实 token 概率的几何平均倒数**。它不是跨 tokenizer 的绝对质量分数，也不等于真实候选词个数；应在相同数据、分词、上下文和归约口径下比较，并结合任务评测使用。
+
+### Q43：Top-p（nucleus）与 Top-k 采样？
+
+**答：**
+
+**Top-k**：每步只保留概率最高的 $k$ 个 token，重新归一化后采样。它实现简单，但固定 $k$ 不能适应不同位置分布的尖锐程度。
+
+**Top-p**：按概率从高到低排序，选取累计概率至少达到 $p$ 的最小集合，再重新归一化采样。分布尖锐时集合较小，分布平坦时集合较大。
+
+相对于在完整词表上按同一温度采样，Top-k/Top-p 都会截断低概率尾部、缩小候选范围；相对于贪心解码，它们又提供随机性。因此不能笼统说“截断本身增加多样性”。二者可与 temperature 组合，但参数没有跨模型、跨任务通用的固定值。
+
+### Q44：Temperature 在采样中的作用？
+
+**答：**
+
+Temperature 在 softmax 前缩放 logits：
+
+$$
+p_i(T)=\frac{\exp(z_i/T)}{\sum_j\exp(z_j/T)}
+$$
+
+$T>1$ 时分布通常更平坦，$0<T<1$ 时更尖锐；若最高 logit 唯一，$T\to0$ 时趋近贪心，$T\to\infty$ 时在未被 mask 的有限词表上趋近均匀。训练中温度可用于知识蒸馏；推理时它控制采样熵。降低温度可能减少随机错误，但模型也可能高置信地产生错误，因此不能保证减少幻觉，取值需与 Top-p/Top-k 和任务评测共同确定。
+
+### Q45：训练中的 loss spike（损失尖峰）原因与应对？
+
+**答：**
+
+**常见原因**：异常或分布突变的 batch、label/mask 错误、学习率过大或 warmup 不足、梯度爆炸、FP16 溢出/下溢，以及硬件、通信错误导致的数据损坏或 rank 状态失配。单纯通信变慢通常只会让 step 变慢或超时，不会自行改变正确完成的梯度。
+
+**排查与应对**：记录 loss、梯度范数、学习率、样本 ID 和各 rank 状态；检查输入、label shift、mask 和长度分布；根据证据调整学习率、warmup 和全局梯度裁剪；FP16 使用动态 loss scaling，必要时评估 BF16；检查 GPU ECC、NCCL 和 checkpoint。若跳过异常 batch，所有 rank 必须协调执行，并保证 optimizer、scheduler 和 scaler 状态一致，不能只让某个 rank 单独跳过。
+
+## 四、系统工程（Q46–Q60）
+
+### Q46：FlashAttention 的核心思想？
+
+**答：**
+
+标准 attention 往往会把 $QK^\top$、softmax 概率等大规模中间结果写入并再次读出 HBM，长序列时容易受容量和带宽限制。FlashAttention 通过 tiling 将 Q/K/V 块搬入片上存储，使用 online softmax 分块更新归一化统计量和输出，并融合多个步骤，从而避免物化完整注意力矩阵。它的核心是 **IO-aware：减少 HBM 与片上存储之间的数据往返，而不是近似 attention**。
+
+FlashAttention-2 进一步减少非矩阵乘 FLOPs，并改进 thread-block 和 warp 的工作划分；FlashAttention-3 针对 Hopper 架构利用异步执行、TMA、warp specialization 和低精度路径。具体支持的 dtype、GPU 和前后向能力应以所用实现版本为准。
+
+![image-20260909083457951](../interview/images/image-20260909083457951.png)
+
+![image-20260909083510761](../interview/images/image-20260909083510761.png)
+
+![image-20260909083519104](../interview/images/image-20260909083519104.png)
+
+![image-20260909083751827](../interview/images/image-20260909083751827.png)
+
+### Q47：标准 Attention 的访存瓶颈为何严重？
+
+**答：**
+
+计算 $QK^\top$ 后若把 $T\times T$ 分数矩阵写回 HBM，再读取做 softmax、再次写回并读取乘 $V$，会多次搬运二次规模的中间结果。GPU 在这类低算术强度阶段容易受 HBM 带宽限制。例如仅一张 $65536\times65536$ 矩阵，FP16/BF16 约为 8 GiB、FP32 约为 16 GiB；这里尚未乘 batch 和 head 数。它远大于片上 SRAM，因此需要融合与分块。
+
+### Q48：分块 Softmax / online softmax 的思想？
+
+**答：**
+
+对一行 attention score 分块处理时，维护当前最大值 $m$、指数和 $l$ 及未归一化的加权输出 $\mathbf o$。若新块统计量为 $m_b,l_b,\mathbf o_b$，则：
+
+$$
+m'=\max(m,m_b)
+$$
+
+$$
+l'=e^{m-m'}l+e^{m_b-m'}l_b
+$$
+
+$$
+\mathbf o'=e^{m-m'}\mathbf o+e^{m_b-m'}\mathbf o_b
+$$
+
+遍历所有块后输出 $\mathbf o/l$。新最大值出现时，旧累计量会被重缩放，因此无需一次存下整行 score。在实数算术下它与标准 softmax attention 数学等价；有限精度下因累加顺序不同，可能有小的舍入差异，不保证逐 bit 相同。
+
+### Q49：FlashAttention 的内存复杂度（相对物化 $T \times T$）？
+
+**答：**
+
+FlashAttention 不保存完整的 $T\times T$ score 和 softmax 矩阵。把 batch、head 和 head dimension 视为固定时，额外显存相对于序列长度由二次降为线性量级；更完整地说，输入、输出和统计量仍需 $O(Td)$ 或 $O(T)$ 空间。训练反向传播通过重新分块计算部分中间结果换显存，因此 FLOPs 可能略增。自回归 KV Cache 是另一项内存，其大小还取决于层数、batch、KV 头数和头维。
+
+> **“物化” = “真正占用了显存的实际数据”。不物化 = “不把中间大矩阵写回显存，用完即丢”。**
+
+### Q50：FlashAttention 的 IO 复杂度直觉？
+
+**答：**
+
+FlashAttention 的核心是让 Q/K/V 块进入片上 SRAM 后尽量复用，并通过 online softmax 避免把完整注意力矩阵写回 HBM。若序列长度为 $T$、每头维度为 $d_h$、SRAM 容量为 $M$（以可存储元素数计），原论文在其适用区间给出的 HBM 访问量为：
+
+$$
+\Theta\left(\frac{T^2d_h^2}{M}\right)
+$$
+
+这描述的是 **IO 复杂度**，不是算术复杂度。对固定硬件和头维度，它关于 $T$ 仍是二次量级，不能写成 $O(T\log T)$；FlashAttention 的优势是避免物化 $T^2$ 中间矩阵，并达到更好的、接近下界的数据搬运量。
+
+**面试一句话版本**
+
+> **标准 Attention 的问题是反复在 HBM 读写 $T\times T$ 中间矩阵；FlashAttention 用分块和 online softmax 在 SRAM 内复用数据，不物化该矩阵。它不改变精确稠密注意力的 $O(T^2d)$ FLOPs，但显著减少 HBM 往返和峰值显存。**
+
+### Q51：FlashAttention-2 相对 FA1 的主要改进？
+
+**答：**
+
+FlashAttention-2 在保持精确注意力结果和线性辅助内存的前提下，主要从三方面提高 GPU 利用率：
+
+**1. 减少非矩阵乘 FLOPs**
+
+现代 GPU 的 Tensor Core 矩阵乘远快于普通标量运算。FA2 重新组织 online softmax 的缩放、边界检查等操作，减少昂贵的非矩阵乘计算。
+
+**2. 增加 thread-block 级并行**
+
+FA1 主要沿 batch 和 head 并行；当二者较小时，并行块数量不足。FA2 还沿 query 序列维切分工作，使长序列、小 batch 场景也能产生更多 thread blocks。它提高的是可用并行度，并不保证任何配置都能“打满 GPU”。
+
+**3. 改进 warp 间工作划分**
+
+FA1 的 forward 更接近 split-K：不同 warp 负责 K/V 子块，需要通过 shared memory 汇总中间结果。FA2 改为让不同 warp 负责不同 Q 行、共享 K/V，即 split-Q，减少 warp 间 shared-memory 通信和同步。需要区分：分支发散导致部分 lane 不活跃，与等待数据或同步造成的 warp stall 不是同一个概念。
+
+**总结**：FA2 的关键不是笼统地“让所有 warp 一直忙”，而是减少非矩阵乘开销、增加序列维并行，并通过更合适的 warp 划分降低同步和共享内存流量。实际吞吐和延迟提升取决于形状、硬件与内核版本。
+
+### Q52：Triton vs CUDA 简述？
+
+**答：**
+
+**CUDA（底层精细控制）**
+- CUDA 是 NVIDIA 的并行计算平台和编程模型；开发者通常通过 CUDA C++ 等接口编写 kernel，显式组织 thread block、warp，并管理 shared memory、寄存器等资源。
+- 可手写 tile、shared memory、指令级优化，灵活极致，能达到硬件极限性能
+- 缺点：开发门槛高，普通开发者手写 CUDA 很难超过 cuBLAS
+
+**Triton（高层快速开发）**
+- Python 式 DSL，在更高级抽象上描述分块计算
+- 编译器自动处理 shared memory 分配、同步、向量化等细节
+- 适合融合算子快速迭代，屏蔽部分硬件细节
+- PyTorch 2 生态大量内核用 Triton 编写（如 `torch.compile` 后端）
+
+**选型建议**
+- 追求硬件极限性能 → CUDA（如 FlashAttention 官方实现）
+- 追求开发效率/快速原型 → Triton（如 FlashAttention 的 Triton 复现版本，方便魔改）
+
+### Q53：什么是 IO 感知算法？
+
+**答：**
+
+**1. 核心定义**
+- 不仅分析 FLOPs（浮点运算量），还分析内存层次中数据移动的代价
+- 算法设计目标：最小化慢速存储访问（如 HBM），尽量在 SRAM/寄存器中完成数据重用
+- > **SRAM（Static Random-Access Memory）** 是一种存储电路类型。FlashAttention 语境中的“片上 SRAM”主要指 shared memory 等片上暂存空间；shared memory 是程序可管理的 scratchpad，不应简单等同于硬件自动管理的 cache。
+
+**2. 为什么重要？**
+
+- 传统算法只关注"算得少"；IO 感知算法还关注"搬得少"
+- 因为 HBM 带宽远低于 SRAM，数据搬运往往比计算更耗时
+
+**3. 典型例子**
+
+- FlashAttention：通过分块让数据在 SRAM 内尽可能复用，只把必要的输入/输出写入 HBM
+- GEMM 分块实现：选择合适的分块大小来匹配 SRAM 容量
+- > **GEMM（General Matrix Multiply，通用矩阵乘法）**：即 $C = A \times B$。
+
+**4. 与 Roofline 模型的关系**
+
+- 若算子内存带宽 bound（算术强度低），减 IO 比减 FLOPs 更有效
+- 若算子计算 bound（算术强度高），减 FLOPs 更重要
+- > **Roofline（屋顶线）模型**：一个**性能分析工具/理论模型**，帮你判断一个算子的性能**到底被什么卡住了**。
+
+### Q54：FlashAttention 的精度损失问题？
+
+**答：**
+
+**数学语义**
+
+FlashAttention 计算精确的 scaled dot-product attention，不通过截断或低秩近似改变定义。“精确”指目标数学函数相同，不表示不同内核、硬件和 dtype 会逐 bit 一致。
+
+**数值差异来源**
+
+分块会改变最大值、指数和矩阵乘的累加次序，并行归约顺序也可能不同，因此存在舍入差异。差异大小取决于 dtype、形状、mask、硬件和内核，应使用与 dtype 匹配的绝对/相对误差阈值分别比较输出和梯度，不能无条件断言它总小于训练噪声。
+
+**混合精度与量化**
+
+FP16/BF16 的溢出、下溢和舍入并非 FlashAttention 独有；FP16 通常配合动态 loss scaling，BF16 通常不需要，但敏感算子仍可能使用更高精度累加。INT8/FP8 等路径还会引入量化和缩放误差，应与分块导致的浮点差异分开评估。
+
+### Q55：GPU SRAM vs HBM？
+
+**答：**
+
+**HBM**
+
+HBM 是 GPU 的片外主显存，容量通常为数十至数百 GB。带宽依 GPU 型号和形态而异，例如 H100 SXM 的公开规格约为 3.35 TB/s，不能泛化到所有 H100 或所有 GPU。相较片上存储，HBM 的访问延迟和数据移动成本更高。
+
+**片上存储**
+
+GPU 片上高速存储包括寄存器、shared memory/L1 cache 等。FlashAttention 讨论的 SRAM 通常重点指程序可管理的 shared memory。容量按每个 SM 分配并随架构变化，例如 A100 每个 SM 的 shared memory 上限约 164 KB，H100 约 228 KB；有效带宽还受访问模式、bank conflict 和并发度影响，不能统一写成固定总量或带宽。
+
+**内核设计**
+
+tile 大小受 shared memory、寄存器、head dimension 和 occupancy 共同约束。块太大会降低 occupancy 或装不下，块太小则增加循环与 HBM 往返；目标是在维持并行度的同时提高片上复用。
+
+### Q56：DDP（DistributedDataParallel）工作原理？
+
+**答：**
+
+**0. 它是什么、干什么用**
+
+- PyTorch 的多 GPU 训练工具，让模型同时在多张 GPU 上训练，速度更快
+- 核心任务：协调所有 GPU，让它们始终保持一致的模型参数
+- GPU 训练中最常见、官方推荐的配置是**每个进程管理一张 GPU**，但这不是 DDP 的概念定义。一个 DDP replica 也可以与张量并行、流水线并行等模型并行方式组合，由多张 GPU 共同承载。
+- 只有在“纯 DDP、每进程单卡且不结合模型分片”的配置下，完整 replica 才必须能装入单卡。
+
+**1. 基本架构**
+
+- 纯数据并行时，每个 DDP 进程持有一份完整模型副本。与 tensor/pipeline parallel 组合时，DDP 复制的是相应的模型并行分片或并行组，而不是要求每个进程都持有全局完整模型。
+- 各进程处理不同数据 batch：数据并行，每张卡喂不同的数据
+
+**2. 计算与同步流程**
+
+- 前向反向本地计算梯度：每张卡独立算出自己那份数据的梯度
+- 通过 AllReduce 对梯度求平均：所有 GPU 交换梯度并取平均
+- 各进程同步更新相同参数：因为梯度相同、初始参数相同，更新后参数依然相同
+
+**3. PyTorch 实现细节**
+
+- bucket 化异步通信：梯度按 bucket 分组
+- overlap 计算：算完一个 bucket 就立刻开始通信，同时继续算下一个 bucket，通信和计算重叠
+
+**4. 硬件配置**
+
+- 每进程一个 GPU 常见配置
+
+**5. 为什么不用 DP（DataParallel）**
+
+- DP 单进程在每次 forward 复制 module、分发输入，并把输出及各 replica 的梯度汇总到原始 module 所在设备；优化器更新原始 module，下一次 forward 再据此创建/同步 replica。集中式工作使主设备和 Python 线程更易成为瓶颈。
+- DDP 多进程，AllReduce 去中心化，所有卡平等参与通信，扩展性好
+- 多 GPU 训练通常优先选择 DDP/FSDP；`DataParallel` 仍可用于简单场景，但扩展性和性能通常较差。
+
+### Q57：AllReduce 常见算法？
+
+**答：**
+
+![image-20260910093433418](../interview/images/image-20260910093433418.png)
+
+**1. Ring AllReduce**
+
+> **DDP 中每个 replica 对本地 mini-batch 计算梯度，AllReduce 汇总后再按约定缩放。在样本权重、loss reduction 和 batch 划分一致时，它等价于一个由各本地 batch 拼成的 global mini-batch 梯度，而不是“全数据集梯度”。墙钟加速还受通信、同步、负载不均和扩展效率影响，不能笼统称为 $N$ 倍。**
+>
+> **所有节点把各自的数据拿出来，按某种规则合并，再把合并结果发回给所有节点。**
+>
+> **关键点**：不是把结果汇总到某一张卡，而是**每张卡都拿到完整结果**。这就是 AllReduce 里 "All" 的含义——**所有人都得到结果**。
+
+- 节点排成环，分块流水线传递：每个节点只和左右邻居通信，数据分块后沿环流动
+- 分两个阶段：先 reduce-scatter，再 all-gather
+- 对 $N$ 个 rank、每 rank 各有 $M$ 字节张量的经典 ring，共有 $2(N-1)$ 个通信轮次；每个 rank 合计发送 $2(N-1)M/N$ 字节并接收同量。若只看渐近带宽项则为 $\Theta(M)$。
+- 带宽利用高：每个节点同时发送和接收，链路不空闲
+
+**2. Tree / Halving-doubling**
+- 这类算法通常以 $O(\log N)$ 轮次完成归约/分发，常用于小消息或延迟敏感场景；实际选择还取决于 rank 数、拓扑、消息大小和实现。
+
+**3. 大集群上的选择**
+- NCCL 会结合拓扑、消息规模、可用协议和配置选择实现算法；其启发式选择通常经过调优，但不能保证对每个负载都是全局最优。
+
+- > AllReduce 是**操作**；Ring、Tree、Halving-Doubling 是**实现这个操作的算法**
+  >
+  > NCCL（通信库）
+  >  ├── 集合通信操作：AllReduce、Broadcast、AllGather、ReduceScatter、AllToAll
+  >  │    └── 每个操作有多种实现算法：
+  >  │         ├── Ring
+  >  │         ├── Tree
+  >  │         ├── Halving-Doubling
+  >  │         └── CollNet/SHARP
+  >  └── 在调用者指定的 collective 下，根据拓扑和消息规模选择可用算法/协议
+  >
+  > **AllReduce、AllGather 等语义操作由调用者选择；NCCL 在给定 collective 下，根据拓扑、消息规模和配置选择底层算法与协议。它不会自行把调用者请求的 AllReduce 改成另一种 collective。**
+
+**4. 面试要点**
+- Ring 能讲清楚即可
+
+### Q58：DDP 与 DP（DataParallel）区别？
+
+**答：**
+
+**1. DP（DataParallel）**
+- 单进程多 GPU
+- scatter/replicate 在单线程：主线程把数据切分发给各 GPU，再把模型复制到各 GPU
+- backward 时，各 replica 的梯度会**求和到原始 module 所在设备**；优化器更新原始 module。replica 通常在下一次 forward 时重新创建/同步，并不存在“持久 replica 梯度平均后再广播回去”的标准流程。
+- 各 replica 的前向/反向仍会并行；主要瓶颈来自单进程多线程、逐轮复制、scatter/gather，以及输出和梯度向主设备集中，因而扩展性通常弱于 DDP。
+
+**2. DDP（DistributedDataParallel）**
+- 常见且推荐的模式是多进程、每进程一张 GPU；各进程有独立 Python 解释器和执行上下文，但会通过 process group 集体同步梯度，通信或某个 rank 变慢仍会阻塞其他 rank。
+- 梯度 AllReduce 去中心化：没有主卡瓶颈，所有卡平等参与通信
+- 可扩展性好
+
+**3. 现代训练的选择**
+
+- 通常优先 DDP/FSDP；DP 主要适合快速原型或兼容性场景。
+
+### Q59：FSDP 与 DDP 区别？
+
+**答：**
+
+**1. DDP**
+- 在纯 DDP、常见的一进程一卡且未结合模型并行/分片时，每个 rank（通常对应一张 GPU）持有完整的 data-parallel module；与 TP/PP 等模型并行组合时，每个 rank 可只持有相应模型分片。
+
+**2. FSDP（Fully Sharded Data Parallel）**
+
+- FSDP 是一组可配置的分片策略。`FULL_SHARD` 会分片参数、梯度和优化器状态，并在前向/反向按需 all-gather 参数、用 reduce-scatter 汇总梯度，整体类似 ZeRO-3。
+- `SHARD_GRAD_OP`、`HYBRID_SHARD`、`NO_SHARD` 等策略的分片范围不同，不能把所有 FSDP 配置都等同于 ZeRO-3。
+
+**3. 对比**
+- 采用 `FULL_SHARD`、`SHARD_GRAD_OP` 或 `HYBRID_SHARD` 时，会降低相应状态的每-rank 显存；`NO_SHARD` 与 DDP 类似，不获得分片节省。
+- 通信模式按策略判断：`FULL_SHARD` 典型地需要参数 all-gather 和梯度 reduce-scatter，其他策略的通信与复制范围不同。
+- PyTorch FSDP 与 DeepSpeed ZeRO 常对比
+
+| 方案              | 参数     | 梯度     | 优化器状态 |
+| :---------------- | :------- | :------- | :--------- |
+| **DDP**           | 每卡完整 | 每卡完整 | 每卡完整   |
+| **ZeRO-1**        | 每卡完整 | 每卡完整 | **分片**   |
+| **ZeRO-2**        | 每卡完整 | **分片** | **分片**   |
+| **ZeRO-3 / FSDP FULL_SHARD** | **分片** | **分片** | **分片**   |
+
+FSDP 的 `FULL_SHARD` 策略会把参数、梯度和优化器状态全部分片；其他策略需按配置判断。
+
+### Q60：DeepSpeed ZeRO Stage 1/2/3？
+
+**答：**
+
+> **DeepSpeed 是微软开源的训练优化库，核心功能是 ZeRO（分片省显存）、Offload（卸载到 CPU/硬盘）、混合精度等，专门让大模型训练更快、更省、更大。它和 PyTorch FSDP 是竞品关系，都解决“单卡装不下大模型”的问题。**
+
+**1. ZeRO-1**
+- 分片优化器状态：每张卡只存一部分优化器状态，如 Adam 的 $m$ 和 $v$
+
+**2. ZeRO-2**
+
+- 再分片梯度：每个 rank 只长期保留与其优化器状态分片对应的已归约梯度分片；实现可用 reduce-scatter 或等价通信，并通常按 bucket 处理、可选择与反向计算重叠，因此不应概括为每个梯度算完立即通信。
+
+**3. ZeRO-3**
+- 再分片参数：每张卡只存一部分参数，前向反向时动态 all-gather 收集需要的参数
+
+**4. 总结**
+- 显存节省随 stage 增加。按原始 ZeRO 分析，Stage 1 和 Stage 2 的总通信量约与普通数据并行相当，只是通信形式和状态存储不同；Stage 3 因参数 all-gather 增加通信，论文估算约比基线高 50%。具体频次、峰值和重叠效果仍取决于实现。
+- 常与 offload CPU/NVMe 组合：把暂时不用的状态卸载到 CPU 内存或硬盘上，进一步省显存
+
+**5. 面试要点**
+
+| 方案              | 参数     | 梯度     | 优化器状态 |
+| :---------------- | :------- | :------- | :--------- |
+| **DDP**           | 每卡完整 | 每卡完整 | 每卡完整   |
+| **ZeRO-1**        | 每卡完整 | 每卡完整 | **分片**   |
+| **ZeRO-2**        | 每卡完整 | **分片** | **分片**   |
+| **ZeRO-3 / FSDP FULL_SHARD** | **分片** | **分片** | **分片**   |
+
+## 五、Scaling Laws（Q61–Q70）
+
+### Q61：Scaling Laws 描述什么规律？
+
+**答：**
+
+**核心结论**
+
+- 在合理范围内，模型性能（如 **test loss**）随 **模型参数量 $N$**、**数据量 $D$**、**计算量 $C$** 呈**幂律改善**。
+- 幂律意味着：损失随规模增大而下降，但下降速度越来越慢（对数坐标下近似直线）。
+
+**存在最优配比**
+- 给定计算量 $C$，$N$ 与 $D$ 太小或太大都会**次优**。
+- 例如：全部算力用来堆大模型但数据不够，或数据很多但模型太小，都不如两者平衡。
+
+**指导意义**
+- 在**算力预算**下，指导如何选择模型大小与训练 token 数。
+- 是 GPT-3、Chinchilla、LLaMA 等模型设计的重要理论依据。
+
+### Q62：Chinchilla 最优配比是什么？
+
+**答：**
+
+**核心发现**
+- Chinchilla 工作研究的是：在给定训练计算预算下，模型参数量 $N$ 与训练 token 数 $D$ 应如何分配。
+- 在该论文的模型族、数据分布和计算口径下，许多当时的大模型相对其参数量训练 token 不足；固定计算量时，适当减小模型并增加训练 token 能取得更低的验证损失。
+
+**经验法则**
+- 论文拟合得到 $N_{\mathrm{opt}}$ 与 $D_{\mathrm{opt}}$ 都近似随计算量按平方根增长，即计算预算增加时，两者应大致同比扩展。
+- 常见速记是**约 20 个训练 token/参数**；按此粗略估算，70B 参数约对应 1.4T token。
+- 这个比值是特定实验设定下的经验近似，不是跨架构、跨数据质量和跨训练目标都成立的定律。
+
+**面试要点**
+- **数据应随模型一起 scale**，不能只堆参数不堆数据。
+
+### Q63：给定计算预算，如何直觉上选「最优模型」？
+
+**答：**
+
+**方法：IsoFLOP 曲线**（**ἴσος（isos）** = 希腊语，意思是 **“相等”**）
+
+**IsoFLOP 方法 = 固定计算预算，扫描模型大小并寻找验证 loss 最低的配置。经验曲线在合适扫描范围内通常近似 U 形；对多个预算重复实验，再拟合最优模型与数据规模随计算量的关系。**
+
+- 对多个 $(N, D)$ 组合，计算相同 **FLOPs**。
+- 找**验证损失最低**的点。
+
+**直觉结论**
+- 通常**中等规模模型 + 更长训练**在相同算力下优于**过大模型早停**。
+
+**实践**
+- 先在多个计算预算上做 IsoFLOP 扫描，再拟合最优 $N$、$D$ 随 $C$ 的关系，并外推到目标预算。
+- 在拟合出损失函数或最优前沿后可以解析求解或数值求解；不存在脱离具体模型族和数据分布的通用固定答案。
+
+### Q64：IsoFLOPs 方法？
+
+**答：**
+
+**做法**
+- 固定**总训练 FLOPs**。FLOPs 是算法计算量；实际训练时间还取决于硬件吞吐、通信和利用率。
+- 扫描不同 **$N$**，配套调整 **$D$** 使 FLOPs 恒定。
+- 比较 loss。
+
+**结果**
+- 经验曲线通常在扫描范围内呈近似 **U 形**，最低点对应该计算预算下的最优 $N$；形状和最优点依赖实验设定。
+
+**地位**
+- 是 Chinchilla 类实验的核心方法。
+- 不同算力预算对应不同的最优 $N$，把这些最优点连起来就是 scaling law 的最优配比线。
+
+### Q65：LLaMA 的「过训练」策略指什么？
+
+**答：**
+
+**做法**
+- LLaMA 为了降低给定性能下的推理成本，让较小模型在**远多于经典 Chinchilla compute-optimal 估计**的 token 上训练。
+- 例如 LLaMA-7B 使用约 1T token，约 143 token/参数，显著高于经典的约 20 token/参数经验值。
+
+**目的**
+- 使**小模型**在推理部署时**性价比更高**。
+- 训练阶段投入更多计算，换取更小模型在推理时的速度和显存优势；只有当部署调用量、服务周期等条件足够大时，生命周期总成本才可能更低。
+
+**名称辨析**
+- “Over-trained” 是相对于**固定训练计算量下的 compute-optimal 点**而言，不表示模型已经发生统计意义上的过拟合。
+- 它并不位于 Chinchilla 的固定训练算力最优区域，而是把一次性训练成本换成更低的长期推理成本，可称为 inference-aware scaling。
+
+**适用场景**
+- 强调**推理成本**时很有价值。
+- 如果训练成本是唯一约束，则按 Chinchilla 最优配比更划算。
+
+### Q66：$C \approx 6ND$ 公式是什么含义？
+
+**答：**
+
+**公式含义**
+- 粗略估计 **decoder-only Transformer 训练总 FLOPs** 与**参数量 $N$**、**token 数 $D$** 成**线性**关系。
+
+**系数 6 的来源**
+- 前向传播约 **2 倍 $ND$**（矩阵乘法）。
+- 反向传播约 **4 倍 $ND$**（计算梯度 + 参数梯度）。
+- 合计约 **6 倍 $ND$**。
+
+**注意**
+- 系数因架构与是否算重注意力等略有出入（如 attention 的 $T^2$ 项在长序列时不可忽略）。
+- 用于**从预算估 token** 或**反推**。
+
+**面试要点**
+- 说**数量级估计工具**即可，勿背死精确 6。
+- 例如：1000 张 A100 跑 10 天，可估算能训练多大的模型和多少 token。
+
+### Q67：Scaling Laws 的局限性？
+
+**答：**
+
+**（1）数据质量非同质**
+
+- 经验 scaling law 通常是在固定或相近的数据分布与训练流程上拟合的。
+- 真实语料的质量、领域、重复率和污染程度不同，因此相同 token 数并不代表相同的有效训练信号。
+
+**（2）超参、架构变化会移动曲线**
+- Scaling Laws 是在特定架构（如 Transformer）和特定超参下拟合的。
+- 改变稠密/MoE 架构、上下文长度、优化器或学习率调度，都可能改变拟合系数和最优配比，不能无条件套用旧曲线。
+
+**（3）推理与部署成本不在 loss 里**
+
+- Scaling Laws 只关心 test loss，不关心推理时延、显存占用、电费。
+- 一个 loss 更低的模型，可能推理成本高到无法部署。
+
+**（4）小尺度外推到大尺度可能失效**
+- 在小模型上拟合的曲线，外推到大模型时可能不准。
+- 数据瓶颈、数值稳定性、并行效率和评测指标都可能在更大尺度发生变化；某些能力在离散指标上看似突然出现，也可能受指标阈值影响。
+
+**（5）多模态、工具、对齐后行为不只看预训练 loss**
+- 经过 RLHF、工具调用、多模态对齐后，模型行为不能只用预训练 loss 衡量。
+- 一个预训练 loss 更低的模型，对齐后可能反而更差。
+
+### Q68：数据质量 vs 数量？
+
+**答：**
+
+**先明确口径**
+
+- 许多 scaling 实验把数据分布和清洗流程固定后研究 token 数；这不等于理论上假设所有网络数据都独立同分布且干净。
+- 真实网络数据包含噪声、重复、隐私和高风险内容，需要过滤、去重、许可审查与安全处理。
+
+**质量 vs 数量的权衡**
+- **更高质量、更匹配目标分布的数据**可以提高每个 token 的训练价值，但不能脱离任务、模型规模和覆盖面给出固定换算比例。
+- 过度过滤也会损失多样性、长尾知识和方言内容，因此目标是质量、覆盖与规模之间的平衡。
+
+**实践手段**
+- **质量加权**：给高质量数据更高的采样权重。
+- **课程学习**：先学简单干净的数据，再逐步加入复杂数据。
+- **合成数据**：可补充特定能力和稀缺样本，但需要验证正确性、保持来源多样性并控制递归训练带来的偏差；使用合成数据并不必然导致模型崩溃。
+- **区分去重与多 epoch**：语料内部的重复/近重复样本应进行 deduplication；对已清洗语料训练多个 epoch 则是独立的训练选择，并非自动错误。重复次数过多会增加记忆和过拟合风险，应结合验证集、数据规模和样本重复率评估。
+
+### Q69：Scaling 对推理成本的影响？
+
+**答：**
+
+**训练最优 ≠ 部署最优**
+- 训练时可以按 Chinchilla 最优配比（$D \approx 20N$）。
+- 但**部署**时，大 $N$ 仍然很贵：显存占用大、推理时延高、GPU 成本高。
+
+**小模型过训练的策略**
+- 用**小模型 + 更多数据**训练（LLaMA 策略）。
+- 训练时多花算力，但推理时小模型更快、更省显存、更便宜。
+- 当模型调用量足够大时，生命周期内的推理成本节省**可能**超过额外训练成本；具体结论取决于请求量、上下文长度、硬件和服务期限。
+
+**产品权衡**
+- 需在**训练算力**与**推理算力生命周期**之间权衡。
+- 当累计推理 token 量和服务周期足以越过额外训练成本的盈亏平衡点时，推理成本可能占主导，小模型过训练才可能更划算。
+- 如果模型只跑一次实验，训练成本是主要矛盾，Chinchilla 最优更划算。
+
+**MoE 等架构的尝试**
+- **MoE（混合专家）** 试图分离**总参数**与**激活参数**。
+- 总参数可以很大，但每个 token 只激活一部分专家，从而降低相对于同等总参数稠密模型的计算量。
+- MoE 仍需存储全部专家权重，还会引入路由、专家负载均衡和跨设备 all-to-all 通信，因此并不保证实际延迟更低。
+
+### Q70：当前 Scaling 的主要挑战（面试可谈方向）？
+
+**答：**
+
+**（1）数据枯竭与版权**
+- 可合法获取、质量高且未重复的公开文本是有限资源，数据许可、隐私和版权约束日益重要。
+- 可探索多模态、合成数据和经授权的私有数据，但每类来源都有新的质量与合规问题。
+
+**（2）合成数据的边际收益**
+- 合成样本可以大量生成，但**有用且可验证**的合成数据并非无限，质量受教师模型、采样策略和验证器限制。
+- 反复只在未经筛选的模型生成数据上训练可能放大偏差、丢失分布尾部；混入真实数据并做过滤、验证可降低风险。
+
+**（3）能源与合规**
+- 大规模训练和推理的能源、机房容量与成本可能成为约束；影响取决于硬件效率、负载和能源结构。
+- 法规因司法辖区和应用场景而异，需要按实际产品评估数据、模型与部署合规。
+
+**（4）多模态与 agent 行为不可单用 loss 衡量**
+- 多模态模型的能力不能只看文本 loss。
+- Agent 的任务完成率、安全性、鲁棒性需要新的评估体系。
+
+**（5）测试时计算（推理 scaling）**
+- 对某些可验证任务，增加思考长度、多次采样或搜索等测试时计算可以提高成功率，但会增加延迟和成本，且收益依任务而异。
+
+**（6）专用芯片与互联改变 $C$ 的性价比**
+- 专用芯片（TPU、NPU）和高速互联（NVLink、InfiniBand）改变了算力的性价比。
+- 在算法和数值精度相同的前提下，相同有效 FLOPs 不应因硬件名称而改变模型规律；不同硬件改变的是可达到的利用率、墙钟时间、能耗和成本，也可能支持不同数值格式与内核。
+
+**面试要点**
+- 强调：从**唯规模**到**规模 + 数据管线 + 对齐 + 系统**的综合竞争。
+- 参数规模仍是重要变量，但不能脱离数据、训练目标、评测和部署约束单独讨论。
+
+## 六、数据工程（Q71–Q80）
+
+### Q71：预训练数据来源一般有哪些？
+
+**答：**
+
+**公开数据源**
+- **Common Crawl**：主要公开 web crawl 来源之一，体量很大；原始抓取含模板、垃圾、重复和非正文内容，通常需要强清洗。
+- **书籍**：Books3、PG-19 等，语言质量高，长文本连贯性好。
+- **学术文本**：arXiv 提供预印本全文；PubMed 主要提供题录和摘要，PMC 才是可获取的生物医学全文档案。具体可用内容仍取决于许可。
+- **代码仓库**：如 GitHub，可提供源代码和相关文档；需处理许可证、自动生成代码和重复仓库。
+- **技术问答**：如 Stack Overflow/Stack Exchange，包含自然语言问答及代码片段，但它们不是代码仓库。
+- **维基百科**：多语言、结构化、质量较高，是知识密度的核心来源。
+- **论坛与社区内容**：Reddit、Stack Exchange 等可直接作为语料，也可用于筛选高质量外链网页。例如 GPT-2 的 WebText 就由 Reddit 高 karma 外链构建，不能笼统说 Reddit 很少进入预训练主干。
+
+**多语言处理**
+- 需**分层采样**：按语言、领域、质量分层，控制混合比例。
+- 避免高资源语言（如英语）主导，低资源语言被忽略。
+
+**企业私有数据**
+- 业务日志、内部文档等（需脱敏）。
+- **版权风险**：即使脱敏，也需要确认**著作权授权**，不是脱敏就可以直接拿来训练。
+- 来源决定模型的知识边界与偏见倾向，需严格**许可与合规审查**。
+
+### Q72：Common Crawl 是什么？
+
+**答：**
+
+**基本定义**
+- 非营利组织，定期抓取全球网页的**开放数据集**。
+- 每次 crawl 可包含数十亿级页面记录，是规模最大的公开网页抓取来源之一；发布频率和记录数会随具体 crawl 变化。
+
+**三种格式**
+- **WARC**：原始抓取记录，包含 WARC/HTTP 元数据与响应 payload；payload 可以是 HTML，也可以是其他 MIME 类型，不等于浏览器渲染后的“完整网页”。
+- **WET**：从响应中提取的纯文本记录，仍不代表已经达到训练清洗质量。
+- **WAT**：由 WARC 派生的结构化元数据记录。
+
+**特点**
+- 体量大：原始数据达 PB 级别。
+- 噪声高：包含 HTML 标签、导航栏、广告、SEO 垃圾等。
+- 它只是**原始网页快照**，**不是清洗好的训练语料**。
+
+**LM 训练中的处理**
+- 需经过**清洗、去重、质量打分、语言识别**等多道工序。
+- 是开放网络语料的**主要入口之一**；具体模型是否使用及使用比例应以其技术报告为准。
+
+### Q73：典型数据处理流程？
+
+**答：**
+
+**典型流水线（顺序可迭代调整）**
+1. **下载**：从 Common Crawl 等源获取原始数据。
+2. **解压缩**：WARC、WET 等格式解压。
+3. **文本提取**：用 trafilatura 等工具从 HTML 中提取正文。
+4. **语言识别**：fastText、cld3 打语言标签。
+5. **粗筛长度过滤**：去掉过短或过长的文档。
+6. **去重**：做文档内、精确和近重复去重；MinHash 常用于近重复集合估计，SimHash 也是可选方案。工程上可先粗去重节省后续计算，再在过滤后复查，顺序不是唯一标准。
+7. **精细质量打分**：启发式规则 + 模型打分。
+8. **PII 与安全处理**：检测后可删除文档、删除片段或替换敏感字段；任何方法都难保证 100% 召回，应配合审计。安全过滤阈值需兼顾风险与数据覆盖。
+9. **基准去污染**：检测训练数据与评测集的重合，降低评测泄漏风险。
+10. **分桶混合**：按领域、语言、质量分桶，控制采样比例。
+11. **tokenizer 与打包**：训练或选定分词器，将文本编码并打包为训练序列。
+
+**可复现性**
+- 除工具版本外，还需记录**过滤阈值、采样权重、随机种子**。
+- CS336 强调**可复现流水线**。
+
+### Q74：HTML 文本提取注意什么？
+
+**答：**
+
+**需要去除的内容**
+- 脚本（`<script>`）、样式（`<style>`）。
+- 导航栏、页脚、侧边栏、广告。
+- trafilatura、resiliparse 等正文提取器会**尝试**识别并剔除这些内容，但仍会出现误删正文或保留模板噪声，需要抽样评估。
+
+**注意：不要一刀切只取正文**
+- **很多高质量长文本不在正文里**（比如论坛评论、讨论帖）。
+- 如果一刀切只取文章正文，会丢掉很多有用语料。
+- 需要根据数据集目标调整策略。
+
+**错误提取的后果**
+- 引入 SEO 垃圾、重复模板、无关链接。
+
+  > SEO 垃圾是网站为提升搜索引擎排名批量生成的低质量网页，关键词堆砌、内容空洞、大量模板化重复文本；如果 HTML 提取把这类网页保留，会污染预训练语料。
+
+- 污染训练数据，降低模型质量。
+
+**工具与规则**
+- 工具和规则需**版本固定**，保证可复现。
+- 表格、列表是否保留视任务而定：代码和数学任务可能需要保留，通用文本可去除。
+- 应分别评估提取**精确率**（保留下来的内容有多少是正文）和**召回率**（原正文保留了多少）；过度清洗与清洗不足都会损害语料。
+
+### Q75：语言识别的作用？
+
+**答：**
+
+**核心用途**
+- 多语言语料需**按语言打标签**。
+- 用于**混合比例控制**：决定每种语言采样多少。
+- 用于**去偏**：防止英语等主导语言淹没低资源语言。
+- 用于**分语言评估**：单独测每种语言的表现。
+
+**常用工具**
+
+- fastText 的公开语言识别模型覆盖 176 种语言，基于字符 n-gram，速度快，适合大规模初筛。
+- CLD3 的常用接口可返回主语言，也提供返回若干高频语言及比例的接口；对语码混合文本仍应结合分句/分段检测和目标语料评测，不能仅凭整篇文档的一个标签判断所有片段。
+- 工具覆盖范围、维护状态和许可证会变化，生产管线应固定版本，并在目标语料上评测，而不是只看官方语种数。
+
+**误判的后果**
+- **语言污染**：低资源语言数据被误判为其他语言，导致采样失衡。
+- **压缩率取决于词表覆盖**：语码混合本身不会必然增加 token 数；如果 tokenizer 对其中某种语言或脚本覆盖不足，该部分文本才可能被切得更碎。应在目标 tokenizer 上按语言与混合场景实测 tokens/character 或 bytes/token。
+- 本该被过滤的非目标语言保留进来，破坏语料分布。
+
+### Q76：数据配比（data mixing）？
+
+**答：**
+
+**核心做法**
+
+- 不同来源**按权重采样**，例如 web : book : code = 60 : 20 : 20。
+- **采样权重的含义取决于采样单位**：按文档/样本抽样时，长度差异会让最终 token 占比偏离样本概率；若先切成近似等长 token 块、使用 packed sequence，或直接按 token 配置 mixture，权重可以近似对应 token 占比。讨论配比时应先说明 sampler 粒度。
+
+**影响**
+- 提高代码、数学、书籍或网页等来源的比例，通常会改变对应领域的损失和下游能力，但影响不是单调且会相互作用，不能仅凭来源标签保证某项能力提升。
+- 配比直接决定模型的**能力倾向**。
+
+**优化方法**
+- 可用消融实验、代理模型、网格/贝叶斯优化或数据混合优化方法选择配比；小规模结论放大后可能漂移，需要中间规模复验。
+- **也可以搭配课程学习**：先学简单数据，再逐步加入复杂数据（不是必选项，很多大模型直接混合全部数据训练）。
+
+### Q77：预训练数据规模量级？
+
+**答：**
+
+**当前量级**
+- 现代公开技术报告中常见**数万亿 token** 的训练量级；例如 Llama 3 报告称其旗舰模型在约 15T 多语言 token 上预训练。
+- 训练 token 数随模型、数据复用方式和报告口径而异，不能概括为固定的年度倍增规律。
+
+**面试要点**
+- Chinchilla 在固定训练计算量、特定模型族和数据分布下得到参数量与训练 token 数大致同比增长的经验结论，经典近似常写为 $D\approx20N$；它不是跨模型、跨数据集都成立的理论常数。
+- 例如 70B 参数按该近似对应约 1.4T token，但现代模型常训练更久。这会降低相对于固定训练预算最优点的 **compute efficiency**，并不等于 GPU 硬件利用率下降；其动机常是用更多一次性训练计算换取更低的长期推理成本。
+
+**小模型**
+- 小模型可用**数百 B token** 仍表现很强，取决于数据质量。
+- “质量”和“数量”不能用一个通用比例互换，应通过 held-out loss、下游评测、污染检查与人工审计综合比较。
+
+### Q78：数据质量如何评估？
+
+**答：**
+
+**启发式指标**
+- 长度：过短或过长都可能是低质量。
+- 困惑度（PPL）：用小型语言模型打分，困惑度低代表文本更流畅。**注意 PPL 有缺陷：模板、重复垃圾文本 PPL 也会偏低，不能单独作为判定依据。**
+- 重复率：n-gram 重复率高的数据质量差。
+- 符号比例：符号过多（如乱码）或过少（如纯数字）需过滤。
+
+**模型式评估**
+- 用小分类器打分**教育性/毒性**。
+- 例如：用 fastText 分类器判断文本是否像教科书。
+
+**下游探针**
+- 用 MMLU、HumanEval 等基准测试模型能力。
+- 但下游表现受架构、优化器、训练策略等多种因素影响，**不能直接归因于数据质量**。
+
+**人工审计**
+- 小规模抽样人工检查，发现自动化指标遗漏的问题。
+
+**结论**
+- 无单一度量，需多维度综合评估。
+
+### Q79：常见开源数据集与资源？
+
+**答：**
+
+**经典数据集**
+- **The Pile**：EleutherAI 构建，涵盖 22 个领域。
+- **C4**：Google 从 Common Crawl 清洗后的数据集。
+- **ROOTS**：BigScience 构建的多语言数据集。
+- **RedPajama**：模仿 LLaMA 数据配比的开源复现。
+- **FineWeb**：HuggingFace 构建的高质量网页数据集，随时间更新。
+
+**许可证**
+- 各数据集许可证各异，**商用需法律审查**。
+- 有些数据集仅限研究用途，不能用于商业产品。
+
+**获取方式**
+- HuggingFace Hub 聚合了大量开源数据集。
+- **企业**常基于开源管线自建数据流水线，而非直接用现成数据集。
+
+### Q80：数据偏见与风险？
+
+**答：**
+
+**偏见来源**
+- 网络数据含**刻板印象、仇恨言论、隐私信息、错误信息**。
+- 模型会**继承并可能放大**训练数据中的分布偏见（如性别、种族、地域）。
+
+**缓解手段**
+- 预训练阶段：过滤明显有害内容，分层采样优化语料分布，减少偏差。
+- 对齐阶段：RLHF/安全对齐、拒绝策略、红队测试，进一步缓解偏见和风险。
+
+**覆盖不均**
+- **地域与语言**覆盖不均导致**能力倾斜**：英语能力强，低资源语言弱。
+- 需要分层采样和针对性补充数据。
+
+**合规与价值观**
+- 合规与**价值观**是产品问题，不仅是技术问题。
+- 不同地区对内容审核的要求不同，需因地制宜。
+
+## 七、对齐技术（Q81–Q95）
+
+### Q81：SFT（监督微调）的定义和作用？
+
+**答：**
+
+**定义**
+
+- 在**指令-回答**、对话等**高质量标注**数据上**继续训练**（通常全参或 LoRA），优化**交叉熵损失**。
+- 数据格式通常是 `(指令, 回答)` 对，模型学习在给定指令下生成对应回答。
+- SFT 数据类型不止指令跟随，也可以是对话、工具调用、代码、多轮历史。
+
+**损失计算（高频坑）**
+- SFT 通常仍使用自回归的下一 token 交叉熵。
+- 指令微调中常把 system、user 和提示模板部分设为 `ignore_index`，只对 assistant 回答 token 计算损失。
+- 但“只训练回答部分”不是 SFT 的定义；有些管线对完整序列计算损失，也可能只选择部分轮次或角色。应直接检查 label mask、chat template 和多轮边界。
+
+**作用**
+- 教会模型**遵循格式、任务类型、基本有用性**。
+- 把「续写」变成「助手」：预训练模型只会续写文本，SFT 后能听懂指令并给出有用回答。
+- 是**对齐流水线第一步**（SFT → 奖励模型 → RLHF）。
+
+**局限**
+
+- 主要从示范数据学习行为和偏好，覆盖范围受数据限制；它不能直接利用“两个回答哪个更好”的比较信号，也不能保证事实正确。是否还需要偏好优化或 RL 取决于产品目标，并非所有 SFT 都必须继续 RLHF。
+- 数据质量**决定上限**：高质量少量数据胜过低质量大量数据。
+
+**训练 epoch**
+
+- 训练轮数依数据规模、重复率、学习率和验证集表现而定；1～3 epoch 是常见起点，不是通用规则，大规模混合数据也可能按 token budget 而非整数 epoch 训练。
+
+### Q82：LoRA 原理？
+
+**答：**
+
+**核心思想**
+- 冻结原权重 $W$，引入**低秩分解** $\Delta W = BA$（$r \ll d$），只训练 $B, A$。
+- 前向传播：$h = Wx + \frac{\alpha}{r}BAx$。
+- $d$ 是隐藏层维度（如 $4096$），$r$ 是 LoRA 的秩（通常 $8$~$64$）。$r \ll d$ 使参数量从 $d^2$ 降到 $2dr$，实现显存友好。$r$ 越大容量越强，但参数量也越多；$r=8$ 或 $16$ 是最常用的起点。
+- **LoRA 不是全局只训一个矩阵，而是在选定的若干层上各自训练独立的 LoRA 矩阵。最常见的是所有层的 $q, v$ 都加，每层一组独立的 $B$ 和 $A$。选哪些层、加多少模块，取决于任务难度和数据量。**
+- 每层不是只有 4 个矩阵。Q、K、V、O 是 attention 的 4 个，FFN 还有 2~3 个（gate、up、down）。LoRA 最常加在 $W_Q, W_V$ 上，也可扩展到所有 attention 矩阵，FFN 通常不加。
+
+**初始化**
+
+- $A$ 矩阵随机初始化，$B$ 初始化为 0。
+- 训练起始 $\Delta W = 0$，保证训练起点和原基座一致。
+
+**缩放系数 $\alpha/r$**
+
+- 输出会乘缩放因子 $\alpha/r$，$\alpha$ 一般和 $r$ 相等，是超参，很多面试会问。
+- 作用：调整 LoRA 更新量的幅度，避免因 $r$ 变化导致需要重新调学习率。
+
+**为什么省资源**
+
+- 原权重 $W$ 是 $d \times d$，参数量 $d^2$。
+- $B$ 是 $d \times r$，$A$ 是 $r \times d$，参数量 $2dr$。
+- 因为 $r \ll d$，所以 $2dr \ll d^2$，**参数量与优化器状态**大幅减少，**显存友好**。
+
+**适用范围**
+
+- LoRA 是**冻结基座的增量参数方法**，不止 Transformer，CNN 也能用。
+- 大模型领域默认作用在 attention 的 $q, v$ 矩阵，也可扩展到 $k, o$ 和 FFN。
+
+**推理**
+
+- 可**合并** $\Delta W$ 回 $W$：$W' = W + \frac{\alpha}{r}BA$，推理无额外延迟。
+- 也可不合并，多适配器切换（每个任务一个 LoRA）。
+
+**缺点**
+
+- LoRA 把权重增量约束为低秩矩阵 $\Delta W=BA$，限制的是增量矩阵的秩。$A$、$B$ 会共同训练，其行/列子空间不是预先固定的；在分布差异很大的任务上，低秩约束可能限制容量。
+
+### Q83：QLoRA 是什么？
+
+**答：**
+
+**核心做法**
+
+- **量化基础模型**（如 4-bit NF4）+ **LoRA 适配器 FP16/BF16 训练**。
+- **量化 = 把连续的浮点数，映射到有限个离散的级别上。**
+- 基础模型权重被量化到 4-bit，冻结不训练；只训练 LoRA 适配器。
+- QLoRA 的核心是量化并冻结预训练基座的主要权重、以 BF16/FP16 计算时反量化，同时训练高精度 LoRA 参数。具体哪些模块保持高精度由实现和模型配置决定，不能固定成同一层清单。
+
+**4-bit NF4**
+
+- NF4（4-bit NormalFloat）是 QLoRA 为近似正态分布权重设计的 4-bit 数据类型，16 个表示值按正态分布分位区间构造。它在 QLoRA 实验设置下比常见 4-bit 表示有效，但不能脱离权重分布断言总是优于所有 FP4 格式。
+- QLoRA 量化的是冻结基座权重；前向时按需反量化到计算 dtype，激活和 LoRA 适配器通常保持 BF16/FP16。
+- **4-bit 指的是每个权重只用 4 个二进制位来编码，因此最多 16 个离散级别；NF4 指的是这 16 个级别不是均匀的 0~15，而是按正态分布的分位数选取的非均匀浮点级别。**
+- 实现通常把权重分块量化，每块保存缩放常数；块大小属于实现参数，并非 NF4 定义固定为 64。双量化再量化这些常数，进一步降低元数据开销。
+
+**核心亮点**
+
+- QLoRA 论文在其评测中取得了接近 16-bit 微调基线的结果，但这不是任意模型和任务上的无损保证。
+- 它显著降低冻结基座的存储开销，使原本放不下的模型可在更少 GPU 上微调；能否单卡完成取决于模型大小、序列长度、batch 和激活内存。
+
+**注意事项**
+- 量化是**权重量化，激活值仍然 FP16/BF16**，不是全部量化。
+- **量化误差**：4-bit 量化会引入精度损失，需评估对任务的影响。
+- **学习率**：合适取值取决于模型规模、数据、LoRA rank、目标模块、batch 和优化器，不能概括为一定小于普通 LoRA。
+- **局限**：量化基座可能造成任务相关的质量损失；是否影响长上下文需以具体评测为准。QLoRA 主要压缩基座权重，并不会消除长上下文的激活和注意力成本。
+- HuggingFace PEFT 常用实现。
+- NF4 的设计假设是经过适当归一化的权重块近似正态；实际各层分布可能偏离该假设，因此仍需做任务评测。
+
+### Q84：全参微调 vs LoRA 对比？
+
+**答：**
+
+**全参微调**
+- 容量最大，能充分适应新任务。
+- 显存大头：不只是权重，还有梯度、Adam 的两个矩状态，以及某些混合精度方案中的高精度主权重；相对字节数取决于 dtype 和分片策略，不能固定为“优化器恰好占权重 2 倍”。
+- 小数据上若超参数或正则化不当可能过拟合，且显存与每任务存储成本高。
+- 每个任务需保存一份完整模型权重。
+- 风险：容易**灾难性遗忘**。
+
+**LoRA**
+- 省资源，多任务可**多适配器切换**（一份基础模型 + 多个小适配器）。
+- 不需要存储基座梯度，这是显存差距最核心原因。
+- 冻结基座便于卸载 Adapter 后恢复原模型，也便于多任务参数隔离；但启用某个 Adapter 时，旧任务性能仍可能下降，不能据此保证不会遗忘。
+- 大任务可能**略逊全参**，尤其当任务与预训练分布差异大时。
+- 适配器体积小（几 MB 到几百 MB），便于存储和分发。
+
+**折中方案**
+- **部分参数微调**：冻结大部分层，只训练顶层，介于全参和 LoRA 之间。
+
+**选型建议**
+- 根据**数据量、任务难度、基础设施**决定。
+- 高容量需求可评估全参、部分参数微调或更高 rank/更多目标模块的 LoRA。
+- 选择取决于任务分布差异、数据量、质量目标和资源；“数据多就必须全参、数据少就必须 LoRA”不是固定规则。
+
+### Q85：灾难性遗忘（catastrophic forgetting）？
+
+**答：**
+
+**定义**
+- 微调新分布后，模型在**旧任务**上性能**下降**。
+- 例如：微调代码任务后，模型通用对话能力变差。
+
+**成因**
+- 模型参数被更新，覆盖旧任务学到的特征。
+
+**区分**
+- **参数层面遗忘** vs **分布偏移导致的性能下降**，后者不是遗忘。
+
+**缓解手段**
+- **混合旧数据重放**：微调时混入一部分预训练或旧任务数据。
+- **KL 到参考模型**：约束微调后模型不要偏离原模型太远。
+- **较小学习率**：避免更新步子太大。
+- **LoRA/Adapter 隔离**：只训练低秩增量，便于卸载适配器后恢复基座；但激活适配器时仍需评估旧任务能力，低秩约束不构成无遗忘保证。
+- **多任务均衡**：同时训练多个任务，避免偏向单一任务。
+- **弹性权重巩固 EWC**：理论居多，大模型很少用。**EWC = Elastic Weight Consolidation（弹性权重巩固）**，EWC 是一种通过 Fisher 信息给重要权重加“弹性锁”的正则化方法，防止新任务微调时破坏旧任务能力。理论上优雅，但在大模型上因计算成本高、效果不如 LoRA 和数据重放，很少实际使用。
+
+**地位**
+- 是**持续学习**核心问题，也是微调实践中的常见坑。
+
+### Q86：RLHF 三步流程？
+
+**答：**
+
+**（1）SFT（有监督微调）**
+
+- 在高质量指令-回答数据上微调，让模型学会遵循指令。
+
+**（2）训练奖励模型 RM**
+
+- 收集人类偏好数据：同一个 prompt 的两个回答做 **pairwise 比较**、标出 chosen/rejected，也可以把多个回答的排序拆成偏好对；不要求每条样本都做完整排序。依据参见 [InstructGPT](https://arxiv.org/abs/2203.02155)。
+- 训练奖励模型学习人类偏好，输出标量奖励分数。
+
+**（3）RL 优化策略（如 PPO）**
+- 用奖励模型打分，通过强化学习优化策略。
+- **actor 模型是 SFT 模型，critic 价值网络和 RM 不是同一个东西**，很多人混淆。
+- 同时加 **KL 惩罚**，一般是和 SFT 参考模型做 KL 散度，限制生成分布偏移，防止奖励黑客。
+- 可选**拒绝采样**、**迭代**多轮。
+
+**缺点**
+
+- RLHF 不稳定、调参麻烦、成本高，这也是 DPO 出现的动机。
+
+### Q87：PPO 目标（直觉）
+
+**答：**
+
+**核心思想**
+
+PPO 是一种 on-policy actor-critic 算法。PPO-Clip 通过裁剪代理目标，减少在同一批数据上进行过于激进的策略更新。
+
+**语言模型中的状态、动作与轨迹**
+
+- 状态 $s_t$：当前提示和已经生成的前缀；
+- 动作 $a_t$：该位置选择的下一个 token；
+- 轨迹：从提示开始生成的一整段响应；
+- 奖励可只在序列结束时给出，也可包含逐 token 的 KL shaping 或过程奖励。
+
+**优势估计**
+
+一步 TD 残差为：
+
+$$
+\delta_t=r_t+\gamma V(s_{t+1})-V(s_t)
+$$
+
+PPO 常配合 GAE：
+
+$$
+\hat A_t^{\mathrm{GAE}}=\sum_{l=0}^{T-t-1}(\gamma\lambda)^l\delta_{t+l}
+$$
+
+单个 $\delta_t$ 只是 $\lambda=0$ 的特殊情况，不能直接等同于一般的 advantage 估计。
+
+**PPO-Clip 目标**
+
+$$
+r_t(\theta)=\frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{\mathrm{old}}}(a_t|s_t)}
+$$
+
+$$
+L^{\mathrm{CLIP}}=\mathbb E_t\left[\min\left(r_t\hat A_t,\operatorname{clip}(r_t,1-\epsilon,1+\epsilon)\hat A_t\right)\right]
+$$
+
+裁剪的是 surrogate objective，而不是把实际概率比硬性限制在区间内。优势为正时，它截平继续提高动作概率所带来的收益；优势为负时，它截平继续降低动作概率所带来的收益。因此“ratio 一越界梯度就全部为 0”并不准确。
+
+**RLHF 中的典型组件**
+
+1. Actor：要优化的语言模型；
+2. Critic：估计状态价值，用于构造优势；
+3. Reference model：冻结的参考策略，用于限制偏移；
+4. Reward model 或可验证奖励：为回答或过程打分。
+
+PPO 的优点是奖励设计灵活；代价是需要在线采样、价值模型和多轮更新，系统和显存开销较高。
+
+### Q88：DPO vs RLHF？
+
+**答：**
+
+DPO 使用偏好对 $(x,y_w,y_l)$ 直接优化策略，其中 $y_w$ 是偏好回答，$y_l$ 是较差回答。其损失为：
+
+$$
+\mathcal L_{\mathrm{DPO}}=-\mathbb E\left[\log\sigma\left(\beta\left[\log\frac{\pi_\theta(y_w|x)}{\pi_{\mathrm{ref}}(y_w|x)}-\log\frac{\pi_\theta(y_l|x)}{\pi_{\mathrm{ref}}(y_l|x)}\right]\right)\right]
+$$
+
+它比较的是优选与拒选回答**相对于参考策略**的 log-ratio 差，而不只是当前策略下的 $\log\pi_\theta(y_w)-\log\pi_\theta(y_l)$。
+
+**与 PPO 式 RLHF 的关系**
+
+- DPO 从带 KL 正则的偏好优化目标推导出分类式损失，不需要单独训练显式 Reward Model，也不需要 on-policy 采样环；
+- reference 项体现了贴近参考策略的约束，但不等于每次更新都有一个显式、严格的 KL 上界；
+- DPO 适合已有离线偏好对的数据，流程相对简单；PPO/GRPO 等在线方法更容易接入环境反馈、工具结果和可验证奖励，但系统更复杂。
+
+### Q89：GRPO 原理（Group Relative Policy Optimization）？
+
+**答：**
+
+GRPO（Group Relative Policy Optimization）由 **DeepSeekMath** 提出，之后被 DeepSeek-R1 等工作采用，并非首次出现在 R1。
+
+**核心流程**
+
+1. 对同一 prompt 从旧策略采样一组回答 $\{o_1,\ldots,o_G\}$；
+2. 用规则、Reward Model 或可验证结果得到奖励 $r_i$；
+3. 用组内相对奖励构造优势，例如：
+
+$$
+\hat A_i=\frac{r_i-\operatorname{mean}(r_1,\ldots,r_G)}{\operatorname{std}(r_1,\ldots,r_G)+\epsilon}
+$$
+
+4. 使用这些相对优势更新策略。原始 GRPO 包含 PPO 风格的概率比裁剪，并加入相对参考策略的 KL 正则。
+
+**特点与局限**
+
+- 不训练独立 critic，从而省去其参数、优化器状态、激活和计算；总显存节省比例仍取决于 actor、reference、奖励计算、序列长度和并行策略；
+- 组内归一化可减弱 prompt 难度和奖励尺度差异，但估计质量依赖组大小、样本多样性和奖励质量；
+- 仍属于需要在线采样的 policy-gradient 方法，同一 prompt 多次生成会增加采样成本。
+
+### Q90：GRPO vs PPO（面试对比）？
+
+**答：**
+
+| 维度 | PPO | GRPO |
+|---|---|---|
+| 优势基线 | 通常由 critic 估计逐状态价值，并通过 GAE 等方法构造优势 | 同一 prompt 下多个回答的组内相对奖励 |
+| 是否需要 critic | 通常需要 | 不需要独立 critic |
+| 采样方式 | 当前/旧策略的 on-policy 或近 on-policy 采样 | 每个 prompt 通常采样一组回答 |
+| 更新约束 | PPO-Clip；RLHF 中常另加 KL | 原始 GRPO 也使用 PPO 风格 clipping 和 KL 正则 |
+| 主要代价 | critic 的训练、状态和激活增加开销 | 多回答生成的采样成本随组大小增加 |
+
+PPO 的 $V(s_t)$ 是随状态/前缀变化的 baseline，不是“全局状态价值”。GRPO 去掉 critic 后能节省一部分资源，但没有具体配置时不能断言总显存减半。两者的关键差异是 advantage 的构造方式，而不是一方有约束、另一方没有约束。
+
+### Q91：奖励模型（RM）如何训练？
+
+**答：**
+
+**数据收集**
+- 对同一 prompt 的两个或多个回答标注相对偏好。数据可以直接采集为 chosen/rejected 的 pairwise 比较，也可以先获得完整或部分排序，再拆成偏好对；并不要求每条样本都有 $A>B>C$ 的全排序。
+
+**训练输入格式**
+- 输入通常为 `(prompt, response)`。Decoder-only 的序列级 RM 常取 EOS 或最后一个非 padding token 的 hidden state，经 value head 输出标量奖励；也可以使用其他 pooling 或 token-level reward 结构，因此“取最后一个 token”是常见实现而不是 RM 的定义。
+
+**训练目标**
+- 训练 **Bradley-Terry / pairwise** 模型：$r_\phi(x, y_w) > r_\phi(x, y_l)$。
+- 损失常为 **ranking loss**：$-\log \sigma(r_\phi(x, y_w) - r_\phi(x, y_l))$。
+- 还有 **Margin ranking loss** 两种常用选择，面试会问两种 loss 区别。
+
+**关键问题**
+- 数据**覆盖域**决定 RM **盲区**：训练数据没覆盖的场景，RM 打分不可靠。
+- **长度偏见**：长回答更容易包含部分正确信息，RM 容易给高分；常见解法除长度归一化外，训练时做长度均衡采样。
+
+**工程细节**
+- RM 训练完后**冻结**，在 PPO 阶段只做推理打分，不更新 RM 权重。
+- 缺陷：RM 学到的是标注偏好，不是事实正确性，容易出现奖励黑客。
+
+### Q92：KL 散度惩罚在对齐中的作用？
+
+**答：**
+
+**核心作用**
+- 防止策略为**刷高奖励**而**胡言乱语或模式崩塌**。
+- 约束 **$\pi_\theta$** 接近**参考模型 $\pi_{\text{ref}}$**（常为 SFT 模型）。
+
+**数学形式**
+- 项 $\beta \mathrm{KL}(\pi_\theta \|\pi_{\text{ref}})$，加在 RL 目标里。
+- $\beta$ **权衡**有用性与**忠实度**：$\beta$ 大则保守，$\beta$ 小则激进。
+
+**KL 的方向**
+
+RLHF 中常见的约束方向为：
+
+$$
+D_{\mathrm{KL}}(\pi_\theta\|\pi_{\text{ref}})=\mathbb E_{a\sim\pi_\theta}\left[\log\pi_\theta(a|s)-\log\pi_{\text{ref}}(a|s)\right]
+$$
+
+反方向 $D_{\mathrm{KL}}(\pi_{\text{ref}}\|\pi_\theta)$ 具有不同的 mode-seeking/mode-covering 行为，不能混用；不同对齐算法也可能使用不同散度或估计器，不宜概括为“几乎不用”。
+
+**常见实现方式**
+
+- **采样估计**：对当前策略实际生成的 token 计算 $\log\pi_\theta(a_t|s_t)-\log\pi_{\text{ref}}(a_t|s_t)$，作为相应期望的 Monte Carlo 估计。它仍需要 reference 对所采样 token 的概率，除非这些值已缓存或通过等价方式获得；
+- **全词表 KL**：在每个位置对两个完整离散分布求和，可得到该位置的精确 KL，但计算和显存代价更高；
+- 共享冻结层、缓存 reference log-prob 或使用独立推理服务只是工程优化，不改变 KL 的定义。
+
+**$\beta$ 自适应**
+- 很多工程不是固定 $\beta$，而是动态调整 KL 系数，把 KL 维持在目标区间。
+
+**副作用**
+- KL 系数过大时，策略会被强约束在参考模型附近，可能限制奖励改进和输出多样性；影响需结合目标 KL、奖励质量和采样设置评估。
+
+### Q93：RLAIF 是什么？
+
+**答：**
+
+**全称**：Reinforcement Learning from AI Feedback。
+
+**定义**：用 **AI 模型**（而非纯人类）生成**偏好或评分**，训练 RM 或直接 DPO。
+
+**两种典型用法**
+
+- AI 标注 pairwise 偏好数据，训练 RM，后续走 RLHF。
+- AI 偏好数据直接喂 DPO，不需要 RM。
+
+**优势**
+- **降低成本**：人类标注贵且慢，AI 标注快且便宜。
+- **加速迭代**：可大规模自动生成偏好数据。
+
+**风险**
+
+- **AI 偏见叠加**：AI 标注的偏见会传递到 RM，再传递到策略。
+- **位置偏差**：大模型打分容易偏爱排在前面的回答，需要打乱顺序多次采样做投票。
+- 实践中可混合人类反馈并用人工抽检校准 AI 评审；纯 AI、纯人工或混合方案孰优取决于评审模型、任务和质量控制，不能一概而论。
+
+**适用边界**
+- AI 擅长在简单、客观任务上做偏好判断。
+- 复杂主观任务、安全类判断，AI 标注质量显著弱于人标。
+
+**整体补充：离线 vs 在线对齐**
+
+| 类别     | 方法              | 特点                               |
+| :------- | :---------------- | :--------------------------------- |
+| **离线** | SFT、RM 训练、DPO | 使用固定监督数据；SFT 通常是示范回答，RM/DPO 通常是偏好对，不需要实时采样 |
+| **在线** | PPO、GRPO         | 需要实时从策略采样新样本           |
+
+面试很喜欢问这一组分类。
+
+**整体补充：对齐评估**
+
+- **自动指标**：MT-Bench、MMLU、HumanEval。
+- **人工评估**：人类偏好打分、A/B 测试。
+- **安全评估**：红队测试、有害内容检测。
+
+**整体补充：安全对齐**
+
+- 红队测试、安全 RL、拒绝有害请求。
+- 是当前高频面试题，建议单独整理。
+
+### Q94：安全对齐（safety alignment）常见手段？
+
+**答：**
+
+**训练阶段手段**
+
+- **安全 SFT**：在指令微调数据中混入安全相关的样本，教模型拒绝有害请求、避免危险建议。也包括**拒绝模板**，SFT 阶段教会模型标准拒绝话术。
+- **红队数据**：红队人员构造越狱/有害 prompt → 模型输出 → 人工修正得到安全样本，再加入 SFT。产出的是**对抗 prompt + 安全回复对**，不是只用 prompt 训练。
+- **宪法 AI / 自我批评**：给模型一套明确的安全原则（“宪法”），让模型自己审查输出是否符合原则，不符合则修正。Anthropic 的 Constitutional AI 是典型代表。
+- **RLHF 安全奖励**：工业界很多做法是奖励模型同时评估**有用性 + 安全性**两个维度，不是单独一个安全 RM；也有做法是额外一个独立安全打分头做惩罚。
+- **DPO 安全偏好对**：按本文 Q88 的记号可写为 `(有害 prompt, 安全回答 chosen, 不安全回答 rejected)`；若数据文件使用其他字段顺序，应显式标明 chosen/rejected。DPO 不是专门的安全技术，只是可以使用安全偏好数据进行优化。
+- **其他**：ORPO、KTO 也可以做安全对齐，面试简答可不提。
+
+**推理阶段手段**
+
+- **推理时护栏**：在输入输出两端加过滤层，检测并拦截有害内容（如关键词过滤、分类器检测），也包含 **LLM 本身做内容审核**（大模型作为裁判）。
+- **监控与熔断**：实时监控模型输出，发现异常（如大量有害内容）时自动降级或切断服务。
+
+**核心矛盾**
+
+- 安全性与有用性**可能冲突**：过度拒绝会损害用户体验（“这也不答那也不答”），过度宽松会带来风险。
+- 需要**产品政策**来权衡：不同场景（医疗、金融、娱乐）对安全的要求不同，需因地制宜。
+
+**一句话总结**
+
+> **安全对齐分为训练、推理两大路径：训练侧使用安全 SFT、红队对抗样本、宪法 AI、RLHF 安全奖励、DPO 安全偏好对优化模型本身；推理侧部署护栏过滤、监控熔断做兜底。核心难点是权衡安全性与有用性，依靠产品政策做场景化取舍。**
+
+### Q95：指令数据如何构建？
+
+**答：**
+
+**常见来源**
+
+- **人工撰写**：专家手写高质量的指令-回答对，质量最高但成本也最高。
+- **模型蒸馏**：用强模型生成指令-回答对，成本低、规模大，但需过滤低质量样本。注意：Alpaca 原始用的是 `text-davinci-003`，不是 GPT-4；后来很多衍生版本才用 GPT-4 蒸馏。
+- **多轮对话合成**：让模型模拟多轮对话，生成对话历史 + 回答，适合训练对话能力。
+- **工具调用轨迹**：记录模型调用工具（搜索、计算、API）的完整过程。真实轨迹往往噪声大，一般还要做清洗、重标注，原始轨迹不能直接喂训练。
+- **领域模板**：针对特定领域（医疗、法律、代码）设计模板，批量生成指令数据。
+- **线上业务日志**：线上用户真实指令 + 人工标注回复，是企业非常重要的指令数据来源。
+
+**关键原则**
+
+- **多样性**：任务类型、难度、领域、语言都要覆盖，避免模型偏科。
+- **难度分布**：工业实践中不一定严格“由简到难”，更多是**混合采样**，训练 batch 内难易样本混杂；“难度曲线”更多指数据集整体分布，不是训练时序。
+- **格式统一**：所有数据遵循相同的格式（如 `(instruction, input, output)`），便于训练。
+- **去毒与隐私审查**：过滤有害内容和个人隐私信息，确保数据合规。
+
+**开源参考**
+
+- **ShareGPT**：真实用户对话数据，格式多样，适合对话训练。但原生是用户聊天 json，存在大量劣质、重复数据，实际使用必须做清洗过滤，不能直接训练。
+- **Alpaca 系**：用 `text-davinci-003` 蒸馏的指令数据，结构清晰，适合入门参考。
+
+**一句话总结**
+
+> **指令数据来源包含人工标注、大模型蒸馏、多轮对话合成、工具调用轨迹、领域模板、线上业务日志；构建需要保证样本多样性、合理难度分布、格式统一，并完成去毒与隐私脱敏；开源可以参考 ShareGPT、Alpaca 系列数据集。**
+
+## 八、推理部署（Q96–Q110）
+
+### Q96：KV Cache 原理？
+
+**答：**
+
+**核心问题**
+
+自回归解码时，每生成一个新 token，都要计算它与**所有历史 token** 的注意力。如果每次都重新计算所有历史 token 的 K 和 V，就会产生大量重复计算，浪费算力。
+
+**KV Cache 的做法**
+
+- 自回归解码每步只新增一个 query，历史 token 的 **$K, V$ 不变**。
+- 缓存每层历史 token 的 K/V。当前步骤只为新输入位置计算 Q/K/V，把当前 K/V 与历史缓存拼接后，当前 Q 对“历史位置加当前位置”的 K 做注意力，并使用对应的 V 聚合；随后把当前 K/V 保存在 cache 中供后续步骤复用。
+- 历史 token 的 K、V 不再重新投影，直接读缓存，避免重复前向。
+
+**两个阶段的区别（高频坑）**
+
+- **Prefill 阶段**：对一个全新的 prompt 并行计算各位置的表示，并把 K/V 写入 cache。全注意力的算术复杂度仍为 $O(P^2d)$；普通 KV cache 是该阶段的产物，本身不会消除这次计算。若多个请求复用完全相同的前缀，则额外的 **prefix caching** 可以跳过已缓存前缀的 prefill。
+- **Decode 阶段**：逐 token 生成并复用历史 cache。第 $t$ 步的注意力要读取约 $P+t$ 个历史位置，因此注意力部分为 $O((P+t)d)$，而不是常数时间。
+
+**复杂度变化（关键，需区分对比基线）**
+
+- 设 prompt 长度为 $P$、新生成 $G$ 个 token。若每一步都把当前完整序列重新送入模型，注意力计算约为 $\sum_{t=1}^{G}O((P+t)^2d)$，并且历史位置的投影和 MLP 也会重复计算。
+- 使用 KV cache 后，只对新 token 计算投影和 MLP；注意力部分累计约为 $O((GP+G^2)d)$。它避免了重算历史表示，但每一步仍需读取并关注历史 KV。
+- 讨论复杂度时应说明只统计注意力，还是统计整层中的线性层/MLP；在短上下文或大隐藏维度下，$O(d^2)$ 的投影也可能占主导。
+
+**代价**
+
+- **显存**随 $T$ 线性增长：序列越长，缓存越大。
+- 长上下文时 KV cache 成为**主要显存瓶颈**。
+
+**一句话总结**
+
+> **KV Cache 缓存各层历史 token 的 K/V，使解码时只需为新 token 计算新的表示；它避免重复计算历史位置，但仍需读取并关注历史 KV。代价是缓存随 batch、层数和序列长度线性增长。**
+
+### Q97：KV Cache 内存如何估算？
+
+**答：**
+
+**理论公式**
+
+$$
+\text{KV 显存} = 2 \times B \times H_{\text{kv}} \times T \times d_h \times L \times \text{bytes}
+$$
+
+其中：
+
+- $2$：K 和 V 各一份。
+- $B$：batch size。
+- $H_{\text{kv}}$：**KV 头数**（num_kv_heads），不是总 query 头数。
+- $T$：序列长度。
+- $d_h$：每头维度。
+- $L$：层数。
+- $\text{bytes}$：精度字节数（FP16 = 2，FP32 = 4）。
+
+**现实估算**
+
+- 上面公式是**理论张量大小**。
+- vLLM/PagedAttention 会有内存碎片、页表开销，真实占用会略大于理论值。
+- 面试估算直接用该公式即可。
+
+**GQA 的影响**
+
+- GQA 减少 K/V 头数 $H_{\text{kv}}$，则 **KV 显存**下降。
+- 例如 MHA 有 32 个 KV 头，GQA 只有 8 个，KV cache 直接降到 $8/32 = 1/4$。
+
+**长上下文的瓶颈**
+
+- 百万 token 时 KV 是**主要瓶颈**，推动 **PagedAttention、量化 KV** 等技术。
+- 例如采用 80 层、8 个 KV 头、每头 128 维的 GQA 配置，128 Ki-token 上下文、batch=1、BF16 缓存的理论大小为 40 GiB；这是按上述维度计算的张量大小，不代表所有 70B 模型都采用同一配置或支持该上下文长度。
+
+**一句话总结**
+
+> **KV Cache 显存理论公式：$2 \times B \times H_{kv} \times T \times d_h \times L \times \text{bytes}$；GQA 通过减少 KV 头数降低 KV 显存；序列越长显存开销越大，催生 PagedAttention、KV 量化等技术缓解显存压力。**
+
+### Q98：量化方法 INT8 / INT4？
+
+**答：**
+
+**先区分量化对象**
+
+- **权重量化（weight-only）**：例如 W8A16、W4A16，权重以 8/4 bit 存储，激活通常保持 FP16/BF16。
+- **权重与激活量化**：例如 W8A8，同时量化权重和激活，更依赖硬件、标定和数值范围处理。
+- 缩放粒度可按 tensor、channel 或 group 设置；粒度越细通常误差越小，但元数据和实现开销更高。
+
+**常见方法**
+
+- **LLM.int8()**：采用 8-bit 矩阵乘并把激活中的离群维度走高精度路径，不是简单地把所有张量统一转成 INT8。
+- **SmoothQuant**：利用等价缩放把激活的量化难度迁移到权重，常用于 W8A8 PTQ。
+- **GPTQ**：使用少量校准样本和近似二阶信息，逐层/逐块降低权重量化后的重建误差。
+- **AWQ**：根据校准激活识别重要权重通道并选择缩放，常用于低比特权重量化。
+- **NF4**：QLoRA 使用的 4-bit 数据类型/量化格式，量化级别针对近似正态分布权重设计；它本身不是一套通用推理算法。
+
+**推理时如何计算**
+
+- 权重通常保持压缩格式存放，由融合内核按 tile/group 解码并立即参与高精度或低精度累加；一般不会先把**整个模型权重**完整反量化成 FP16，否则会失去主要显存收益。
+- 显存下降较确定，吞吐和延迟是否改善则取决于硬件是否有高效低比特指令、解码开销、batch 大小和内核实现。
+
+**权衡**
+
+- 比特更低通常增加量化误差，但误差不是只由位宽决定，还取决于量化粒度、校准数据、模型和保留高精度的敏感层。
+- 是否让 embedding、LM head 或特定层保持高精度应通过评测决定，不是所有模型的固定规则。
+
+**一句话总结**
+
+> **量化要同时说明位宽、量化对象和粒度。INT4 在 LLM 中常用于仅权重量化；W8A8 还会量化激活。低比特能降低模型存储和带宽，但实际速度与精度必须在目标硬件和任务上验证。**
+
+### Q99：PTQ vs QAT？
+
+**答：**
+
+**PTQ（训练后量化）**
+
+- 训练完成后量化，不对原模型做完整的量化感知训练。
+- 有些 PTQ 方法需要少量代表性数据做校准（如 GPTQ、AWQ、静态激活量化），也有权重舍入或动态量化方案可以不使用校准集。
+- **快**，成本低。
+- GPTQ、AWQ、SmoothQuant 等属于 PTQ 方法；NF4 更准确地说是一种量化数据类型，QLoRA 用它存储冻结的预训练权重。
+- 大模型部署**PTQ 更常见**，因为 QAT 成本太高。
+
+**QAT（量化感知训练）**
+
+- 训练或微调过程中在前向加入伪量化/量化算子，使参数适应部署时的离散化误差；反向通常通过直通估计器等近似传递梯度，并保留高精度主参数更新。
+- QAT 往往比同配置 PTQ 更能恢复低比特精度，但需要额外训练，不保证对所有模型和位宽都更优。
+- 适合小模型或对精度要求极高的场景。
+
+**实践策略**
+
+- 大模型部署 **PTQ** 更常见。
+- 可根据逐层敏感度采用混合精度：敏感层保持 8/16 bit，其他层使用 4 bit；具体层应以校准和任务评测确定。
+
+**一句话总结**
+
+> **PTQ 在训练后量化，可能有校准也可能无校准；QAT 在训练中模拟部署量化误差，使模型主动适应低精度。PTQ 成本低、在大模型部署中常见，极低位宽下可再考虑 QAT 或混合精度。**
+
+### Q100：vLLM 的 PagedAttention？
+
+**答：**
+
+**核心问题：KV cache 的显存浪费**
+
+Transformer 推理时，每个请求都要缓存历史 token 的 Key 和 Value（KV cache）。
+
+- 传统 KV 管理常要求每个序列占用连续空间，并按较大的最大长度预留或在增长时搬迁。
+- 问题：未知输出长度会造成预留浪费、内部/外部碎片或频繁重新分配，限制可并发的请求数。
+
+**PagedAttention 的做法**
+
+类比 **OS 虚拟内存分页**：
+
+- 把 KV cache 切成固定大小的**块（block）**，比如每块存 16 个 token 的 KV。
+- 这些块**不需要连续**，可以分散在显存任意位置。
+- 每个请求维护一张**块表（block table）**，记录它的 KV 存在哪些块里。
+
+**效果**
+
+- **减少最大长度预留浪费**：只分配实际需要的块，不按每个请求的最大长度预分配；是否减少计算中的 padding 还取决于批调度与内核实现。
+- **减少碎片**：块大小固定，显存利用率高。
+- **提高 batch 内可变长度推理吞吐**：不同长度的请求可以共享显存池，动态分配释放。
+- 动态请求长度下 **GPU 利用率**更高。
+
+**额外好处：前缀共享**
+
+- 块式寻址也便于 copy-on-write 和前缀共享；但只有在服务框架实现了前缀匹配/缓存、且模型权重与相关推理配置兼容时，相同前缀的请求才能复用 KV 块。
+
+### Q101：投机解码（speculative decoding）？
+
+**答：**
+
+**核心思想**
+
+- 用较便宜的**草稿分布 $q$** 自回归提出多个候选 token，再让**目标分布 $p$** 用一次并行前向为这些位置打分。
+- 如果候选接受率高，一次昂贵的目标模型调用可以确认多个 token，从而减少串行目标模型步数。
+
+**采样模式下的标准流程**
+
+1. 草稿模型依次生成 $K$ 个 token，并保存每一步的草稿概率 $q_i$。
+2. 目标模型并行计算对应位置的概率 $p_i$。
+3. 从左到右，以 $\min(1,p_i(x_i)/q_i(x_i))$ 接受草稿 token；第一次拒绝时，从归一化后的 $\max(0,p_i-q_i)$ 残差分布采样并结束本轮。
+4. 若 $K$ 个草稿 token 全部接受，再从目标模型为下一位置给出的分布采样一个额外 token。
+
+**为什么不损失分布**
+
+- 上述接受概率、残差重采样和“全部接受后的额外 token”共同保证输出服从目标模型分布。
+- “投机解码无损”是对**正确实现的验证/校正算法**而言；若只是接受分数较高的草稿 token，或省略残差校正，就不再自动具有这一保证。
+- 在贪心解码中，可以通过目标模型验证候选是否等于其贪心选择来保持相同的确定性输出，规则与随机采样不同。
+
+**效果**
+
+- 潜在收益取决于接受长度、草稿成本、目标模型并行验证成本、batch 大小和硬件利用率。
+- 草稿过慢或接受率过低时，额外工作可能抵消收益；因此它不保证在所有负载下降低延迟或提高吞吐。
+
+**草稿来源**
+
+- 经典方案使用与目标模型分布接近的独立小模型；也可以使用 Medusa 类多头、EAGLE 类特征草稿、提前退出层或模型内置 MTP 模块。
+- 不同来源需要相应的候选组织和验证方法，不能把它们都等同为“两套完整语言模型”。
+
+**一句话总结**
+
+> **投机解码用便宜的草稿提出多个 token，再由目标模型并行验证。严格的接受与残差校正规则可以保持目标分布不变；是否真正加速取决于接受率和端到端系统成本。**
+
+### Q102：MTP（Multi-Token Prediction）是什么？
+
+**答：**
+
+**核心思想**
+
+- 传统语言模型每次只预测**下一个 token**（next-token prediction）。
+- MTP 在训练时增加对更远未来 token 的预测目标，使一个位置的表示不仅监督 $t+1$，还可监督 $t+2,t+3,\ldots$。
+- “多 token”是一类目标，不对应唯一结构：有的方法从同一隐藏状态接多个并行预测头，有的方法用级联模块顺序预测后续 token。
+
+**两类常见结构**
+
+- **并行头式**：多个头基于同一主干隐藏状态分别预测不同偏移量，辅助损失与 next-token loss 加权求和。
+- **级联式**：后一个预测模块依赖前一个模块的表示或前一位置 token，因此候选之间保留显式因果依赖。
+- 训练时可以使用真实的后续 token embedding；推理时使用模型自己产生的候选，二者要区分。
+
+**DeepSeek-V3 的具体做法**
+
+- DeepSeek-V3 报告使用**顺序的 MTP 模块**，并在其最终配置中设置 MTP 深度 $D=1$：主模型负责 next token，额外模块学习再向前预测一个 token。
+- MTP loss 作为辅助训练目标；训练后可以丢弃 MTP 模块做普通解码，也可以把它作为投机候选来源并配合验证算法。
+- 仅仅能预测多个候选并不自动带来无损加速；仍需要正确的验证规则和支持该执行路径的推理系统。
+
+**优势**
+
+- 提供额外训练信号，并可能改善数据效率或主模型表现；收益应以对应论文和复现实验为准。
+- 当 MTP 模块足够便宜且候选接受率较高时，可作为内置草稿器，避免部署一套独立的完整草稿模型。
+
+**代价**
+
+- **训练成本增加**：预测头/模块带来额外参数、计算和实现复杂度。
+- **接受率依赖训练质量**：如果 MTP 头预测不准，加速效果打折扣。
+- **结构不统一**：不同论文中的并行头、级联模块和训练标签构造不同，不能只用一张固定架构图概括。
+
+**一句话总结**
+
+> **MTP 是让模型同时学习更远未来 token 的训练目标/模型模块；它可以只用于改善训练，也可以在推理时充当投机草稿器，但后者仍需要验证算法。**
+
+### Q103：投机解码和 MTP 的关系是什么？
+
+**答：**
+
+**核心区分**
+
+- **投机解码**是推理算法范式：候选生成、目标模型并行验证、接受或校正。
+- **MTP**是训练目标或模型模块：让模型学习预测多个未来 token。它可以被关闭，也可以只作为辅助损失使用。
+- 因此，MTP **可以提供**投机解码所需的候选，但 MTP 不等于投机解码，投机解码也不要求使用 MTP。
+
+**常见候选器并不相同**
+
+- **独立草稿模型**：小模型自回归生成候选，目标模型验证。
+- **Medusa 类方法**：从目标模型隐藏状态接多个并行头，组织成候选树。
+- **EAGLE 类方法**：用轻量草稿组件自回归预测目标模型的特征/候选，而不是简单的并行 token 头。
+- **DeepSeek 式 MTP**：使用级联的未来 token 预测模块；其候选也需要目标路径验证。
+
+**无损保证来自哪里**
+
+- 是否保持原目标分布，取决于候选器对应的验证与校正规则，而不是“共享主干”或“MTP”这个名称。
+- 对随机采样，要执行正确的接受概率和残差重采样；对贪心解码，要验证候选与目标模型的贪心结果一致。
+- MTP 与主干共享表示可能减少额外参数和提高候选相关性，但不保证接受率一定高于独立草稿模型，也不保证端到端加速。
+
+**一句话总结**
+
+> **投机解码负责“怎样验证候选并保持目标输出”，MTP 负责“怎样训练模型产生多个未来候选”。两者可以组合，但概念和正确性条件不同。**
+
+### Q104：MLA（Multi-Head Latent Attention）是什么？
+
+**答：**
+
+**一句话定义**
+
+MLA 是 DeepSeek-V2 提出的注意力机制。它把每个 token 的 Key/Value 内容联合压缩为低维潜在向量，解码时主要缓存这个潜在向量，而不是缓存每个头完整的 K 和 V。
+
+**低秩联合压缩**
+
+对层输入 $h_t$，先计算：
+
+$$
+c_t^{KV}=W^{DKV}h_t
+$$
+
+各头的内容 Key/Value 可由上投影得到：
+
+$$
+k_t^C=W^{UK}c_t^{KV},\qquad v_t^C=W^{UV}c_t^{KV}
+$$
+
+投影矩阵是固定模型权重；随序列长度增长的缓存主要是每个历史 token 的 $c_t^{KV}$。因此不能把“增加投影权重”和“KV cache 增长”混为一谈。
+
+**矩阵吸收**
+
+内容注意力分数可重排为：
+
+$$
+q_{t,i}^{C\top}k_{j,i}^C
+=q_{t,i}^{C\top}W_i^{UK}c_j^{KV}
+=(W_i^{UK\top}q_{t,i}^C)^\top c_j^{KV}
+$$
+
+同理，Value 上投影可以与输出投影重排。部署实现可预先合并相应权重，使解码时直接围绕潜在缓存计算，而不必为所有历史位置显式物化完整的多头内容 K/V。这里“吸收”的是线性上投影；下投影仍需为每个新 token 计算。
+
+**为什么还要单独处理 RoPE**
+
+- RoPE 是位置相关变换，不能像普通固定线性映射那样把整个 Key 上投影直接吸收到 Query 投影中。
+- DeepSeek-V2 因此把注意力分成**内容部分**和**解耦的 RoPE 部分**。缓存除 $c_t^{KV}$ 外，还要保存一个较小的 RoPE key $k_t^R$。
+- 最终分数由内容项与位置项共同构成；说“MLA 只缓存一个 512 维向量”会漏掉 RoPE 缓存。
+
+**与 MHA/GQA 的区别**
+
+- **MHA**：每个 Query 头有独立的完整 K/V 头并全部缓存。
+- **GQA/MQA**：减少 KV 头数，让多个 Query 头共享缓存的 K/V。
+- **MLA**：不同头的内容 K/V 由共享的低维潜在表示重构，缓存的是潜在表示加解耦位置 Key。它不是简单地“保留所有完整 KV 头再压缩文件”。
+
+**DeepSeek-V2 的量级示例**
+
+- 论文配置中 $d_c=512$、解耦 RoPE key 维度 $d_h^R=64$，所以每层每 token 缓存 $512+64=576$ 个元素。
+- 论文用于比较的 MHA 配置有 $n_h=128$、$d_h=128$，每层每 token 的 K/V 为 $2n_hd_h=32768$ 个元素；按元素数比较约为 $56.9$ 倍差距。
+- 这是特定配置的理论元素数。真实字节数还取决于缓存精度、布局、对齐和实现；DeepSeek-V2 报告的端到端节省也包含其部署设置，不能外推成所有 MLA 模型的固定倍率。
+
+**局限**
+
+- MLA 的训练与推理内核、张量并行布局和 RoPE 处理比标准 GQA 更复杂。
+- 低秩瓶颈会改变模型容量；DeepSeek-V2 的消融实验显示其配置表现良好，但不能据此保证任意压缩率、模型规模和任务都优于 MHA/GQA。
+- prefill 与 decode 的最优实现路径可能不同，是否更快需要以端到端基准验证。
+
+**一句话总结**
+
+> **MLA 联合压缩 K/V 内容并缓存低维潜在表示，通过矩阵吸收避免在解码时物化全部历史内容 K/V；为兼容 RoPE，它还缓存较小的解耦位置 Key。其核心收益是显著降低 KV cache，代价是更复杂的架构和内核。**
+
+### Q105：局部敏感哈希（LSH）是什么？在注意力里怎么用？
+
+**答：**
+
+**一句话定义**
+
+局部敏感哈希（Locality-Sensitive Hashing，LSH）是一种让**相似输入大概率落到同一个桶里**的哈希技术。和普通哈希追求“均匀分散”不同，LSH 追求“相似聚集”。
+
+**核心直觉**
+
+假设你要在 $n$ 个向量里为一个查询向量找近邻：
+
+- **暴力做法**：计算它与全部 $n$ 个向量的距离，代价约为 $O(nd)$；只有做所有向量的两两比较时才是 $O(n^2d)$。
+- **LSH 做法**：针对特定相似度设计哈希族，让相近向量以更高概率碰撞，再只对候选桶做精确比较。通常需要多个哈希表/轮次来平衡召回率和查询成本。
+
+它是概率型近似检索；具体复杂度和召回率取决于距离度量、数据分布、哈希参数和桶是否均衡，不能笼统保证固定倍数加速。
+
+**在注意力里怎么用**
+
+标准注意力要计算完整的 $T \times T$ 分数矩阵，算术复杂度为 $O(T^2d)$。LSH 注意力方法利用 Query/Key 相似性，把可能相关的位置放入相同或相邻桶，只在候选集合内计算。
+
+- 不能先知道“注意力分数相近”再哈希，因为那会先付出完整计算；实际是对 Query/Key 或其变换做哈希。
+- Reformer 等方法按桶限制注意力邻域；HyperAttention 则用 LSH 辅助定位未归一化注意力矩阵中的大元素，再近似其余部分。两者算法并不相同。
+
+**在 HyperAttention 中的具体应用**
+
+HyperAttention 的高层思路是把贡献分成两部分：
+
+- **重元素**：用 LSH 快速定位，精确计算。
+- **剩余部分**：通过均匀采样等方法估计，不逐个计算所有矩阵项。
+- 其近线性结论依赖论文定义的矩阵参数较小等条件，并不是 LSH 对任意注意力输入都能把复杂度无条件降为线性。
+
+**和普通哈希的区别**
+
+| 维度     | 普通哈希           | 局部敏感哈希                 |
+| :------- | :----------------- | :--------------------------- |
+| 目标     | 均匀分散           | 相似聚集                     |
+| 相似输入 | 哈希值可能完全不同 | 哈希值大概率相同             |
+| 用途     | 哈希表、去重       | 近似最近邻、聚类、注意力加速 |
+
+**局限**
+
+- 是近似方法，不是无损的，精度和速度需要权衡。
+- 对注意力矩阵的分布有假设（重元素占比不能太高），极端情况下加速效果会打折。
+- 目前主要在研究和实验阶段，工业大规模部署的案例还不多。
+
+**一句话总结**
+
+> **LSH 让相似输入以更高概率落入同桶，从而缩小候选比较集合。注意力方法可用它寻找潜在大权重项；能否达到近线性复杂度取决于具体算法、输入分布和论文假设。**
+
+### Q106：HyperAttention 是什么？
+
+**答：**
+
+**一句话定义**
+
+HyperAttention 是一项 2023 年公开的**近似注意力**研究，目标是在可刻画的输入条件下，以关于序列长度近线性的时间近似 softmax attention。
+
+**它解决什么问题**
+
+标准注意力的算术复杂度是 $O(T^2d)$。FlashAttention 通过分块和重计算减少显存占用与 HBM 读写，但仍计算精确注意力，算术阶仍为二次。HyperAttention 从算法层面减少要估计的矩阵项，以近似误差换取更低复杂度。
+
+**核心做法**
+
+它把注意力矩阵拆成“重元素”和“轻元素”两部分，分别处理：
+
+- **重元素（heavy entries）**：用基于 LSH 的过程寻找并显式处理较大的未归一化注意力项。
+- **剩余部分**：通过采样估计归一化注意力输出。
+- 论文用两个数据相关参数刻画问题难度；当最大列范数、去除大元素后的行范数比等参数较小时，可得到线性或近线性的运行时间界。不能把这个条件性结果写成任意输入上的严格 $O(T)$。
+
+**效果**
+
+论文报告：在其 ChatGLM2、32k 上下文实验中，推理时间约减少 50%，困惑度由 5.6 变为 6.3；在 131k、因果掩码的单层注意力实验中报告约 5 倍加速。这些是特定实现、硬件和评测设置下的结果，不是通用保证。
+
+**和 FlashAttention 的关系**
+
+两者解决的问题不同：HyperAttention 近似减少算法工作量，FlashAttention 优化精确注意力的 IO。HyperAttention 的模块化实现可以调用 FlashAttention 处理其中的精确子问题，但不能因此认为组合后既严格精确又无条件线性。
+
+**局限**
+
+- 是**近似方法**，不是无损的，精度和速度需要权衡。
+- 对注意力矩阵的分布有假设（重元素占比不能太高），极端情况下加速效果会打折。
+- 目前主要在研究和实验阶段，工业大规模部署的案例还不多。
+
+**一句话总结**
+
+> **HyperAttention 用 LSH 辅助发现大注意力项，并采样估计剩余部分；在论文给定的数据相关条件下可达到关于序列长度近线性的复杂度。它是有误差的算法近似，而 FlashAttention 是精确注意力的 IO 优化。**
+
+### Q107：连续批处理（continuous batching）？
+
+**答：**
+
+![image-20260917232802146](../interview/images/image-20260917232802146.png)
+
+**传统静态 batch 的问题**
+
+- 静态 batch 在一轮生成期间固定成员。完成的请求可以提前返回，但其槽位通常不能立即被新请求利用；实现若继续对齐到最长序列，还会产生 padding 或掩码计算浪费。
+
+**连续批处理的做法**
+
+- 调度器在迭代边界重新组织活跃请求：
+  - 有序列生成完了（遇到 EOS）→ **立刻移出 batch**，释放显存。
+  - 在容量、KV cache 和调度策略允许时，把等待中的请求加入后续迭代。
+- 实际系统还需协调长 prefill 与 decode，未必严格“每个 token 都插入新请求”，也不能保证 GPU 永远满载。
+
+**效果**
+- 对长度不齐、请求持续到达的在线负载，通常能提高有效批量和吞吐。
+- 它可能降低排队或批尾浪费，但更激进的批处理也可能增加单个请求的 token 间延迟；效果取决于调度策略和负载。
+- 多种现代 LLM 服务引擎提供迭代级/连续批处理能力，具体行为和配置以所用版本为准。
+
+**一句话**：静态 batch 是“等所有人吃完才收盘”，连续批处理是“谁吃完谁走，新来的随时坐下”。
+
+### Q108：推理吞吐 vs 延迟？
+
+**答：**
+
+**吞吐（Throughput）**
+
+- 可用 requests/s、output tokens/s，或 input + output tokens/s 表示；报告时必须说明口径、请求长度分布和硬件数量。
+- 增大 batch 通常先提高硬件利用率，但达到算力、显存或内存带宽瓶颈后会饱和，甚至因排队、调度和 padding 开销而下降。
+- 适合**离线批处理**场景（如批量生成训练数据、文档摘要）。
+
+**延迟（Latency）**
+- 若 TTFT 从请求起点开始计时，则端到端延迟可写为“TTFT + 首 token 之后各次输出间隔之和”；排队、prefill 和第一次 decode 通常已包含在 TTFT 中。也可按系统阶段拆为排队、prefill/首 token 计算和后续 decode，但不能把两种口径重复相加。
+- 交互式场景（如聊天）对延迟敏感，用户等不了太久。
+- 适合**在线服务**场景（如 ChatGPT 对话）。
+
+**优化目标不同**
+- **聊天场景**：同时关注 TTFT、流式输出间隔，以及 p95/p99 尾延迟。
+- **离线批处理**：重吞吐，总时间最短就行，首 token 慢一点无所谓。
+
+**实践**
+- 需要按场景调最大并发、token budget、prefill/decode 调度和内核参数；不存在“batch 越大吞吐必然越高”的无限单调关系。
+- 找到吞吐和延迟的平衡点，是推理优化的核心任务之一。
+
+### Q109：典型模型服务架构？
+
+**答：**
+
+**请求链路（从上到下）**
+1. **入口层**：鉴权、配额、限流、请求校验和流式连接管理。
+2. **请求/模型路由**：在多模型、多版本或多副本之间选择可用的 replica，并考虑负载与缓存亲和性。
+3. **副本与并行组**：一个副本可以在单 GPU 上运行，也可以跨多 GPU 使用 tensor/pipeline/expert parallel；不能默认“一卡一个完整副本”。
+4. **批调度器**：根据 token budget、KV cache 容量和优先级调度 prefill/decode，执行连续批处理。
+5. **模型执行引擎**：运行算子和通信，并管理 KV cache、采样及输出。
+6. **流式返回与可观测性**：回传 token，记录队列、TTFT、TBT、吞吐、错误和资源指标。
+
+**容易混淆的路由**
+
+- 多模型/多副本路由发生在请求层。
+- MoE 的专家路由通常发生在模型内部的每个 MoE 层，并且按 token 选择专家；它不是网关把整个请求固定发给某一个专家。
+
+**大流量场景的额外优化**
+- 可以在进程内、节点内或专门的分布式 KV/prefix-cache 系统中复用公共前缀。复用键除 token 前缀外，还要包含模型版本、适配器及影响 KV 的相关配置。
+- Redis 等通用存储可承担元数据或序列化对象管理，但不能仅靠“放进 Redis”就高效复用 GPU 上的分层 KV 张量；跨节点传输成本、布局和缓存失效都需专门设计。
+
+### Q110：TTFT vs TBT 指标？
+
+**答：**
+
+**TTFT（Time To First Token）**
+- 定义：从约定的请求起点到收到/生成**首个输出 token**的时间。客户端与服务端测量会因是否包含网络传输而不同，报告时应说明边界。
+- 受什么影响：排队与调度、prompt 的 prefill、第一次 decode/采样、运行时开销，以及客户端口径下的网络时间。
+- 为什么重要：用户等第一个字的时间，直接决定交互体验。
+
+**TBT/ITL 与 TPOT**
+
+- **TBT** 在概念上表示相邻 token 的输出间隔；具体 benchmark 的 **ITL（Inter-Token Latency）** 可能按相邻流式输出事件计时。标准解码通常每个事件输出一个 token，此时两者近似一致；投机解码一次事件可能返回多个 token，此时事件级 ITL 不等于逐 token 间隔。
+- **TPOT（Time Per Output Token）**：当 $N_{\text{out}}>1$ 时，常按 $(\text{E2E}-\text{TTFT})/(N_{\text{out}}-1)$ 计算每个请求首 token 之后的平均生成耗时；只有 0 或 1 个输出 token 的请求需单独处理。
+- 因此应明确测量单位与聚合口径，不能无条件把事件级 ITL、逐 token TBT 和请求级 TPOT 当作同一个指标。
+
+**SLA（服务等级协议）通常同时规定二者**
+- 在线服务常分别约束 TTFT、TBT/ITL、端到端延迟和可用性，并按输入/输出长度分桶看 p50/p95/p99；阈值由产品场景决定，没有通用的 500 ms/50 ms 标准。
+
+**优化手段**
+- **调度与连续批处理**：可提高吞吐，但需约束队列和 token budget，避免伤害尾延迟。
+- **投机解码**：在候选接受率和实现成本合适时降低串行解码开销。
+- **量化与优化内核**：可降低带宽/计算成本，但只有硬件和内核匹配时才会转化为延迟收益。
+- **KV 管理与前缀缓存**：提高并发或跳过重复 prefill；PagedAttention 主要改善内存管理，不等于自动降低每个 token 的算术量。
 
 ## 附录：快速自查清单（面试前 10 分钟）
 
-- Transformer：**Attention 流程 + \(O(T^2)\) + RoPE + 因果掩码**。  
-- 训练：**AdamW、warmup、BF16、梯度裁剪、loss spike**。  
-- 系统：**FlashAttention IO、DDP/FSDP/ZeRO**。  
-- Scaling：**Chinchilla、IsoFLOP、6ND 量级**。  
-- 数据：**清洗去重、混合比例、偏见**。  
-- 对齐：**SFT → RM → PPO；DPO/LoRA/QLoRA**。  
+- Transformer：**Attention 流程 + $O(T^2)$ + RoPE + 因果掩码**。
+- 训练：**AdamW、warmup、BF16、梯度裁剪、loss spike**。
+- 系统：**FlashAttention IO、DDP/FSDP/ZeRO**。
+- Scaling：**Chinchilla、IsoFLOP、6ND 量级**。
+- 数据：**清洗去重、混合比例、偏见**。
+- 对齐：**SFT → RM → PPO；DPO/LoRA/QLoRA**。
 - 推理：**KV cache 显存、PagedAttention、量化 PTQ、TTFT**。
-
----
 
 **文档版本说明**：本题库与 CS336 课程主题对齐，数值系数（如 6ND）以课堂/论文为准；面试中强调 **数量级与权衡** 优于死记硬背。
 
-**行数说明**：本文档含 105 道主问答与附录，满足「大规模、分主题、详答」的复习需求；若与自动化工具统计行数略有出入，以编辑器显示为准。
+**题目说明**：本文档含 110 道主问答与附录，按 Transformer、分词器、训练、系统、Scaling Laws、数据、对齐和推理部署八个主题组织。
 
 
 
@@ -12890,14 +15618,14 @@ Scaling Laws 假设 **数据 i.i.d. 且干净**；真实网络数据需 **过滤
 
 # 2026年AI大模型岗位需求分析
 
-> 本文面向准备大模型相关求职的读者，结合 **2026 年**国内招聘市场常见岗位画像、典型 JD（职位描述）要素，以及 Stanford **CS336: Language Modeling from Scratch** 全链路课程模块，给出可落地的技能矩阵、平台差异与学习路径说明。  
-> 文中薪资为**一线城市互联网/AI 行业**常见区间（月薪税前，人民币），实际会因公司体量、融资阶段、候选人背景与面试表现显著波动；具体招聘要求以各用人单位最新 JD 为准。
+> 本文作为 **2026 年求职备考的技能参考**，按算法、系统、数据、对齐与推理等方向映射学习内容；不是招聘市场抽样调查，也未附可核查的 JD 样本。岗位、平台和面试流程描述是准备材料的参考分类，具体要求以目标岗位最新 JD 为准。  
+> **课程边界**：主要参考 [CS336 Spring 2025](https://cs336.stanford.edu/spring2025/)；文中 Lesson 01–20 是本仓库的笔记编号，不是官方课次。A5 主线为数学推理的 zero-shot、SFT、Expert Iteration 与 GRPO；安全 DPO 是该年选做部分，其他 RLHF、LoRA、推理部署内容含拓展学习。完成阅读不能直接写成已完成作业或生产项目。
 
 ---
 
 ## 一、岗位类型与CS336技能映射
 
-2026 年大模型团队分工趋于清晰：**算法、系统、数据、对齐、推理**五条主线并行，又与「全栈型」岗位交叉。下表将常见岗位与 CS336 模块一一对应，便于投递与复习时快速自检。
+为方便准备，可按**算法、系统、数据、对齐、推理**五条主线整理能力，又与「全栈型」岗位交叉。下表是岗位技能与学习主题的参考映射，不表示所有公司采用相同分工。
 
 | 岗位方向 | 岗位核心职责（摘要） | CS336 强相关模块 | 对应课程/作业锚点 |
 |---------|---------------------|------------------|-------------------|
@@ -12919,7 +15647,7 @@ Scaling Laws 假设 **数据 i.i.d. 且干净**；真实网络数据需 **过滤
   岗位强调流水线工程化与质量指标。**A4** 与 **Lesson 14–15** 对应网页语料处理、过滤策略、MinHash 去重等，可与 Spark/Flink 等司内栈叠加叙述。
 
 - **对齐研究员 → SFT、RLHF、DPO**  
-  研究岗追问路线对比、稳定训练与评测设计。**Lesson 17–18** 与 **A5** 提供 SFT/RLHF/DPO/GRPO 的概念与作业级实践，便于与论文阅读结合。
+  准备路线对比、稳定训练与评测设计。**Lesson 17–18** 提供 SFT/RLHF/DPO/GRPO 的概念；2025 年 **A5** 主线实践是 SFT、Expert Iteration 与 GRPO，安全 DPO 另有选做部分，不能把所有方法都写成必做实践。
 
 - **推理优化工程师 → KV Cache、量化、vLLM**  
   岗位关注延迟、吞吐、显存与框架。**Lesson 20** 是主战场；理解 **A2** 中 FlashAttention 与内存层级有助于说明「为何推理阶段瓶颈常在访存与批调度」。
@@ -12931,7 +15659,7 @@ Scaling Laws 假设 **数据 i.i.d. 且干净**；真实网络数据需 **过滤
        → GPU/FlashAttention/DDP（09–12）→ A2
        → Scaling Laws（13）→ A3
        → Common Crawl/过滤去重（14–15）→ A4
-       → SFT/RLHF/DPO（17–18）→ A5
+       → SFT/Expert Iteration/GRPO（17–19）→ A5（DPO 为选做）
        → 推理部署（20）
 ```
 
@@ -12970,10 +15698,7 @@ Scaling Laws 假设 **数据 i.i.d. 且干净**；真实网络数据需 **过滤
    - **要求关键词**：vLLM/TensorRT-LLM 等（因 JD 而异）、推理框架、系统基础。  
    - **与 CS336**：Lesson 20；A2 辅助理解瓶颈。
 
-**薪资范围（Boss 上常见标价区间，一线，税前月薪）**：约 **25K–80K/月**。  
-- 初级/应届或 1–3 年执行岗：多落在 **25K–45K**；  
-- 3–5 年独立负责子系统：**40K–65K** 常见；  
-- 高级专家或带小团队：**60K–80K** 及更高（视公司品牌与期权结构浮动）。
+**薪资核对方法**：本仓库没有附带日期、城市、职级和样本量的招聘数据，因此不提供“市场常见薪资”数字。请记录目标 JD 的链接、发布日期、税前月薪、薪数与奖金/期权口径，并对比同城市、同职级岗位；平台标价不等于实际 offer。
 
 **学历要求**：**本科/硕士**为主流；博士在算法/对齐研究岗为加分项。部分工程岗强调本科+扎实项目与实习经历即可竞争。
 
@@ -12989,7 +15714,7 @@ Scaling Laws 假设 **数据 i.i.d. 且干净**；真实网络数据需 **过滤
 - **研究向**：对齐、安全、长上下文、MoE 等方向，顶会、开源、大规模实验经历权重大。  
 - **管理向**：小组长/总监级，除技术外要求人才梯队与项目管理。
 
-**薪资范围**：常见标价约 **40K–100K+/月**（或折算年薪表述），高级别与稀缺方向（强系统+强算法复合）易触及区间上沿；总包需区分**现金/期权/签字费/年终奖**结构。
+**薪资核对方法**：先确认 JD 写的是月薪、年薪还是总包，不能将年薪总包直接除以 12 当作固定月薪。分别记录固定现金、浮动奖金、签字费、股票/期权及归属条件，再与招聘方确认职级带宽；不把未注明来源的区间作为谈薪依据。
 
 **与 CS336 的使用建议**：猎聘 JD 颗粒度不一，建议用 CS336 **Assignment 全链路**做「能力地图」，面试时主动映射到对方 JD 中的「预训练/数据/对齐/推理」关键词，减少空泛自我介绍。
 
@@ -13034,7 +15759,7 @@ Scaling Laws 假设 **数据 i.i.d. 且干净**；真实网络数据需 **过滤
 |------|------|
 | **技能描述** | Self-Attention、因果掩码、多头、FFN、残差与 Norm；Decoder-only 为主流 LLM 范式；参数量与复杂度估算。 |
 | **CS336 覆盖** | **Lesson 03–05**（架构、多头与 RoPE、RMSNorm/SwiGLU/GQA）；**A1**。 |
-| **面试考察方式** | 手推 Attention、复杂度 \(O(n^2 d)\)、与 RNN 对比；现代模块（RoPE、SwiGLU）名词与动机。 |
+| **面试考察方式** | 手推 Attention、复杂度 $O(n^2 d)$、与 RNN 对比；现代模块（RoPE、SwiGLU）名词与动机。 |
 | **掌握程度要求** | **精通（岗位核心）**：能白板画图讲清数据流；能估算层数与维度对显存的影响。 |
 
 ### 3.3 BPE
@@ -13192,7 +15917,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 - **大模型算法工程师**：A1 + A3 + A5 —— 独立实现小模型训练；完成缩放相关实验；做过对齐微调与评测。  
 - **AI 系统工程师**：A2 + Lesson 20 —— 多卡加速比、Profiling 结论；推理侧延迟/吞吐对比（若有）。  
 - **数据工程师**：A4 —— Common Crawl 子集流程、过滤与去重策略、质量指标。  
-- **对齐研究员**：A5 + Lesson 17–18 —— SFT 与 DPO/RLHF 对比、数据偏差与稳定性讨论。  
+- **对齐研究员**：A5 + Lesson 17–18 —— 实际完成的 SFT/Expert Iteration/GRPO 实验，及 DPO/RLHF 理论对比；选做或扩展需单独标注。  
 - **推理优化工程师**：Lesson 20 —— KV Cache、量化、vLLM 等；结合 A2 解释 Attention 瓶颈。
 
 ### 7.3 面试表达结构（STAR 建议）
@@ -13217,7 +15942,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ---
 
-**文档版本说明**：本文基于 2026 年行业通用岗位画像与本仓库 CS336 课程体系整理；薪资与平台特点为归纳性描述，不构成任何薪酬承诺，请以用人单位最新信息为准。
+**文档版本说明**：2026 年备考参考；课程基准为 CS336 Spring 2025，章节编号来自本仓库。未进行薪资、岗位数量或面试频率统计；平台与企业分类仅用于安排准备方向，请以可核查的最新 JD 和招聘方确认信息为准。
 
 
 
@@ -13227,6 +15952,8 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 # CS336 项目简历模板
 
 本文档面向 Stanford **CS336（Language Models from Scratch）** 课程项目，提供可复用的简历写作框架、关键词库、量化示例与岗位差异化写法，帮助你在求职材料中**准确、可验证、可检索**地呈现项目价值。
+
+> **模板不是项目履历**：本仓库包含学习笔记与教学代码，不证明已经完成官方 A1–A5、运行 Triton GPU 内核、多卡训练或获得下文的性能结果。所有第一人称示例、硬件与指标均为写法占位；没有日志/测试/代码证据的条目应删除或改为“学习/计划”，不能复制为真实经历。课程范围以 [CS336 Spring 2025](https://cs336.stanford.edu/spring2025/) 为准；GQA、LoRA、部署等需按实际实现标为课程扩展。
 
 ---
 
@@ -13266,7 +15993,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 **示例 A（偏训练系统）**：
 
-> 基于 Stanford CS336，从零实现含 **BPE 分词器、Transformer（RoPE / RMSNorm / GQA / SwiGLU）、AdamW** 的语言模型训练系统；完成 **FlashAttention-2** 与 **DDP** 分布式训练集成，在同等配置下训练吞吐提升 **3.2×**。
+> 基于 Stanford CS336，从零实现含 **BPE 分词器、Transformer（组件按实际列出）、AdamW** 的语言模型训练系统；完成 **___ 系统优化**，在 **___ 固定配置**下训练吞吐提升 **___×**（只填写已验证的实现与实测结果）。
 
 **示例 B（偏模型与优化）**：
 
@@ -13380,7 +16107,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 11. 在固定 token 预算下，将实验完整跑完时间从 **14 小时**缩短到 **4.5 小时**（约 **3.1×**）。
 12. 通过更合理 warmup+cosine，在 **20k steps** 内验证集 loss 降低 **0.18**（指标口径：**___**）。
-13. 将 checkpoint 体积从 **12 GB** 压缩到 **6.2 GB**（如使用量化/裁剪策略且真实），恢复训练成功率 **100%**（如可验证）。
+13. 使用 **___ 无损压缩/序列化策略**，将可续训 checkpoint 体积从 **___ GB** 降至 **___ GB**；完成 **___ 次恢复测试**并核对参数、优化器和随机状态。权重量化/裁剪后的推理文件不是原训练状态的等价替代，应另报部署收益。
 
 ### 分词与数据预处理
 
@@ -13391,7 +16118,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 16. 固定随机种子与确定性配置后，两次训练 **loss 曲线差异 < 1e-4**（按你实际能达到的精度描述）。
 17. CI/脚本化（如有）：一键训练评测流水线将人工操作从 **45 分钟**降到 **6 分钟**。
-18. 崩溃恢复：平均每 **8 小时**保存 checkpoint，最长恢复损失 **12 分钟**训练时间（按实际）。
+18. 崩溃恢复：每 **___ 分钟/步**保存 checkpoint，实测故障后的重跑工作量为 **___ 分钟/步**；常规周期保存的最坏重跑工作量可接近一个保存间隔，还需另计载入与重启耗时，不能把低于间隔的平均值写成最坏上限。
 
 ### 课程里程碑式指标（可与项目报告一致）
 
@@ -13414,7 +16141,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 **示例 bullet**：
 
-- 设计并对比 **MHA vs GQA** 在 **同等参数量**下的收敛速度与吞吐，最终选择 **GQA（G=8）**，在 **↓15%** 计算量下验证集指标 **不降**（给出具体指标）。
+- 在 **___ 对照协议**下比较 **MHA vs GQA**，记录各自参数量、KV Cache、吞吐和验证指标，选择 **___ KV 头**配置。GQA 会减少 K/V 投影与缓存；是否减少端到端 FLOPs、质量是否保持应以实际配置与实验为准，不能从“同等参数量”直接推得固定收益。
 
 ---
 
@@ -13457,7 +16184,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 **项目描述**：
 
-- 基于 Stanford **CS336** 要求，从零实现 **BPE 分词器**与 **Decoder-only Transformer**（**RoPE + RMSNorm + GQA + SwiGLU**），并完成 **AdamW** 与完整训练闭环（**AMP、梯度裁剪、LR schedule、checkpoint**）。
+- 参考 Stanford **CS336**，从零实现 **BPE 分词器**与 **Decoder-only Transformer**（**RoPE + RMSNorm + SwiGLU**；**GQA 若实际扩展则注明**），并完成 **AdamW** 与训练闭环（**AMP 若使用、梯度裁剪、LR schedule、checkpoint**）。
 - 训练系统工程：拆分数据预处理与训练路径，完善日志与实验追踪；通过 profiler 定位瓶颈，引入 **FlashAttention-2** 降低注意力显存与耗时；使用 **DDP** 扩展多卡并行并优化 DataLoader 与同步开销。
 - **成果（示例口径）**：在 **A100×1、BF16、batch=__、seq=__** 下达到 **___ tokens/sec**；引入 FlashAttention 后峰值显存 **↓60%**（**38GB → 15GB**）；**4 卡 DDP**相对单卡 **3.6×** 加速；在 **___ 训练步数**内验证集 **loss 从 ___ → ___**。
 
@@ -13544,7 +16271,9 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 # CS336 项目 STAR 面试稿
 
-> 面向 Stanford **CS336：Language Modeling from Scratch** 的学习与项目复盘。以下为**口述脚本**：按 Situation → Task → Action → Result 组织，语气贴近真实面试。文中带 **X**、**区间数字** 处请按你本地实验日志替换，务必与简历、代码一致。
+> 面向 Stanford **CS336：Language Modeling from Scratch** 的学习与项目复盘。以下是**假设性口述模板，不是作者或本仓库的真实实验履历**：按 Situation → Task → Action → Result 组织。所有第一人称行动、故障故事、硬件、数据规模和数字都须用你的代码/测试/日志核对；未做的内容删除或改为“学习/计划”，不是仅替换 X 就能直接背诵。
+
+> **版本与实现边界**：参考 [CS336 Spring 2025](https://cs336.stanford.edu/spring2025/)，Lesson 编号对应本仓库 20 篇笔记。2025 年 A5 主线包含 zero-shot、SFT、Expert Iteration 与 GRPO，安全 DPO 是选做；该年主线 GRPO 不要求 reference KL。仓库里的纯 PyTorch 分块 attention 教学实现不等同于已实现高性能 Triton FlashAttention-2 内核，阅读笔记也不证明已完成多卡或 TB 级实验。
 
 **使用建议**：通读并标注与自身实现不一致之处；录音限时演练（STAR 1 约 2 分钟，STAR 2～10 每题约 1.5～2 分钟）；数字口径区分「子模块加速」与「端到端加速」、单次实验与中位数。
 
@@ -13567,7 +16296,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ### 口述正文（约 15～20 句）
 
-我当时系统跟进了 Stanford 的 CS336，课名是 Language Modeling from Scratch，目标是从零把语言模型整条链路走通，而不是只调 API。背景上我主要在单机多卡环境做实验，比如 4×A100 40GB 这一类配置，数据侧以 Common Crawl 子集为主，配合可重复的清洗、去重管线。技术栈是 PyTorch 2.x，系统作业里用 Triton 写 FlashAttention 风格内核，并行用 torchrun 加 DDP。我的任务可以概括成三件事：一是关键模块要能自己实现或逐行讲清，包括字节级 BPE、Decoder-only Transformer、手写 AdamW、以及 IO-aware 的注意力内核；二是训练与评估协议要固定，同样 config 和种子能复现趋势；三是不能只报 loss，还要能解释算力怎么花在模型规模 N 和数据量 D 上，对齐阶段 SFT、DPO、GRPO 各自优化的是什么目标。具体做法上，我先实现 GPT-2 风格的预分词加 UTF-8 字节上的 BPE，再搭带 RMSNorm、RoPE、SwiGLU、GQA 的 Transformer，小模型过拟合验证后再放大；然后进入系统篇，用 Triton 实现 FlashAttention-2 思路的内核，和 PyTorch 的 scaled_dot_product_attention 做数值与吞吐对照；数据工程上做流式解析、语言过滤、近似去重和分片；训练侧用 DDP 扩并行，并做 IsoFLOPs 扫描理解「同算力下 N 与 D 的配比」；最后对齐阶段用 SFT 稳定格式，再在可验证任务上尝试 GRPO 这类组采样加相对优势的方法。结果上，预训练验证集交叉熵能平滑下降，val loss 落在与数据与规模相匹配的区间；长序列上 Attention 子模块相对朴素实现常见能拿到约 1.5×～3× 量级的加速，端到端会受 MLP 与数据加载影响而打折；4 卡 DDP 扩展效率我观测到大约 0.85～0.95 倍理想线性。整个项目让我能从算子、系统、数据、目标函数四个层次回答「为什么」，而不是只背名词。
+我当时系统跟进了 Stanford 的 CS336，课名是 Language Modeling from Scratch，目标是从零把语言模型整条链路走通，而不是只调 API。背景上我使用【真实硬件与卡数】做实验，数据侧以【真实数据集与规模】为主，配合可重复的清洗、去重管线。技术栈是 PyTorch 2.x，系统作业里用 Triton 写 FlashAttention 风格内核，并行用 torchrun 加 DDP。我的任务可以概括成三件事：一是关键模块要能自己实现或逐行讲清，包括字节级 BPE、Decoder-only Transformer、手写 AdamW、以及 IO-aware 的注意力内核；二是训练与评估协议要固定，同样 config 和种子能复现趋势；三是不能只报 loss，还要能解释算力怎么花在模型规模 N 和数据量 D 上，对齐阶段 SFT、DPO、GRPO 各自优化的是什么目标。具体做法上，我先实现 GPT-2 风格的预分词加 UTF-8 字节上的 BPE，再搭带 RMSNorm、RoPE、SwiGLU、GQA 的 Transformer，小模型过拟合验证后再放大；然后进入系统篇，用 Triton 实现 FlashAttention-2 思路的内核，和 PyTorch 的 scaled_dot_product_attention 做数值与吞吐对照；数据工程上做流式解析、语言过滤、近似去重和分片；训练侧用 DDP 扩并行，并做 IsoFLOPs 扫描理解「同算力下 N 与 D 的配比」；最后对齐阶段用 SFT 稳定格式，再在可验证任务上尝试 GRPO 这类组采样加相对优势的方法。结果上，我在【固定评测协议】下记录 val loss【起点→终点】；Attention 子模块相对【明确基线】的加速为【实测倍数】，端到端为【实测倍数】；【实际卡数】卡的扩展效率为【实测值，并说明强/弱扩展口径】。整个项目让我能从算子、系统、数据、目标函数四个层次回答「为什么」，而不是只背名词。
 
 ### 面试官可能追问
 
@@ -13596,7 +16325,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ### 口述正文（约 22～28 句）
 
-**Situation** 是课程要求从零实现**字节级 BPE**：词表从 256 个字节初始化，再迭代合并相邻 token 对，保存 merges，词表常扩到 32k 量级；并且 GPT-2 风格下要用正则做预分词，合并不跨片段，否则训练统计与推理编码会对不齐。**Task** 一方面要绝对正确：encode 再 decode 可逆，emoji、中英文混排、数字边界都要测；另一方面语料上到 GB 级时，朴素「反复全表扫描」的 Python 实现很容易跑到小时级，迭代成本太高。**Action** 上我把训练拆成稳定循环：每轮先统计相邻对频次，再全局应用一次 merge，避免在整串上反复做昂贵替换；频次用哈希表维护 pair 到 count，并只更新受影响的局部区间；大语料用多进程 map-reduce，子进程各自统计、主进程归并相加，同时注意分片边界只在片段内统计 pair，避免跨 shard 漏统计或重复统计；merge 顺序上固定 tie-break，例如字典序，保证确定性；编码阶段严格按训练得到的 merges 优先级应用。我还用 100MB～1GB 子集做快速冒烟再上全量，并加回归测试保证编解码一致。**Result** 上，在 8 核 CPU 上，相较最初单进程版本，训练 32k merges 的总耗时从大约 90～120 分钟降到 20～35 分钟量级，让我能频繁调整正则与语料而不怕重训分词器；词表覆盖率与压缩比上，英文常见每字符 0.25～0.35 token 量级，中文因 UTF-8 多字节会更长；面试里能清楚讲**字节级没有传统 UNK**、OOV 语义与词级模型的差异。若对比「训练速度提升 X 倍」，我本地大致是 **4～6×** 这一档，词表对 held-out 字节的覆盖可达 **99.9%+**（按你统计口径填写）。
+**Situation** 是课程要求从零实现**字节级 BPE**：词表从 256 个字节初始化，再迭代合并相邻 token 对，保存 merges，词表常扩到 32k 量级；并且 GPT-2 风格下要用正则做预分词，合并不跨片段，否则训练统计与推理编码会对不齐。**Task** 一方面要绝对正确：encode 再 decode 可逆，emoji、中英文混排、数字边界都要测；另一方面语料上到 GB 级时，朴素「反复全表扫描」的 Python 实现很容易跑到小时级，迭代成本太高。**Action** 上我把训练拆成稳定循环：每轮先统计相邻对频次，再全局应用一次 merge，避免在整串上反复做昂贵替换；频次用哈希表维护 pair 到 count，并只更新受影响的局部区间；大语料用多进程 map-reduce，子进程各自统计、主进程归并相加，同时注意分片边界只在片段内统计 pair，避免跨 shard 漏统计或重复统计；merge 顺序上遵守对应年份讲义的 tie-break，明确比较字节串二元组及方向，而不按 token ID 比较，保证确定性；编码阶段严格按训练得到的 merges 优先级应用。我还用 100MB～1GB 子集做快速冒烟再上全量，并加回归测试保证编解码一致。**Result** 上，在【实际 CPU 与核数】上，相较【明确基线】，在【语料规模】上训练到【目标词表大小】的耗时从【基线时间】变为【优化时间】，加速比为【实测值】；目标词表大小包含 256 个字节和特殊 token，不能把词表大小当 merge 数。压缩率按 held-out 的【bytes/token 或 tokens/character】报告；完整字节词表的可表示性为 100%，不以 99.9% 覆盖率冒充实验收益。
 
 ### 面试官可能追问
 
@@ -13604,7 +16333,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 |------|----------------|
 | 为什么不用 tiktoken 直接训？ | 课程目标是理解**算法与边界**；自研能改 tie-break、验证与参考实现一致；上线可再换工业实现。 |
 | 中文为什么更耗 token？ | UTF-8 下汉字常占 3 字节，BPE 在字节上合并，且语料中英比例影响高频子词分布。 |
-| 复杂度大概多少？ | 朴素实现每轮扫描语料为 \(O(T)\) 量级，轮数约 merges；优化重点是**降低常数项**与并行，而非证明新渐近阶。 |
+| 复杂度大概多少？ | 朴素实现每轮扫描语料为 $O(T)$ 量级，轮数约 merges；优化重点是**降低常数项**与并行，而非证明新渐近阶。 |
 
 ### 补充追问（口述版）
 
@@ -13612,10 +16341,10 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 答：训练阶段 **merge 统计** 与 **推理阶段应用 merges 的顺序**必须一致；decode 若没按字节边界还原，会出现中文截断或乱码。单元测试里对「随机 UTF-8 字符串」做 round-trip 是最有效的保险。
 
 **问：你如何把「训练速度提升 X 倍」写进简历才不虚？**  
-答：写清**对比对象**（单进程朴素版 vs 多进程+哈希表优化）、**语料规模与 merges 数**、**硬件**（CPU 核数、是否 SSD）。X 取 **4～6×** 这类区间时，注明是「我本地一次实验」还是「三次取中位数」。
+答：写清**对比对象**（单进程朴素版 vs 多进程+哈希表优化）、**语料规模与 merges 数**、**硬件**（CPU 核数、是否 SSD）。X 必须来自实测；报告区间时注明样本数与范围，不能拿模板中的倍数当实验结果。
 
-**问：词表覆盖率 99.9% 指什么？**  
-答：常见口径是对 **held-out 语料中的 UTF-8 字节**，在 merge 后能用子词完全覆盖的比例；或「未出现需回退到字节 fallback 的比例」——**与面试官对齐口径**，避免各说各话。
+**问：字节级 BPE 的“词表覆盖率”该怎么解释？**  
+答：保留全部 **256 个字节 token**、不额外做有损归一化时，任意合法 UTF-8 文本都可编码，因此字节可表示性为 **100%**；它不是通过 merge 才达到 99.9%。若统计“合并 token 占比”或“每字符 token 数”，应另给定义、语料与计数结果，不能称作没有 UNK 的覆盖率。可逆性还需通过 `decode(encode(text))` 测试，不能对任意随机生成的 token 序列保证合法 UTF-8。
 
 ---
 
@@ -13625,14 +16354,14 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ### 口述正文（约 22～28 句）
 
-**Situation** 是我实现 Decoder-only 因果语言模型，从小配置开始，比如 d_model=256、4 层、4 头，先用单 batch 过拟合合成数据。最难的 bug 往往不是立刻报错，而是 **shape 轻微不一致被 broadcast 悄悄吃掉**，表现为 loss 不降、梯度爆炸或 NaN，定位成本极高；BF16 下 softmax、归一化对数值范围更敏感；RoPE 若旋在错误维度上，注意力仍能算但语义错；GQA 下 K/V head 少于 Q head 时，repeat 与 cache 维序一错就会 silent wrong。**Task** 是建立可重复的调试流程：先在合成数据上「必降」，再对齐参考实现，关键张量 FP32 误差要在可接受范围，否则不调学习率掩盖实现错误。**Action** 上我用手写参考版 Attention 与模块版在小形状上做 `torch.allclose`；对 RoPE 单独测范数与周期；检查 causal mask 上三角为 -inf 且 dtype 与 softmax 一致；排查 RMSNorm 的 eps、初始化、Dropout 在 eval 关闭；核对梯度累积与学习率缩放与全局 batch 一致。印象最深的一次是 KV cache 推理路径与训练路径在 GQA repeat 上不一致，有的配置直接报错，有的则数值漂移。**Result** 上，修复后小模型在合成任务上几十步内 loss 能从 8～10 降到 0.5 以下；与参考对齐后关键层 L∞ 误差约 1e-5（FP32）量级；我养成了**先对齐算子再谈训练策略**的习惯，并用 `assert_close`、形状断言减少盲猜。对面试官我会总结：复杂模型调试靠的是**分层对照与数值契约**，不是只调超参。
+**Situation** 是我实现 Decoder-only 因果语言模型，从小配置开始，比如 d_model=256、4 层、4 头，先用单 batch 过拟合合成数据。最难的 bug 往往不是立刻报错，而是 **shape 轻微不一致被 broadcast 悄悄吃掉**，表现为 loss 不降、梯度爆炸或 NaN，定位成本极高；低精度下 softmax、归一化需关注数值误差，FP16 动态范围尤其有限，BF16 则尾数精度较低；RoPE 若旋在错误维度上，注意力仍能算但语义错；GQA 下 K/V head 少于 Q head 时，repeat 与 cache 维序一错就会 silent wrong。**Task** 是建立可重复的调试流程：先在合成数据上「必降」，再对齐参考实现，关键张量 FP32 误差要在可接受范围，否则不调学习率掩盖实现错误。**Action** 上我用手写参考版 Attention 与模块版在小形状上做 `torch.allclose`；对 RoPE 单独测范数与相对位置性质；检查 causal mask 上三角为 -inf 且 dtype 与 softmax 一致；排查 RMSNorm 的 eps、初始化、Dropout 在 eval 关闭；核对梯度累积与学习率缩放与全局 batch 一致。印象最深的一次是 KV cache 推理路径与训练路径在 GQA repeat 上不一致，有的配置直接报错，有的则数值漂移。**Result** 上，按【合成任务与固定配置】记录 loss【起点→终点、实际步数】，按【dtype/模块/形状】报告参考对齐的绝对与相对误差【实测值】；我养成了**先对齐算子再谈训练策略**的习惯，并用 `assert_close`、形状断言减少盲猜。对面试官我会总结：复杂模型调试靠的是**分层对照与数值契约**，不是只调超参。
 
 ### 面试官可能追问
 
 | 追问 | 建议回答要点 |
 |------|----------------|
 | 你怎么区分「实现错了」和「超参不好」？ | 合成数据过拟合、与参考实现逐层对齐；超参问题通常曲线「怪但一致」，实现错误常**不对齐或不稳定**。 |
-| 混合精度下你特别注意什么？ | loss scaling、softmax 前减 max、累加用 FP32；关键对比先在 FP32 对齐再开 BF16。 |
+| 混合精度下你特别注意什么？ | FP16 常用 loss scaling；BF16 通常不需要。softmax 前减 max、敏感累加用 FP32；关键对比先在 FP32 对齐再开低精度。 |
 | GQA 相对 MHA 多哪些坑？ | K/V repeat 广播维度、cache 布局、不同框架对 head 维约定不同。 |
 
 ### 补充追问（口述版）
@@ -13654,7 +16383,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ### 口述正文（约 22～28 句）
 
-**Situation** 是标准注意力若物化 N×N 的 logits 或概率矩阵，显存是 \(\Theta(N^2)\)，长上下文时往往比 QKV 更先成为瓶颈；即使显存够，HBM 带宽也可能饿死算力。CS336 系统作业要求用 Triton 写 IO-aware 内核：分块 tiling、在线 softmax、把 matmul 与规约融合，本质是 FlashAttention-2 那套减少 HBM 往返的思路。**Task** 是数学上仍是**精确 softmax attention**（非常见稀疏近似），性能上要比朴素 baseline 明显更快，峰值显存不应再被 N² 主导，并提供与 `scaled_dot_product_attention` 或双精度参考的误差报告与不同序列长度下的吞吐。**Action** 上我先写清 online softmax：对每个 query tile 沿 key/value tile 扫描，维护运行最大值 m、归一化因子 ℓ、输出累加器，用重标度公式合并新块；Triton 里调 BLOCK_M、BLOCK_N，用 `tl.dot` 走 Tensor Core；特别注意 causal 在块边界上的可见范围；数值上每块先减 max 再 exp。验证从小到大：先在 N=128～512 对齐，再扩到 2k～8k，并用 profiler 看是否 memory-bound。**Result** 上，BF16 下与参考常见 max abs error 可压到 1e-2 量级或更严（依实现）；Attention 子模块在 N=4096、d_head=128 等设置相对朴素实现常见 **约 2× 或更高**；显存峰值不再由完整 N×N 矩阵主导，从而能把 batch 或序列长度往上推一档。端到端加速会小于子模块，因为 MLP 与 DataLoader 仍占相当比例。
+**Situation** 是标准注意力若物化 N×N 的 logits 或概率矩阵，显存是 $\Theta(N^2)$，长上下文时往往比 QKV 更先成为瓶颈；即使显存够，HBM 带宽也可能饿死算力。CS336 系统作业要求用 Triton 写 IO-aware 内核：分块 tiling、在线 softmax、把 matmul 与规约融合，本质是 FlashAttention-2 那套减少 HBM 往返的思路。**Task** 是数学上仍是**精确 softmax attention**（非常见稀疏近似），性能上要比朴素 baseline 明显更快，峰值显存不应再被 N² 主导，并提供与 `scaled_dot_product_attention` 或双精度参考的误差报告与不同序列长度下的吞吐。**Action** 上我先写清 online softmax：对每个 query tile 沿 key/value tile 扫描，维护运行最大值 m、归一化因子 ℓ、输出累加器，用重标度公式合并新块；Triton 里调 BLOCK_M、BLOCK_N，用 `tl.dot` 走 Tensor Core；特别注意 causal 在块边界上的可见范围；数值上每块先减 max 再 exp。验证从小到大：先在 N=128～512 对齐，再扩到 2k～8k，并用 profiler 看是否 memory-bound。**Result** 上，在【GPU、dtype、N、d_head 与 batch】下，输出与梯度误差为【实测绝对/相对误差】，相对【明确基线】的 attention 耗时为【前→后】，峰值显存为【前→后】。端到端加速另行实测；不能由子模块收益直接推出整体收益。
 
 ### 面试官可能追问
 
@@ -13662,7 +16391,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 |------|----------------|
 | FlashAttention 和「稀疏注意力」区别？ | Flash 通常是**精确 softmax 的融合实现**；稀疏/低秩才是近似模型。 |
 | online softmax 为什么是对的？ | 分块更新 running max 与归一化因子，使合并结果与一次性 softmax 等价（可简述重标度）。 |
-| 你实现 backward 了吗？ | 如实说范围：作业可能只要求 forward 或简化 backward；反向也可用重计算与分块，复杂度更高。 |
+| 你实现 backward 了吗？ | 如实区分教学 forward、autograd 路径与自定义 backward；是否满足 A2 以对应年份讲义与测试为准，不能因 forward 对齐就声称完整作业或训练内核已通过。 |
 
 ### 补充追问（口述版）
 
@@ -13683,13 +16412,13 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ### 口述正文（约 22～28 句）
 
-**Situation** 是我主要用 PyTorch DDP：一进程一 GPU，每卡完整模型副本，数据并行。单机多卡受 NVLink/PCIe 拓扑影响；多机还要面对网卡、防火墙、NCCL 环境变量。最痛的不一定是不会写 torchrun，而是**某些 rank 静默卡住**：表面 loss 在跳，实际在等 AllReduce。**Task** 是保证梯度同步后的更新与全局 batch 约定一致，系统稳定、不随机超时，且数据划分无重复遗漏。**Action** 上我统一用 `DistributedSampler` 并在每个 epoch 调用 `set_epoch`；处理 `find_unused_parameters`：有条件分支导致部分参数无梯度时可能 NCCL 超时，要么打开该选项要么改结构使计算图一致；排查 `broadcast_buffers` 与 BN（LLM 多为 LayerNorm/RMSNorm）；遇到 NCCL 问题用 `NCCL_DEBUG=INFO`、检查 `NCCL_SOCKET_IFNAME`、驱动版本；用 torchrun 固定 MASTER_ADDR/PORT，rank0 断言 world size；核对学习率随全局 batch 的缩放约定；也曾发现「梯度不一致」实为不同 rank 预处理不一致。**Result** 上，一次典型故障是 AllReduce 卡死，根因是不同 rank 前向路径不一致，修复后 4 卡 step 时间从不稳定恢复到稳定区间，扩展效率回到 **0.85+**；另一个常见坑是有效 batch 理解错误，修完后学习率曲线才合理。我会用数字举例：1 卡某配置 180ms/step，4 卡理想 45ms，实测可能 52～60ms，并解释通信与 DataLoader 占比。
+**Situation** 是我主要用 PyTorch DDP：一进程一 GPU，每卡完整模型副本，数据并行。单机多卡受 NVLink/PCIe 拓扑影响；多机还要面对网卡、防火墙、NCCL 环境变量。最痛的不一定是不会写 torchrun，而是**某些 rank 静默卡住**：表面 loss 在跳，实际在等 AllReduce。**Task** 是保证梯度同步后的更新与全局 batch 约定一致，系统稳定、不随机超时，且数据划分、补齐或丢弃规则可解释并被检查。**Action** 上我统一用 `DistributedSampler` 并在每个 epoch 调用 `set_epoch`，确认默认补齐会重复少量索引、`drop_last=True` 会丢弃尾部，验证统计需去除重复或使用无补齐采样器；处理 `find_unused_parameters`：有条件分支导致部分参数无梯度时可能 NCCL 超时，要么打开该选项要么改结构使计算图一致；排查 `broadcast_buffers` 与 BN（LLM 多为 LayerNorm/RMSNorm）；遇到 NCCL 问题用 `NCCL_DEBUG=INFO`、检查 `NCCL_SOCKET_IFNAME`、驱动版本；用 torchrun 固定 MASTER_ADDR/PORT，rank0 断言 world size；核对学习率随全局 batch 的缩放约定；也曾发现「梯度不一致」实为不同 rank 预处理不一致。**Result** 上，只报告真实复现的【故障、日志与根因】，例如不同 rank 的 collective 调用次数或顺序不一致；修复后【实际卡数】卡的吞吐和扩展效率为【实测值】。比较单卡与多卡时说明全局 batch 固定的强扩展，还是每卡 batch 固定的弱扩展，不能混用 step time 直接宣称线性加速。
 
 ### 面试官可能追问
 
 | 追问 | 建议回答要点 |
 |------|----------------|
-| DDP 梯度怎么聚合？ | 各 rank 本地梯度 **AllReduce 求和再除以 world_size**（或等价缩放），使更新对应全局 batch。 |
+| DDP 梯度怎么聚合？ | 通常对各 rank 梯度 **AllReduce 后除以 world_size**。本地有效样本/token 数相等、loss 归约一致时等于全局均值；数量不等时需按有效数量缩放，不能把 rank 均值当全局 token 均值。 |
 | 和 DeepSpeed ZeRO 比呢？ | DDP 是**数据并行基线**；ZeRO 切分优化器/梯度/参数降显存，复杂度更高，按岗位如实答使用范围。 |
 | 多机最常踩的坑？ | 网卡绑定、防火墙、时钟与节点不一致、共享存储读写竞争。 |
 
@@ -13702,7 +16431,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 答：`nvidia-smi dmon` 看 GPU 是否空转；`NCCL_DEBUG=INFO` 看卡在哪个 collective；各 rank **同时打印 step 边界**，若只有部分 rank 前进，多半是通信或分支不一致。
 
 **问：单机多卡还需要模型并行吗？**  
-答：模型能塞进单卡时常用 **DDP 即可**；只有当层太大或要训超长上下文导致**单卡 OOM** 时，才考虑 **FSDP/张量并行**——与岗位相关，诚实答你课内主路径是 DDP。
+答：模型及训练状态能装入单卡时可先用 **DDP**；FSDP 分片与张量并行也可用于降低每卡显存或改善特定吞吐，不是必须先 OOM 才能选择。FSDP 通常属于分片数据并行，张量并行属于模型并行；如实说明自己的实验范围。
 
 ---
 
@@ -13712,7 +16441,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ### 口述正文（约 22～28 句）
 
-**Situation** 是在架构族相对稳定时，验证集损失常与参数规模 N、数据规模 D、计算量 C 呈现可用幂律描述的关系；Kaplan 强调「大模型」，Chinchilla 强调算力约束下的最优配比，常用工具是 **IsoFLOPs 曲线**：固定总算力，扫不同 (N, D)。我算力有限，更强调**实验干净、结论可解释**，而不是铺几千次跑。**Task** 是回答：同样 FLOPs，预算更应该给参数还是给 token？需要一组算力近似恒定的点，测 val loss，在 log-log 下拟合，并避免 tokenizer、数据混合比等混杂因素。**Action** 上用粗估 **C ≈ 6ND** 把训练预算换算成 (N, D) 组合，常数因子各点一致即可；选定 IsoFLOPs 预算档对应到 GPU-hours；构造模型族调节层数/宽度使 N 变化；对每个模型配 D 使 ND 落在同一乘积尺度；固定 warmup、AdamW、权重衰减、clip、数据 shard 比例；评估协议固定同一验证集、上下文长度、eval batch；对 log loss 与 log N、log D 回归，看残差；记录大模型训练不稳定等工程现实。**Result** 上，在我的网格里通常能复现 Chinchilla 方向：**相对更小 N + 更大 D** 往往优于「大模型但 token 不足」；可报告量化例子如固定算力下某配比 val loss 差 **0.05～0.15 nats**（替换为你拟合值）。我也会强调：工业界可能过训练小模型换推理成本；数据质量差时 D 再大也可能无效；**Scaling laws 是经验规律，不是物理定律**。
+**Situation** 是在架构族相对稳定时，验证集损失常与参数规模 N、数据规模 D、计算量 C 呈现可用幂律描述的关系；Kaplan 强调「大模型」，Chinchilla 强调算力约束下的最优配比，常用工具是 **IsoFLOPs 曲线**：固定总算力，扫不同 (N, D)。我算力有限，更强调**实验干净、结论可解释**，而不是铺几千次跑。**Task** 是回答：同样 FLOPs，预算更应该给参数还是给 token？需要一组算力近似恒定的点，测 val loss，在 log-log 下拟合，并避免 tokenizer、数据混合比等混杂因素。**Action** 上用粗估 **C ≈ 6ND** 把训练预算换算成 (N, D) 组合，检查参数矩阵乘主导的假设；长序列 attention 与重计算需另计。选定 IsoFLOPs 预算，GPU-hours 仅作为实际耗时记录，不把相同墙钟时长等同于相同 FLOPs；构造模型族调节层数/宽度使 N 变化；对每个模型配 D 使 ND 落在同一乘积尺度；固定 warmup、AdamW、权重衰减、clip、数据 shard 比例；评估协议固定同一验证集、上下文长度、eval batch；若使用 Chinchilla 的加性模型，用非线性拟合估计不可约损失及容量/数据项；只有纯幂律或拟合最优前沿时，才可在 log-log 坐标下线性回归，并检查残差；记录大模型训练不稳定等工程现实。**Result** 上，报告【实际网格、预算、最优配比与验证损失】，以及拟合误差和外推范围；如果没有跑过实验，就只说明 Chinchilla 的理论结论，不声称自己复现了它。我也会强调：工业界可能过训练小模型换推理成本；数据质量差时 D 再大也可能无效；**Scaling laws 是经验规律，不是物理定律**。
 
 ### 面试官可能追问
 
@@ -13731,7 +16460,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 答：粗略说，Kaplan 时代常强调**加大 N**；Chinchilla 指出在**算力约束**下，**数据不足的大模型**会欠训练；IsoFLOPs 是检验手段。
 
 **问：实验里如何控制「训练不充分」混杂？**  
-答：每个 (N,D) 点用**相同 token 预算或相同 step**（需说明口径），并监控是否**收敛到平台**；若未收敛，比较 val loss 不公平。
+答：**IsoFLOPs 固定计算预算，不固定所有模型的 token 数或 step 数**；对不同 $N$ 选择 $D\approx C/(6N)$，并让学习率调度匹配各自训练预算。比较预算结束时的验证损失，不要求所有模型都收敛到平台；“大模型较早停止”恰是算力约束的权衡。固定数据、tokenizer 和评测协议，并报告近似 FLOPs 的口径。依据参见 [Chinchilla 的 IsoFLOP 实验](https://arxiv.org/html/2203.15556v1#S3.SS2)。
 
 ---
 
@@ -13741,13 +16470,13 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ### 口述正文（约 22～28 句）
 
-**Situation** 是 Common Crawl 原始数据常为 WARC，体积可达 TB；直接训练会引入模板页、导航、重复抓取、低质文本，浪费算力并偏移 tokenizer 与下游评估。真实约束往往是**流水线能否并行、断点续跑、每步是否可量化**。**Task** 是把原始爬取变成训练可读的分片，如 JSONL 或预 token 化二进制 shard；每阶段有吞吐、丢弃率、语言分布、重复率估计；当 GPU 利用率低时要知道瓶颈在清洗还是读取。**Action** 上流式解析 WARC，不全量进内存；语言识别用 fastText lid 或轻量规则粗过滤；近似去重用 MinHash+LSH 或 SimHash 分桶，对 5-gram shingle 建签名，权衡算力与去重强度；质量过滤用启发式与小分类器并记录阈值带来的偏差；规范化统一空格、控制字符，避免过度清洗破坏代码与公式；按 hash 分片输出固定 shard 数；若 CPU tokenization 瓶颈则离线预 token 化或 mmap 数据集；用 profiler 看 GPU 利用率，长期 40%～55% 优先怀疑 DataLoader。**Result** 上，典型管线可能把数 TB 原始压缩到可用语料的某个比例，高度依赖阈值；去重可能使重复率从 30%～50% 降到 5%～15%（领域差异大）；通过预 token 化与调 workers，GPU 利用率可从约 45% 提到 **75%～85%**（用你实测替换）。我会强调数据工程是**可量化权衡**，不是越干净越好。
+**Situation** 是 Common Crawl 原始数据常为 WARC，体积可达 TB；直接训练会引入模板页、导航、重复抓取、低质文本，浪费算力并偏移 tokenizer 与下游评估。真实约束往往是**流水线能否并行、断点续跑、每步是否可量化**。**Task** 是把原始爬取变成训练可读的分片，如 JSONL 或预 token 化二进制 shard；每阶段有吞吐、丢弃率、语言分布、重复率估计；当 GPU 利用率低时要知道瓶颈在清洗还是读取。**Action** 上流式解析 WARC，不全量进内存；语言识别用 fastText lid 或轻量规则粗过滤；近似去重用 MinHash+LSH 或 SimHash 分桶，对 5-gram shingle 建签名，权衡算力与去重强度；质量过滤用启发式与小分类器并记录阈值带来的偏差；规范化统一空格、控制字符，避免过度清洗破坏代码与公式；按 hash 分片输出固定 shard 数；若 CPU tokenization 瓶颈则离线预 token 化或 mmap 数据集；用 profiler 区分 DataLoader 等待、通信、kernel 与同步开销；GPU 利用率低本身不能唯一定位到数据管道。**Result** 上，在【真实语料与规模】上记录过滤保留率【实测值】、重复率【定义及前→后】、预处理吞吐与训练等待时间【实测值】；去重阈值、语言分布和领域偏差一并说明，不把示例百分比当作通用收益。我会强调数据工程是**可量化权衡**，不是越干净越好。
 
 ### 面试官可能追问
 
 | 追问 | 建议回答要点 |
 |------|----------------|
-| MinHash 和精确去重区别？ | MinHash 用 Jaccard 估计，适合**大规模近似**；精确去重成本高，多用于小集或抽样校验。 |
+| MinHash 和精确去重区别？ | 精确文档去重可用哈希分桶，适合大规模完全重复；MinHash/LSH 用于近重复候选检索和 Jaccard 估计。只有对所有文档两两精确计算相似度才有二次成本，不能说精确文档去重通常只适合小集。 |
 | 过滤太强会怎样？ | 多样性下降、长尾能力受损、领域偏移；应用 FLOPs 与下游任务监控。 |
 | PII 与合规？ | Common Crawl 也需按团队策略做邮箱、电话等处理，**依实际项目**回答。 |
 
@@ -13770,13 +16499,13 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ### 口述正文（约 22～28 句）
 
-**Situation** 是基座预训练优化的是「下一词预测」，更擅长像语料，不天然等于「像人类助手」。CS336 对齐部分覆盖 **SFT、RLHF、DPO、GRPO** 等路线。理解上：**RLHF** 是训练奖励模型再 PPO 类策略优化，流程重、对 RM 与稳定性要求高；**DPO** 直接用偏好对优化策略，避免显式 RM，实现相对轻；**GRPO** 适合同一提示下采样多条、用组内相对比较降方差，和**可验证奖励**（数学、代码）很搭。**Task** 上我关注的可观测指标是：格式可解析率、严格正确率、KL 不爆炸；任务域可选数学式推理，奖励基于答案匹配、符号等价或代码执行。**Action** 上先 SFT 稳定对话格式得 π_ref；组采样对每个 prompt 采 K 条，调温度与 top-p；奖励主信号为结果正确，辅信号为格式分，对过长输出惩罚缓解长度偏置；优势用组内减均值中心化；对参考模型加 KL，监控 token-level KL 与熵；梯度裁剪、warmup、过滤异常轨迹；用更难 held-out 验证集防 reward hacking。**Result** 上，格式可解析比例可从约 55%～65% 提升到 75%～85%（示例）；严格准确率提升依赖题库难度，可能有 **+5～15 个百分点**；也观察到套模板拿分等现象，需更难验证与 KL 约束。若问「和 DPO 比」，答：**偏好数据与实现成本**不同，DPO 适合成对偏好数据丰富场景；我这边强调可验证信号时 GRPO 更顺手。
+**Situation** 是基座预训练优化的是「下一词预测」，更擅长像语料，不天然等于「像人类助手」。课程笔记讲解 **SFT、RLHF、DPO、GRPO** 等路线，但 2025 年 A5 主线不是完整 RM+PPO 项目。理解上：**传统 PPO 式 RLHF** 是训练奖励模型再 PPO 类策略优化，流程重、对 RM 与稳定性要求高；**DPO** 直接用偏好对优化策略，避免显式 RM，实现相对轻；**GRPO** 适合同一提示下采样多条、用组内相对比较降方差，和**可验证奖励**（数学、代码）很搭。**Task** 上我关注的可观测指标是：格式可解析率、严格正确率、KL 不爆炸；任务域可选数学式推理，奖励基于答案匹配、符号等价或代码执行。**Action** 上先 SFT 稳定对话格式得 π_ref；组采样对每个 prompt 采 K 条，调温度与 top-p；奖励主信号为结果正确，辅信号为格式分，对过长输出惩罚缓解长度偏置；优势按实验版本使用组内减均值、再除标准差，或明确标注不除标准差的消融；原始 GRPO 使用 KL，2025 年作业主线不要求 reference KL，扩展加入时需单独说明；监控熵和适用的策略漂移指标；梯度裁剪、warmup、过滤异常轨迹；用更难 held-out 验证集防 reward hacking。**Result** 上，按【固定、未用于调参的评测集与解码设置】报告格式可解析率【前→后】、严格正确率【前→后】、输出长度与奖励投机案例【实际记录】；改善不预设范围。KL 或奖励设计也不能保证杜绝 reward hacking。若问「和 DPO 比」，答：**偏好数据与实现成本**不同，DPO 适合成对偏好数据丰富场景；我这边强调可验证信号时 GRPO 更顺手。
 
 ### 面试官可能追问
 
 | 追问 | 建议回答要点 |
 |------|----------------|
-| DPO 的损失在优化什么？ | 在隐式偏好下最大化赢面、抑制输面，**等价于带 KL 约束的策略改进**的一种闭式写法（说清符号依赖课内口径）。 |
+| DPO 的损失在优化什么？ | 用 chosen/rejected 回答相对 reference 的 log-ratio 差构造偏好分类损失；从 Bradley–Terry 偏好模型和 KL 正则目标推导，不是每次 SGD 都精确求出最优策略或满足严格 KL 上界。参见 [DPO 原论文](https://arxiv.org/abs/2305.18290)。 |
 | RLHF 最大难点？ | RM 泛化、PPO 稳定性、reward hacking、与人类价值观对齐的可扩展性。 |
 | 你为什么选 GRPO 做实验？ | 组基线降方差、与多采样兼容、数学任务上**可验证奖励**信号硬。 |
 
@@ -13799,14 +16528,14 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ### 口述正文（约 22～28 句）
 
-**Situation** 是 Transformer 训练瓶颈分布在 Attention/MLP、激活显存、优化器状态、数据加载、分布式通信；若不 profiler，容易「以为在训模型其实在等 DataLoader」。**Task** 是给出可量化 before/after：tokens/s/GPU、step time、峰值显存，并解释原因；在**不改变数学**的前提下提升吞吐或支持更长上下文。**Action** 上 Attention 用 FlashAttention-2 或 SDPA；BF16 autocast，对 loss 累加等保留 FP32 策略；长序列开 activation checkpointing，用额外计算换显存；DataLoader 调 num_workers、pin_memory、prefetch，避免训练循环里频繁 `.item()` 同步；DDP 合理设置 bucket；IO 瓶颈时预 token 化、本地 NVMe staging。**Result** 上用一组答辩友好对比（**请全部替换为实测**）：例如吞吐从 **18k 提到 32k tokens/s/GPU**，约 **1.7×**；显存从 **38GB 降到 26GB**，从而全局 batch 或序列长度可上调；端到端同样 token 预算 wall-clock 缩短 **35%～45%**；profiler 上 Attention 占比从 45% 降到 28%、DataLoader 从 18% 降到 7% 等。我会同时说明：**子模块 2× 不等于端到端 2×**，并区分「算子优化」与「数据管线优化」各自贡献。
+**Situation** 是 Transformer 训练瓶颈分布在 Attention/MLP、激活显存、优化器状态、数据加载、分布式通信；若不 profiler，容易「以为在训模型其实在等 DataLoader」。**Task** 是给出可量化 before/after：tokens/s/GPU、step time、峰值显存，并解释原因；在**不改变数学**的前提下提升吞吐或支持更长上下文。**Action** 上 Attention 用 FlashAttention-2 或 SDPA；BF16 autocast，对 loss 累加等保留 FP32 策略；长序列开 activation checkpointing，用额外计算换显存；DataLoader 调 num_workers、pin_memory、prefetch，避免训练循环里频繁 `.item()` 同步；DDP 合理设置 bucket；IO 瓶颈时预 token 化、本地 NVMe staging。**Result** 上报告【固定 GPU、卡数、batch、seq、精度、版本与 token 预算】下的吞吐【前→后】、峰值显存【前→后】、端到端 wall-clock【前→后】，并用 profiler 给出关键阶段的绝对耗时和占比【实测值】。我会同时说明：**子模块 2× 不等于端到端 2×**，并区分「算子优化」与「数据管线优化」各自贡献。
 
 ### 面试官可能追问
 
 | 追问 | 建议回答要点 |
 |------|----------------|
 | 为什么端到端加速小于 Attention 加速？ | MLP、归一化、优化器、IO 与通信仍占时间；Amdahl 定律。 |
-| checkpointing 的代价？ | 前向重算增加计算 **20%～35%** 换显存 **30%～50%**（依实现与层数变化）。 |
+| checkpointing 的代价？ | 反向传播中重算部分前向，用额外计算换较少激活存储；收益与重算范围、内核、模型和 batch 有关，应报告自己的峰值显存与训练时间，不能套用固定百分比。 |
 | 你怎么证明是优化而不是随机波动？ | 多次 run 取中位数、固定版本与数据 shard、同一 step 区间对比 tok/s。 |
 
 ### 补充追问（口述版）
@@ -13828,7 +16557,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ### 口述正文（约 22～28 句）
 
-**Situation** 是即使是课程小组项目，只要两人以上，**接口与配置不一致**的成本就会指数上升；模块大致分数据工程、训练代码、系统内核与并行、评测与对齐。**Task** 是每周有可演示里程碑：BPE、单卡收敛、DDP、Scaling 图、对齐曲线；避免「只能在他电脑上跑」；统一环境、配置字段与日志 schema。**Action** 上分支策略保护 main、开发走 feat 分支、合并前 PR review；ruff/black 与关键 API 类型标注；用单一 YAML/JSON schema 规定超参与实验字段；WandB 或 TensorBoard 统一 project，run name 带 git sha 与 config hash；分工上可示例：我负责内核与性能，同伴负责数据与评测，对齐阶段共建奖励与数据；每周同步 NCCL、环境、数据许可证等风险；README 给一键训练、评估、复现图表命令。**Result** 上，前期接口未冻结时集成问题集中，冻结后返工下降；交付物包括多次可复现实验记录、统一日志与答辩用对比表。冲突处理上，例如「性能换可复现」的争执，用 **profiler 数据与盲测 loss** 做决策而不是主观争论。若个人项目则强调：**里程碑、配置即文档、实验可追溯**，效果类似小团队。
+**Situation** 是即使是课程小组项目，只要两人以上，**接口与配置不一致**会显著增加集成和沟通成本；模块大致分数据工程、训练代码、系统内核与并行、评测与对齐。**Task** 是每周有可演示里程碑：BPE、单卡收敛、DDP、Scaling 图、对齐曲线；避免「只能在他电脑上跑」；统一环境、配置字段与日志 schema。**Action** 上分支策略保护 main、开发走 feat 分支、合并前 PR review；ruff/black 与关键 API 类型标注；用单一 YAML/JSON schema 规定超参与实验字段；WandB 或 TensorBoard 统一 project，run name 带 git sha 与 config hash；分工上可示例：我负责内核与性能，同伴负责数据与评测，对齐阶段共建奖励与数据；每周同步 NCCL、环境、数据许可证等风险；README 给一键训练、评估、复现图表命令。**Result** 上，前期接口未冻结时集成问题集中，冻结后返工下降；交付物包括多次可复现实验记录、统一日志与答辩用对比表。冲突处理上，例如「性能换可复现」的争执，用 **profiler 数据与盲测 loss** 做决策而不是主观争论。若个人项目则强调：**里程碑、配置即文档、实验可追溯**，效果类似小团队。
 
 ### 面试官可能追问
 
@@ -13889,7 +16618,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ## 附录 D：一分钟电梯陈述（备用）
 
-我用 CS336 从零搭了 **字节级 BPE → Decoder-only Transformer → Triton FlashAttention → DDP 训练 → IsoFLOPs 缩放实验 → SFT 与 DPO/GRPO 对齐** 的完整链路。系统侧把长序列 Attention 做成 IO-aware 融合内核，并用 profiler 证明吞吐与显存变化。数据侧处理 TB 级 Common Crawl 子集，做语言过滤与近似去重，输出可分片训练格式。方法论上能解释 Chinchilla 与 Kaplan 的差异，以及可验证奖励在数学任务上如何稳定组相对优化。您若感兴趣，我可以深入任何一层：算子、系统、数据或目标函数。
+我参考 CS336 完成了【真实实现的模块清单】，用【测试/日志/报告链接】验证结果。系统侧实际使用【纯 PyTorch 教学分块实现 / SDPA / 自定义 Triton 内核，择一】，在【配置】下测得【吞吐与显存】；数据侧处理【真实数据与规模】，完成【实际过滤/去重步骤】。我也学习了【尚未实施的主题】，但不把阅读或计划当成项目产出。您若感兴趣，我可以深入【最熟悉且有证据的模块】。
 
 ---
 
@@ -13907,7 +16636,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
    答：相对位置归纳、外推性讨论多；实现上要清楚 **旋转施加在哪些维度**、与 head 维拆分方式。
 
 4. **你如何估算一次训练的 FLOPs？**  
-   答：把主要算子拆成 matmul，用 **2MNK** 估乘法次数，再乘层数与前向/反向系数；说明是**数量级估算**，用于 Scaling 与预算，不是财务审计。
+   答：对 $M\times K$ 与 $K\times N$ 的稠密矩阵乘，约有 **MNK 次乘法与 MNK 次加法**；按一次乘加计 2 FLOPs 的口径，计算量约为 **2MNK FLOPs**。再乘层数与前向/反向系数，说明是否计入注意力、重计算和优化器。
 
 5. **遇到 OOM 你按什么顺序排查？**  
    答：**batch × seq × 激活**、优化器状态、是否意外保存了整段激活、是否可开 gradient checkpointing、是否该用 DDP 而非重复模型（DDP 不省单卡显存）等——按你真实操作顺序说。
@@ -13934,7 +16663,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 | A2 Systems | 系统 | GPU/显存层级、FlashAttention 类内核、DDP，追求吞吐与稳定 |
 | A3 Scaling | 缩放 | IsoFLOPs、Chinchilla 叙事、算力与数据配比实验 |
 | A4 Data | 数据 | Common Crawl、过滤、去重、shard，服务预训练 |
-| A5 Alignment | 对齐 | SFT、RLHF/DPO/GRPO，目标函数从「似然」到「偏好/奖励」 |
+| A5 Alignment（2025） | 对齐与推理 RL | zero-shot、SFT、Expert Iteration、GRPO 数学推理主线；安全 DPO 为选做，不是必做 PPO/RLHF 项目 |
 
 面试时把 **STAR 1** 与上表对齐，可快速回应「你项目分几个阶段」类问题。
 
@@ -13959,8 +16688,10 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 # CS336 面试问题全集（含STAR回答）
 
 > **课程**：Stanford CS336 — *Language Modeling from Scratch*（从零构建语言模型）  
-> **说明**：每题按 **S（情境）→ T（任务）→ A（行动）→ R（结果）** 组织；文中部分数字为**教学量级示例**，请用你的本地实验日志、代码路径与指标替换，保持简历 / 代码 / 口述一致。  
+> **说明**：每题按 **S（情境）→ T（任务）→ A（行动）→ R（结果）** 组织；所有第一人称行动和结果均为**回答模板，不是已发生的项目经历**。请逐条用真实代码、测试与实验日志核对；未完成的模块应删去或改为“学习/计划”，不是只替换数字。  
 > **STAR 速记**：**S**ituation 背景与约束；**T**ask 目标与成功标准；**A**ction 具体技术动作；**R**esult 可量化 outcome 与复盘。
+
+> **课程与仓库范围**：以 [CS336 Spring 2025](https://cs336.stanford.edu/spring2025/) 为主；Lesson 01–20 是本仓库笔记编号。A5 主线是 zero-shot、SFT、Expert Iteration 与 GRPO 数学推理，安全 DPO 为选做；2025 年主线 GRPO 不要求 reference KL。纯 PyTorch 分块 attention 教学代码不证明已完成 Triton FlashAttention-2、多卡或大规模实验，GQA、LoRA、部署等扩展按实际说明。
 
 ---
 
@@ -14033,7 +16764,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 - **S（情境）**：量化问题用于验证你真实投入，也用于评估复杂度认知。  
 - **T（任务）**：给出合理区间，并说明如何统计与周期安排。  
-- **A（行动）**：代码量可用 `cloc` 统计核心目录（`tokenizer/model/training/systems/alignment`），教学项目常见在 **数千到一两万行**量级（含实验脚本与测试则更高）；周期按基础差异大约 **4～10 周**，我采用「讲义精读 + 里程碑交付 + 复盘笔记」并行推进。  
+- **A（行动）**：代码量用 `cloc code` 等命令实测，区分核心实现、测试、依赖和生成产物，不把学习笔记行数算成实现规模；开发周期按真实提交、实验日志与里程碑记录填写【起止日期及有效投入】，不套用示例项目的行数或周数。  
 - **R（结果）**：数字与仓库一致即可；重点在 **里程碑是否闭环** 而非堆行数。
 
 ---
@@ -14121,12 +16852,12 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 - **A（行动）**：对长度为 `n` 的序列，注意力分数矩阵为 `[n,n]`，我把 **上三角（不含对角）**置为 `-inf`，再 softmax，使未来位置权重为 0；等价于只在 `j<=i` 的位置参与加权求和。实现上 mask 作用在 **scores**（缩放后、softmax 前）。  
 - **R（结果）**：训练并行计算所有位置时仍保持与自回归推理一致的信息流。
 
-### 22. 为什么要除以 \(\sqrt{d_k}\)？不除会怎样？
+### 22. 为什么要除以 $\sqrt{d_k}$？不除会怎样？
 
 - **S（情境）**：缩放是稳定训练的关键细节，面试极高频。  
 - **T（任务）**：解释方差尺度与 softmax 饱和。  
-- **A（行动）**：点积 \(q^\top k\) 维度变大时方差累积，数值变大导致 softmax 极端尖锐，梯度变小；除以 \(\sqrt{d_k}\) 让分数尺度更稳定。  
-- **R（结果）**：我能观察到训练更稳定；调试时也会检查是否误用 \(d_{\text{model}}\) 而非每头维度。
+- **A（行动）**：点积 $q^\top k$ 维度变大时方差累积，数值变大导致 softmax 极端尖锐，梯度变小；除以 $\sqrt{d_k}$ 让分数尺度更稳定。  
+- **R（结果）**：我能观察到训练更稳定；调试时也会检查是否误用 $d_{\text{model}}$ 而非每头维度。
 
 ### 23. 多头注意力的动机是什么？头之间如何合并？
 
@@ -14184,9 +16915,9 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 - **A（行动）**：残差提供近似恒等映射路径，使梯度更易回传，子层学习「增量修正」；配合归一化后训练更稳定。  
 - **R（结果）**：我能把这与「为什么能堆几十层」联系起来。
 
-### 31. LM Head 为什么要 tied embeddings？不共享会怎样？
+### 31. LM Head 是否要 tied embeddings？共享与不共享如何取舍？
 
-- **S（情境）**：词表映射参数量巨大，共享是常见默认。  
+- **S（情境）**：词表映射参数量巨大，部分模型共享输入与输出权重，另一些（如 LLaMA）不共享；不是语言模型的必需条件。  
 - **T（任务）**：解释参数效率与优化影响。  
 - **A（行动）**：输入嵌入与输出层常共享权重以减少参数、让语义空间一致；不共享则更灵活但参数更多、需更多数据正则。  
 - **R（结果）**：我能根据项目设定解释选择与 trade-off。
@@ -14234,7 +16965,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 - **S（情境）**：工程上要在正确性与性能间取得平衡。  
 - **T（任务）**：描述后端选择与形状/dtype 约束。  
-- **A（行动）**：我使用 `scaled_dot_product_attention` 或自定义内核路径，开启兼容的 **sdpa kernel**；注意 dtype（bf16/fp16）、mask 格式、以及 head 维对齐；对关键配置做 A/B 吞吐对比并记录版本。  
+- **A（行动）**：我使用 `scaled_dot_product_attention` 或自定义内核路径，选择兼容的后端；注意 dtype、mask 格式和 head 维约束。SDPA 的布尔 mask 中 True 表示允许关注，且不会自动跟随 `model.eval()` 关闭 dropout，评估时须显式传 `dropout_p=0.0`；对关键配置做 A/B 对比并记录版本。参见 [PyTorch SDPA](https://docs.pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html)。  
 - **R（结果）**：加速比可解释、可回归测试。
 
 ### 38. Triton 实现 Attention 时，你最关心哪些内存层级问题？
@@ -14248,7 +16979,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 - **S（情境）**：单机多卡是训练扩展的入门路径。  
 - **T（任务）**：解释进程组、all-reduce 与并行策略。  
-- **A（行动）**：DDP 每卡一份模型副本，各自算局部梯度，再用 **all-reduce** 求平均梯度后同步更新；依赖 `torchrun` 启动与正确设置 `LOCAL_RANK` 等设备绑定。  
+- **A（行动）**：常见纯 DDP 配置每进程一卡、每个 rank 一份模型副本，计算局部梯度后由 **all-reduce** 聚合更新；依赖 `torchrun` 和正确的设备绑定。本地有效 token 数相等且 loss 归约一致时，rank 梯度均值才等于全局 token 均值；否则需按有效数量加权。  
 - **R（结果）**：我能解释通信如何成为扩展瓶颈。
 
 ### 40. 为什么多卡训练不一定线性加速？
@@ -14297,11 +17028,11 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ## 五、Scaling Laws深度追问（5题）
 
-### 46. Kaplan 形式的缩放定律直觉是什么？不可约误差项代表什么？
+### 46. 幂律损失模型的直觉是什么？不可约误差项代表什么？
 
 - **S（情境）**：预训练损失随规模变化常用经验幂律描述。  
-- **T（任务）**：解释 \(L(N,D)\) 分解项与适用边界。  
-- **A（行动）**：一类直觉分解把误差看成 **模型容量不足项**随 \(N\) 下降与 **数据不足项**随 \(D\) 下降，并包含 **不可约误差**代理，反映噪声、任务难度与分布外因素；在 log-log 下常呈现近似线性关系。  
+- **T（任务）**：解释 $L(N,D)$ 分解项与适用边界。  
+- **A（行动）**：Chinchilla 的一种拟合形式为 $L(N,D)=E+A/N^\alpha+B/D^\beta$，分别刻画不可约项、容量项和有限训练项；$E$ 反映该数据分布下理想生成过程的损失，不是任意分布外误差的总和。该加性模型通常需非线性拟合，不能直接把 $\log L$ 对 $\log N,\log D$ 做线性回归；纯幂律或最优前沿才适合相应 log-log 线性拟合。不要把这套加性形式直接归为 Kaplan 原论文公式。参见 [Chinchilla §3.3](https://arxiv.org/html/2203.15556v1#S3.SS3)。  
 - **R（结果）**：我能说明它是经验规律，需要结合数据质量与评测。
 
 ### 47. Chinchilla 的核心结论是什么？「20N」是什么意思？
@@ -14315,14 +17046,14 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 - **S（情境）**：需要比较「同样算力不同 `(N,D)`」谁更优。  
 - **T（任务）**：描述固定 FLOPs 曲线与取最优点。  
-- **A（行动）**：固定近似总 FLOPs \(C\)，对不同 \(N\) 配相应 \(D\)（常用 \(C\approx 6ND\) 的粗略关系做预算），训练到约定 token，比较验证损失，取该算力预算下最优点。  
+- **A（行动）**：固定近似总 FLOPs $C$，对不同 $N$ 配相应 $D$（常用 $C\approx 6ND$ 的粗略关系做预算），训练到约定 token，比较验证损失，取该算力预算下最优点。  
 - **R（结果）**：我能解释实验设计要点：口径一致、避免混杂因素。
 
-### 49. \(C \approx 6ND\) 是什么量级估计？为什么不能当物理定律？
+### 49. $C \approx 6ND$ 是什么量级估计？为什么不能当物理定律？
 
 - **S（情境）**：工程上用粗估做预算与规划。  
 - **T（任务）**：解释常数来源与敏感性。  
-- **A（行动）**：它来自对 Transformer 训练一步中矩阵乘与反向的粗略计数，\(\tau\) 常取经验值；真实常数受实现融合、重计算、数据加载等影响。  
+- **A（行动）**：在参数矩阵乘主导的稠密模型中，每 token 的前向约为 $2N$ FLOPs、反向约为 $4N$，因此共约 $6ND$。长序列注意力、激活重计算和额外训练组件可能增加算术量；数据加载、通信与融合造成的墙钟变化不能直接当作模型 FLOPs 改变。  
 - **R（结果）**：我用它做数量级判断，但不把它当精确账单。
 
 ### 50. 缩放定律外推到更大模型有哪些风险？
@@ -14456,8 +17187,8 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 - **S（情境）**：数学推理等任务可用规则/执行结果给奖励。  
 - **T（任务）**：解释组采样与相对优势。  
-- **A（行动）**：GRPO 通过对同一提示采样一组输出，用组内相对排序/归一化构造优势信号，降低对价值网络的依赖，便于与可验证奖励结合。  
-- **R（结果）**：我能把它与「减少方差、稳定训练」联系起来，并意识到仍需 KL/参考模型约束。
+- **A（行动）**：GRPO 对同一提示从旧策略采样一组输出；原始结果监督版本以奖励减组均值、再除组标准差构造优势，并采用 PPO 风格 clipping 和参考 KL，不是仅用排序名次更新，也不训练独立 critic。课程作业还会比较不除标准差等变体，须说明所用版本。参见 [DeepSeekMath](https://arxiv.org/abs/2402.03300)。  
+- **R（结果）**：我能解释基线与奖励尺度的作用，以及组大小、奖励同分和采样成本的限制；KL/参考模型是原始 GRPO 的组件，不是所有变体的必需条件，2025 年 A5 主线不要求 reference KL。
 
 ### 68. KL 惩罚在对齐里为什么重要？
 
@@ -14566,16 +17297,16 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 ---
 
 
-# CS336 相关面经汇总（2025-2026）
+# CS336 面试场景与复习清单（2025-2026 备考参考）
 
-> 本文档整理自牛客（Niuke）、小红书（Xiaohongshu）等平台公开分享，并结合国内大模型岗位常见面试模式进行结构化归纳。内容侧重与 **CS336（大模型系统与训练）** 知识栈的对应关系，供学习与面试准备参考。  
-> **声明**：个体面经具有随机性；公司政策与题库会变化，请以官方JD与当年反馈为准。
+> 本文未提供可核查的原帖链接、发布日期和采访记录，以下内容应视为**按岗位方向构造的模拟面试与复习材料，不是真实面经实录**。公司/团队名称仅用于示意备考场景，不证明其实际题库、时长、轮次、难度或录用结果。  
+> **范围**：参考 [CS336 Spring 2025](https://cs336.stanford.edu/spring2025/) 与本仓库笔记；LoRA、RAG、Agent、部署等含延伸学习，不是五个官方作业均已实现的内容。具体招聘与面试要求以目标岗位 JD 和可核查的当年信息为准。
 
 ---
 
-## 一、小红书大模型算法面经
+## 一、小红书大模型算法备考场景
 
-### 面经1：小红书大模型应用算法一面（约 45min）
+### 模拟1：小红书大模型应用算法一面（约 45min）
 
 | 项目 | 内容 |
 |------|------|
@@ -14586,7 +17317,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 **具体问题列表**
 
 1. **八股**
-   - Transformer 自注意力的时间/空间复杂度如何随序列长度 \(L\)、隐藏维度 \(d\) 变化？
+   - Transformer 自注意力的时间/空间复杂度如何随序列长度 $L$、隐藏维度 $d$ 变化？
    - 多头注意力（MHA）与单头相比，动机与表达能力差异是什么？
    - Tokenization 的一般流程是什么？BPE/WordPiece 与字符级各有什么取舍？
 2. **项目追问**
@@ -14597,20 +17328,20 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 **建议答案要点**
 
-- **复杂度**：自注意力对序列长度多为 \(O(L^2 d)\)（注意力矩阵 \(L\times L\)），总 FLOPs/显存随 \(L\) 二次增长；KV Cache 推理时显存与 \(L\) 线性相关但计算仍受注意力结构影响。
-- **MHA**：多子空间并行，利于捕获不同关系类型；单头可看作特例；实践中头数与 \(d_{\text{head}}\) 需匹配模型宽度。
-- **Tokenization**：归一化→子词切分→ID；BPE 合并高频片段，词表可控、OOV 友好；需讨论分词误差对任务的影响。
-- **微调**：SFT 全量成本高；LoRA 低秩适配冻结主干，适合资源受限；数据配比需防「领域过拟合」与「通用能力遗忘」，可配合混合比例、replay、或轻量正则。
-- **sqrt**：二分 `[0, x]`（\(x\ge1\)）或牛顿法 \(t_{k+1}=\frac{1}{2}(t_k+x/t_k)\)，迭代至相邻两次差值小于 \(10^{-7}\) 量级再格式化输出。
+- **复杂度**：标准稠密自注意力的打分/聚合为 $O(L^2d)$，计入投影为 $O(Ld^2+L^2d)$；物化概率矩阵时注意力激活为 $O(BhL^2)$，FlashAttention 可避免保存该二次矩阵。因此不能概括为所有实现的总显存都随 $L$ 二次增长。KV Cache 的张量大小随上下文长度线性增长，但单 token decode 的注意力计算仍需读取历史 KV。
+- **MHA**：多子空间并行，利于捕获不同关系类型；单头可看作特例；实践中头数与 $d_{\text{head}}$ 需匹配模型宽度。
+- **Tokenization**：按具体 tokenizer 选择归一化、特殊 token 处理、预分词、子词编码与 ID 映射；归一化不是必需步骤，有损规范化会影响 round-trip。BPE 合并高频片段；字节级方案保留全部字节时不需要传统 UNK。
+- **微调**：SFT 是监督训练目标，可以全参数训练，也可以用 LoRA；LoRA 是低秩参数化方案，不是与 SFT 相互排斥的目标。冻结主干通常可减少梯度/优化器状态，但仍有激活开销；需防领域过拟合与通用能力遗忘。
+- **sqrt**：二分 `[0, x]`（$x\ge1$）或牛顿法 $t_{k+1}=\frac{1}{2}(t_k+x/t_k)$，迭代至相邻两次差值小于 $10^{-7}$ 量级再格式化输出。
 
 **结果与经验总结**
 
-- **结果**：通过（示例面经）。
+- **结果**：未记录真实面试或录用结果；本条仅为模拟练习。
 - **经验**：一面侧重「能讲清楚基础+能写干净代码」；CS336 中 attention 复杂度、tokenizer 与数据管线是高频对齐点；编码题偏 LeetCode Easy~Medium，不必炫技，边界与精度要写对。
 
 ---
 
-### 面经2：小红书大模型算法二面
+### 模拟2：小红书大模型算法二面
 
 | 项目 | 内容 |
 |------|------|
@@ -14622,25 +17353,25 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 1. DeepSeek R1 系列相对传统 SFT/RLHF 路线的主要创新点有哪些（可从冷启动数据、GRPO 类算法、推理链强化学习等角度）？
 2. Decoder-only 与 Encoder-Decoder 在架构与任务上的典型差异？为何当前主流 LLM 多为 Decoder-only？
 3. 「涌现能力」常见讨论点：是度量方式带来的假象还是规模与训练的真实结果？
-4. LoRA 的数学形式、秩 \(r\) 的选择经验、与全量微调的可比性？
+4. LoRA 的数学形式、秩 $r$ 的选择经验、与全量微调的可比性？
 5. DPO（Direct Preference Optimization）训练数据通常来自哪里？与 RLHF 数据管线差异？
 
 **建议答案要点**
 
-- **R1**：强调长链推理与可验证奖励信号结合；群体相对策略优化（GRPO）等减少 critic 依赖；冷启动与多阶段训练提升稳定性（具体名词以论文/官方技术报告为准）。
+- **R1**：区分 R1-Zero 的直接 RL 路线与 R1 的冷启动和多阶段训练；GRPO 来源于 DeepSeekMath，不是 R1 首次提出。减少独立 critic 是 GRPO 的特点，可验证奖励是相应任务的奖励设计，不是 GRPO 的定义。参见 [DeepSeek-R1 报告](https://arxiv.org/abs/2501.12948)。
 - **架构**：Decoder-only 自回归统一了预训练目标与接口；Encoder-Decoder 在部分翻译/结构化任务仍有优势；工业界生态与 scaling 经验更偏向 Decoder-only。
 - **涌现**：需区分「连续提升」与「阈值效应」；评价指标、小样本评测与数据污染都会干扰结论；面试中展示批判性思维即可。
-- **LoRA**：\(W \leftarrow W + BA\)，\(B\in\mathbb{R}^{d\times r}, A\in\mathbb{R}^{r\times k}\)；\(r\) 常取 8~64 量级依任务试；推理可合并权重。
-- **DPO**：偏好对 \((y_w, y_l)\) 常来自人类标注、AI 反馈、或规则/模型打分；无需显式奖励模型，优化偏好似然比；数据质量比数量更关键。
+- **LoRA**：$W_{\mathrm{eff}}=W+(\alpha/r)BA$，$B\in\mathbb R^{d\times r}$、$A\in\mathbb R^{r\times k}$；原权重通常冻结，秩和缩放依方案与任务选择。兼容的稠密权重可在推理时合并，不保证量化后可无损合并；参见 [LoRA 原论文](https://arxiv.org/abs/2106.09685)。
+- **DPO**：偏好对 $(y_w, y_l)$ 常来自人类标注、AI 反馈、或规则/模型打分；无需显式奖励模型，优化偏好似然比；数据质量比数量更关键。
 
 **结果与经验总结**
 
-- **结果**：视个人表现而定（示例面经未统一披露）。
+- **结果**：未记录真实面试或录用结果；本条仅为模拟练习。
 - **经验**：二面常串联「前沿论文 + 训练方法论」；与 CS336 中 RLHF/DPO、PEFT、数据章节强相关；建议准备 1~2 个读过技术报告的深度案例。
 
 ---
 
-### 面经3：小红书 NLP 实习
+### 模拟3：小红书 NLP 实习
 
 | 项目 | 内容 |
 |------|------|
@@ -14668,9 +17399,9 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ---
 
-## 二、字节跳动大模型面经
+## 二、字节跳动大模型备考场景
 
-### 面经4：字节跳动 Seed / 大模型算法一面（重构典型模式）
+### 模拟4：字节跳动 Seed / 大模型算法一面（非真实面试记录）
 
 | 项目 | 内容 |
 |------|------|
@@ -14698,7 +17429,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ---
 
-### 面经5：字节跳动 大模型算法二面（重构典型模式）
+### 模拟5：字节跳动 大模型算法二面（非真实面试记录）
 
 | 项目 | 内容 |
 |------|------|
@@ -14724,7 +17455,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ---
 
-### 面经6：字节跳动 大模型工程向交叉面（重构典型模式）
+### 模拟6：字节跳动 大模型工程向交叉面（非真实面试记录）
 
 | 项目 | 内容 |
 |------|------|
@@ -14740,7 +17471,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 **建议答案要点**
 
-- KV Cache：每层每 token 存 K、V；总占用 \(\propto\) 层数 \(\times\) batch \(\times\) 序列 \(\times\) 头维。
+- KV Cache：标准 MHA/GQA/MQA 的理论字节数为 $2LBTH_{\mathrm{kv}}d_hb$，其中 $b$ 是每元素字节数；估算必须计入 KV 头数，而不是只乘每头维度。MLA 等压缩缓存结构需另算。
 - 动态批：提高 GPU 利用率，降低 padding 浪费。
 - 量化：校准数据集选择；异常值对 INT4 影响更大。
 
@@ -14750,9 +17481,9 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ---
 
-## 三、阿里巴巴大模型面经
+## 三、阿里巴巴大模型备考场景
 
-### 面经7：阿里通义 / 达摩院 大模型算法一面（重构典型模式）
+### 模拟7：阿里通义 / 达摩院 大模型算法一面（非真实面试记录）
 
 | 项目 | 内容 |
 |------|------|
@@ -14777,7 +17508,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ---
 
-### 面经8：阿里云 / 智能信息 大模型应用二面（重构典型模式）
+### 模拟8：阿里云 / 智能信息 大模型应用二面（非真实面试记录）
 
 | 项目 | 内容 |
 |------|------|
@@ -14802,7 +17533,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ---
 
-### 面经9：淘天 / 本地生活 大模型岗（重构典型模式）
+### 模拟9：淘天 / 本地生活 大模型岗（非真实面试记录）
 
 | 项目 | 内容 |
 |------|------|
@@ -14826,9 +17557,9 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ---
 
-## 四、腾讯大模型面经
+## 四、腾讯大模型备考场景
 
-### 面经10：腾讯混元 / LLM 算法一面（重构典型模式）
+### 模拟10：腾讯混元 / LLM 算法一面（非真实面试记录）
 
 | 项目 | 内容 |
 |------|------|
@@ -14852,7 +17583,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ---
 
-### 面经11：腾讯 微信 / 搜索 大模型应用二面（重构典型模式）
+### 模拟11：腾讯 微信 / 搜索 大模型应用二面（非真实面试记录）
 
 | 项目 | 内容 |
 |------|------|
@@ -14876,7 +17607,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ---
 
-### 面经12：腾讯 游戏 / IEG 相关 AI 面（重构典型模式）
+### 模拟12：腾讯 游戏 / IEG 相关 AI 面（非真实面试记录）
 
 | 项目 | 内容 |
 |------|------|
@@ -14899,9 +17630,9 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ---
 
-## 五、百度大模型面经
+## 五、百度大模型备考场景
 
-### 面经13：百度 ERNIE / 文心 大模型算法一面（重构典型模式）
+### 模拟13：百度 ERNIE / 文心 大模型算法一面（非真实面试记录）
 
 | 项目 | 内容 |
 |------|------|
@@ -14925,7 +17656,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ---
 
-### 面经14：百度 Paddle / 飞桨 生态岗位（重构典型模式）
+### 模拟14：百度 Paddle / 飞桨 生态岗位（非真实面试记录）
 
 | 项目 | 内容 |
 |------|------|
@@ -14950,9 +17681,9 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ---
 
-## 六、AI 独角兽面经（MiniMax / 月之暗面 / 智谱）
+## 六、AI 独角兽备考场景（MiniMax / 月之暗面 / 智谱）
 
-### 面经15：MiniMax 大模型算法（重构典型模式）
+### 模拟15：MiniMax 大模型算法（非真实面试记录）
 
 | 项目 | 内容 |
 |------|------|
@@ -14977,7 +17708,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ---
 
-### 面经16：月之暗面 Moonshot 大模型算法 / 研究（重构典型模式）
+### 模拟16：月之暗面 Moonshot 大模型算法 / 研究（非真实面试记录）
 
 | 项目 | 内容 |
 |------|------|
@@ -15002,7 +17733,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ---
 
-### 面经17：智谱 AI ChatGLM 相关岗位（重构典型模式）
+### 模拟17：智谱 AI ChatGLM 相关岗位（非真实面试记录）
 
 | 项目 | 内容 |
 |------|------|
@@ -15029,9 +17760,9 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ## 七、面试规律总结
 
-### 7.1 高频考点排名（结合公开面经与 CS336 知识映射）
+### 7.1 复习主题清单（按 CS336 知识映射）
 
-以下排名为经验性归纳，**非严格统计**：
+以下编号用于组织复习，**不是公司面试频率排名**；本仓库未建立带来源的面经样本集：
 
 1. **Transformer 基础**：注意力、复杂度、位置编码、LayerNorm、残差。
 2. **训练与并行**：数据并行、ZeRO、流水线、梯度累积、混合精度。
@@ -15059,7 +17790,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 ### 7.4 通过率和难度分析
 
 - **通过率**：受 HC、组、候选人基数影响极大，**不可用单一数字概括**；同一人不同年份结果也可能不同。
-- **难度趋势**：2025-2026 年大模型岗位对「只会调 API」的容忍度继续下降；**系统知识+项目深度+代码** 三角缺一不可。
+- **准备取舍**：按目标岗位 JD 分配基础、系统、项目与代码的练习时间；本材料没有跨年度招聘样本，不能据此判断 2025–2026 年的难度或录用趋势。
 - **CS336 价值**：系统性地覆盖「数据—训练—评测—推理」闭环，与面经中的高频追问高度同构。
 
 ---
@@ -15068,9 +17799,9 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ### 8.1 按 CS336 模块准备的优先级
 
-1. **模型与前向基础**（注意力、归一化、位置编码）：几乎所有面试的「默认开场」。
-2. **训练系统**（并行、显存、checkpoint）：中厂以上算法岗高频，工程岗必考。
-3. **数据与 tokenizer**：数据岗与「大模型训练」title 必问；应用岗也会问 RAG 数据。
+1. **模型与前向基础**（注意力、归一化、位置编码）：适合模型相关岗位的基础复习。
+2. **训练系统**（并行、显存、checkpoint）：训练工程岗位的重点准备方向，不表示每场面试必考。
+3. **数据与 tokenizer**：数据与预训练岗位的重点方向；应用岗位按 JD 补充 RAG 数据。
 4. **对齐与微调**（SFT/LoRA/RLHF/DPO）：二面与独角兽核心。
 5. **推理与压缩**（KV、量化、调度）：推理岗、优化岗与「工程型算法」重点。
 6. **评测与可复现性**：经理面与跨团队沟通时常用，体现专业度。
@@ -15111,12 +17842,12 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 ---
 
 **文档版本**：v1.0  
-**适用时间范围**：2025-2026  
+**版本标签**：2025-2026 备考参考，不代表面经采样日期或当前公司题库。  
 **维护建议**：每季度增补新考点与新公司风格；删除过时题型引用。
 
 ---
 
-## 扩展阅读型面经条目（补充篇幅与覆盖面）
+## 扩展阅读型备考场景条目（补充篇幅与覆盖面）
 
 以下为结构化补充条目，便于对照 CS336 不同子模块强化复习。
 
@@ -15132,8 +17863,8 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ### 补充 C：模拟问答 — Transformer 复杂度（深度版）
 
-**问**：自注意力为何是 \(O(L^2)\)？  
-**要点**：两两 token 计算相似度形成 \(L\times L\) 矩阵；线性注意力与稀疏注意力为降复杂度的方向。  
+**问**：自注意力为何是 $O(L^2)$？  
+**要点**：两两 token 计算相似度形成 $L\times L$ 矩阵；线性注意力与稀疏注意力为降复杂度的方向。  
 **追问**：长序列下瓶颈在算力还是显存？  
 **要点**：训练与推理场景不同；推理常强调 KV Cache 与带宽。
 
@@ -15149,7 +17880,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 **问**：LoRA 插在什么位置？  
 **要点**：常作用于注意力投影矩阵；不同实现有差异。  
 **问**：为何推理时可合并？  
-**要点**：\(W+BA\) 可预计算为单一矩阵（在秩与形状允许的前提下）。
+**要点**：匹配形状的稠密权重可预计算 $W+(\alpha/r)BA$；秩较低是参数效率来源，不是矩阵能否相加的额外条件。量化权重的合并可能需反量化/重量化并引入额外误差。
 
 ### 补充 F：模拟问答 — RLHF vs DPO（深度版）
 
@@ -15160,9 +17891,9 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ### 补充 G：代码 — sqrt 二分细节提示
 
-- 对 \(x\in[0,1)\)，区间需调整避免除零；  
-- 牛顿法初值可取 \(x\) 或 \(x/2\)；  
-- 输出格式化注意四舍五入与浮点误差（可先加小 epsilon 再打印，依语言而定）。
+- 浮点二分先处理 $x<0$ 的输入约定，非负数可用区间 $[0,\max(1,x)]$；$x=0$ 直接返回 0。二分不需要除以迭代变量，不存在因此除零的问题。  
+- 牛顿法 $t_{k+1}=(t_k+x/t_k)/2$ 必须使用非零初值并单独处理零，按输入范围设置绝对/相对停止容差。  
+- 格式化保留 6 位小数前先保证计算误差小于目标精度；不要统一加 epsilon“修正舍入”，否则可能把原本正确的结果推过舍入边界。
 
 ### 补充 H：代码 — LCA 边界
 
@@ -15186,7 +17917,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ### 补充 L：CS336 模块自测题单（示例）
 
-1. 写出 Adam 更新式与 \(\beta_1,\beta_2\) 作用。  
+1. 写出 Adam 更新式与 $\beta_1,\beta_2$ 作用。  
 2. 解释梯度裁剪的动机与典型阈值经验。  
 3. 解释 warmup 与 cosine decay 的学习率曲线意义。  
 4. 简述混合精度训练中 loss scaling 的原因。  
@@ -15214,7 +17945,7 @@ CS336 路径：**Tokenizer → Transformer → 训练循环 → FlashAttention/D
 
 ---
 
-**全文行数说明**：本文档采用「主章节面经 + 规律总结 + 准备建议 + 扩展模拟问答与清单」结构，便于超过 400 行篇幅要求并支持持续追加；若需精简版可仅保留第一至第八章主体。
+**维护说明**：新增真实面经时应附原帖链接、日期、岗位、轮次与可核查的题目记录，并与现有模拟场景分开；不能将模拟时长、难度和结果用于统计或归因到具体公司。
 
 
 

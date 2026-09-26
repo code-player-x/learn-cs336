@@ -39,7 +39,7 @@
 
 ### 2.2 conda、pip、uv 分别是什么？
 
-- **conda**：不仅是 Python 包管理器，还能装 **Python 本身、CUDA 相关运行时、非 Python 库**（如某些 C 库）。适合实验室统一配 GPU 驱动与 PyTorch 的场景。
+- **conda**：不仅是 Python 包管理器，还能装 **Python 本身、CUDA 相关运行时、非 Python 库**（如某些 C 库）。可管理 Python/PyTorch 环境，但 **NVIDIA GPU 驱动需要在操作系统层安装**，不能由 conda 环境代替。
 - **pip**：**Python 官方推荐的包安装器**，通常与 **`python -m venv`** 创建的虚拟环境配合：轻量、文档多、生态最大。
 - **uv**（Astral）：用 Rust 实现的**极快**解析与安装工具，可创建虚拟环境、`uv pip install` 与 pip 命令接近，适合 CI 与频繁重建环境。
 
@@ -56,7 +56,7 @@
 ### 2.4 `nn.Module` 与 `nn.Parameter` 各管什么？
 
 - **`nn.Module`**：可组合的计算单元，负责**子模块注册**、`forward` 定义、`train()`/`eval()` 切换（影响 Dropout、BatchNorm 等）。
-- **`nn.Parameter`**：一种特殊的 `Tensor`，会被注册为**可学习参数**，出现在 `model.parameters()` 里，随 `optimizer.step()` 更新，并随 `model.to(device)` 迁移。
+- **`nn.Parameter`**：特殊的 `Tensor`；赋给 `nn.Module` 属性后会注册到 `parameters()`，并随模块迁移。传给优化器且产生梯度时才会被更新。
 
 普通 `Tensor` 挂在 `self` 上若未用 `register_buffer`，**不会**被优化器默认更新，常用于临时常量（需谨慎）。
 
@@ -1049,7 +1049,7 @@ for step in range(3):
    self.buf = torch.ones(3)                        # 普通张量，不是 Parameter
    self.w   = nn.Parameter(torch.ones(3))          # 注册为参数
    
-   list(model.parameters()) 长度 = 1（只有 self.w）
+   # list(model.parameters()) 的长度为 1（只有 self.w）。
    
    #buf 不会被默认优化器更新。它不在 model.parameters() 里。
    
@@ -1130,7 +1130,7 @@ for step in range(3):
 
 **答**：（1）PyTorch 张量可把计算放在 **GPU / MPS**，NumPy 数组默认在 CPU。（2）PyTorch 集成 **autograd**，支持 `requires_grad` 与 `backward()`。（3）与 `nn.Module`、优化器、分布式工具链深度集成；NumPy 更适合通用数值与数据预处理。二者可通过 `torch.from_numpy` / `.numpy()` 交互，需注意 **dtype、设备、内存是否共享**。
 
-下面是**修正后的 Q2 答案**，把原来那段自相矛盾的表述改对了：
+下面分别说明 PyTorch 权重的存储形状与实际矩阵乘法：
 
 ---
 
@@ -1192,9 +1192,9 @@ for step in range(3):
 
 **答**：
 
-- `nn.Parameter` 会注册进 `parameters()`，默认被优化器更新，并随 `model.to(device)` 迁移。
+- 将 `nn.Parameter` 赋给 `nn.Module` 属性后，它会注册进 `parameters()` 并随 `model.to(device)` 迁移。只有将其传给优化器、允许求导且产生梯度时，优化器才会更新它。
 
-- 普通 `Tensor` 若仅 `self.x = torch.ones(3)`，通常**不**视为可训练参数；
+- 普通 `Tensor` 若仅 `self.x = torch.ones(3)`，不会自动注册成参数或 buffer，也不会随 `model.to(device)` 自动迁移或写入 `state_dict()`。
 - 若需持久化且非训练（如 running mean），应 **`register_buffer`**。面试强调：**是否参与训练**、**是否出现在 `parameters()`**、**是否随设备迁移**。
 
 ### Q4：为什么 `loss.backward()` 前常要 `optimizer.zero_grad()`？
@@ -1213,7 +1213,7 @@ with torch.no_grad():
     pred = model(x)
 ```
 
-两者职责不同：`eval()` 保证数值行为正确（Dropout 关闭、BN 用滑动统计），`no_grad()` 保证不把显存和算力浪费在反向上。训练前记得切回 `model.train()`，否则 Dropout 不生效、BN 不更新，容易欠拟合；另外 BN 的滑动统计只在 train 模式更新，若一上来就 eval，推理结果会崩。微调时若想冻结 BN，可单独把 BN 层设回 `eval()`。
+两者职责不同：`eval()` 保证数值行为正确（Dropout 关闭、BN 在默认 `track_running_stats=True` 时用滑动统计），`no_grad()` 保证不把显存和算力浪费在反向上。训练前记得切回 `model.train()`，否则 Dropout 不生效、BN 不更新，容易欠拟合；另外 BN 的滑动统计只在 train 模式更新，若从未训练就使用 eval，滑动统计可能不准确。微调时若想冻结 BN，可单独把 BN 层设回 `eval()`。
 
 ### Q6：如何估算一个全连接层的前向 FLOPs 与权重大小？
 
@@ -1225,7 +1225,7 @@ with torch.no_grad():
 
 **答**：二者都能“不要给某部分求导”，但作用层级和语义不同。
 
-**`torch.no_grad()`** 是一个**上下文管理器**，在它的代码块内，所有新产生的张量都**不记录计算图**（`requires_grad` 一律视为 `False`）。它不改变已有张量，只影响块内**新建**的运算。典型用途是验证/推理，避免建图、省显存与算力：
+**`torch.no_grad()`** 是一个**上下文管理器**，关闭当前线程内运算的反向自动求导记录，一般运算结果的 `requires_grad=False`。它不改变已有张量的属性；接受 `requires_grad` 参数的工厂函数，以及创建 `nn.Parameter` 等操作是例外。典型用途是验证/推理，避免建立反向计算图：
 
 ```python
 with torch.no_grad():
@@ -1242,7 +1242,7 @@ y = x.detach()           # y 与 x 共享数据，但 y 不参与反向
 
 **关键区别：**
 
-- **作用范围**：`no_grad` 是**全局块级**（块内所有运算都不建图）；`detach` 是**单张量级**（只切断这一个张量往前的梯度）。
+- **作用范围**：`no_grad` 是**当前线程的上下文级**（有工厂函数例外，也不关闭前向模式 AD）；`detach` 是**单张量级**（切断该张量的自动求导关系）。
 - **是否改变已有张量**：都不改。`no_grad` 只影响块内新建的张量；`detach` 返回一个新张量。
 - **数据是否共享**：`detach` 返回的张量**与原张量共享内存**（改一个另一个也变，除非 `clone`）；`no_grad` 与共享无关，它只是不记录梯度。
 - **典型场景**：`no_grad` 用于推理、评估、参数更新时防止建图；`detach` 用于强化学习里的 target 网络、停止梯度、把张量转成 numpy/日志记录。
@@ -1252,9 +1252,9 @@ y = x.detach()           # y 与 x 共享数据，但 y 不参与反向
 **常见误用与注意点：**
 
 - `detach()` 后**还能**再 `requires_grad_()` 打开梯度，但此时它已是计算图的“叶子”，与原来的图无关。
-- `no_grad` 块内**不能**做需要反向的训练步骤；若块内张量原本 `requires_grad=True`，块结束后它仍保留该属性（`no_grad` 不改已有张量）。
+- 在 `no_grad` 内执行需要反向传播的**前向运算**会丢失相应计算图；但若图已在外部建立，仍可在该上下文内调用 `backward()`。已有张量的 `requires_grad` 属性不变。
 - 想**永久**切断某参数的梯度，用 `param.requires_grad_(False)`；想**临时**切断，用 `with torch.no_grad():`。
-- 一个常被忽略的点：`loss.backward()` 之前用 `no_grad` 包住 `optimizer.step()` 是标准写法，但**不要**把 `loss.backward()` 也包进去，否则梯度无法回传。
+- 标准顺序是 `loss.backward()` **之后**再 `optimizer.step()`。PyTorch 优化器通常自行在无梯度上下文中更新参数；手写更新应使用 `no_grad`。不要把训练前向和 loss 计算包进 `no_grad`。
 
 ---
 
@@ -1299,7 +1299,7 @@ x = torch.randn(1000, 1000, device=device)
 
 **一、为什么训练时要尽量 batch 化输入？**
 
-**1.传输开销是"固定成本"，不是"按数据量线性增长"**
+**1.传输开销包含固定启动成本和随数据量增长的搬运成本**
 
 一次 CPU→GPU 拷贝（`cudaMemcpy`）本身有固定的启动开销（kernel launch、同步、DMA 建立等），大概在微秒量级。如果你把 1000 个样本一个一个传：
 
@@ -1319,7 +1319,7 @@ for i in range(1000):
 x = data[:1000].to(device)   # 一次传输，摊薄了固定开销
 ```
 
-固定开销只付一次，而且大块连续内存能用满 PCIe 带宽。**同样数据量，传输次数越少越接近带宽上限。**
+固定启动开销只付一次，同时仍需承担随字节数增长的搬运成本，近似为“启动延迟 + 字节数 / 有效带宽”。GPU 侧传输与计算重叠还需要 pinned 源内存、独立 CUDA stream 和可用 DMA 引擎，并处理同步依赖；同一 stream 内不会自动重叠。参见 [PyTorch 官方传输教程](https://docs.pytorch.org/tutorials/intermediate/pinmem_nonblock.html)。
 
 **2.让 GPU 保持"吃饱"状态**
 
@@ -1351,13 +1351,13 @@ pinned:    CPU内存 ---------------------------(DMA)--> GPU   ← 一次搬运
 loader = DataLoader(dataset, batch_size=64, num_workers=4, pin_memory=True)
 ```
 
-开启后，DataLoader 会把取出的 batch 放进 **pinned memory**。这样当你执行 `.to(device)` / `.cuda()` 时，拷贝是**异步且更快**的，尤其配合：
+开启后，DataLoader 会把取出的 batch 放进 **pinned memory**。配合下面的选项，可避免每次拷贝后都阻塞主机线程；实际速度需测量，并不保证更快：
 
 ```python
 x = x.to(device, non_blocking=True)
 ```
 
-`non_blocking=True` 让拷贝和 GPU 计算重叠，进一步隐藏传输时间。
+`non_blocking=True` 避免主机线程在每次拷贝后立即同步等待，但**不保证拷贝与 GPU 计算重叠**。GPU 侧重叠还需要 pinned 源内存、与计算不同的 CUDA stream、可用 DMA 引擎，以及正确的同步依赖；同一 stream 内仍按顺序执行。条件满足时，可用预取下一批数据等方式隐藏传输时间，详见 [PyTorch 官方传输教程](https://docs.pytorch.org/tutorials/intermediate/pinmem_nonblock.html)。
 
 **3. 注意事项**
 
@@ -1379,7 +1379,7 @@ loader = DataLoader(
 )
 
 for x, y in loader:
-    x = x.to(device, non_blocking=True)   # ③ 异步传输，和计算重叠
+    x = x.to(device, non_blocking=True)   # ③ 主机侧不逐次等待；同一 CUDA stream 内仍按序执行
     y = y.to(device, non_blocking=True)
     ...
 ```
@@ -1477,7 +1477,7 @@ describe(y.contiguous(), "contiguous")
 
 ---
 
-## 十三、扩展背诵条目（1～200，配合行数与速览）
+## 十三、扩展复习条目
 
 1. 张量是计算图节点。  
 
@@ -1809,85 +1809,13 @@ describe(y.contiguous(), "contiguous")
 
 164. 对比学习（了解）。  
 
-165. 继续扩展。  
-
-166. 行数足够。  
-
-167. 复习愉快。  
-
-168. 做题愉快。  
-
-169. 面试愉快。  
-
-170. 拿到 offer。  
-
-171. 回馈社区。  
-
-172. 写博客总结。  
-
-173. 教后来者。  
-
-174. 知识传承。  
-
-175. 本附录偏长。  
-
-176. 可跳读。  
-
-177. 抓主干即可。  
-
-178. 条目扫关键词。  
-
-179. 考前速览。  
-
-180. 睡前列想。  
-
-181. 白板模拟。  
-
-182. 计时回答。  
-
-183. 录音回听。  
-
-184. 改进表达。  
-
-185. STAR 故事。  
-
-186. 项目经历。  
-
-187. CS336 写简历。  
-
-188. 量化成果。  
-
-189. 数据规模。  
-
-190. 训练时长。  
-
-191. 指标提升。  
-
-192. 问题解决。  
-
-193. 协作案例。  
-
-194. 冲突处理。  
-
-195. 学习能力。  
-
-196. 自驱力。  
-
-197. 好奇心。  
-
-198. 严谨性。  
-
-199. 工程素养。  
-
-200. 本节扩展完。  
-
 ---
 
 ### 十四、结语（张量内存与 PyTorch 基础）
 
-**GPU/CPU 分工**、**contiguous / view / reshape**、**autograd 与 Module** 是后续 BPE、Transformer、训练循环的**公共底座**；建议把第九节与第九节代码**默写一遍**，面试中「PyTorch 基础关」可稳过。
+**GPU/CPU 分工**、**contiguous / view / reshape**、**autograd 与 Module** 是后续课程的公共底座；建议结合第九节概念与第十节代码练习。
 
-**文档说明**：为满足「单文件超长详细版」复习需求，第十三节含大量可扫读条目；时间有限可只读 **第八～十节**与 **Q&A**。
+**复习建议**：时间有限时，可先读 **第八～十节**与 **Q&A**。
 
 ---
 
@@ -1904,12 +1832,12 @@ describe(y.contiguous(), "contiguous")
 
 ---
 
-### 十六、版本与兼容性备忘（2026）
+### 十六、版本与兼容性备忘
 
 - 以课程当年 `requirements.txt` 与 PyTorch 官方 wheel 为准；**CUDA 驱动版本 ≥ PyTorch 期望的最低驱动**。  
-- Apple Silicon 优先试 **MPS**；不支持算子时会自动或手动回退 CPU（速度下降）。  
+- Apple Silicon 可试 **MPS**；未支持的算子不保证自动回退。部分算子可通过 `PYTORCH_ENABLE_MPS_FALLBACK=1` 启用 CPU 回退，仍需检查支持范围与速度，见 [PyTorch MPS 环境变量](https://docs.pytorch.org/docs/stable/mps_environment_variables.html)。
 - **Python 3.11+** 与 `typing`、性能、生态兼容性整体更好。
 
 ---
 
-**【全文完 · 行数目标：800+ 行面试导向详细版】**
+**【全文完】**

@@ -4,18 +4,22 @@
 
 本项目基于斯坦福大学 CS336 课程（Language Modeling from Scratch），专为准备 AI/大模型岗位面试的同学打造。从零开始，手把手带你理解、实现并掌握大语言模型的全链路知识。
 
+**范围与版本**：主要参考 [CS336 Spring 2025](https://cs336.stanford.edu/spring2025/)，整理为课程总览与 20 篇学习笔记；这不是官方课次划分或完整作业答案。LoRA、DPO、推理部署等包含拓展学习。`code/` 是教学实现，不代表已完成全部官方测试、真实 GPU 性能实验或生产部署。
+
 ---
 
 ## 📚 项目结构
 
 ```
 learn-cs336/
-├── docs/           # 20节课程文档（面试导向）
+├── docs/           # 课程总览 + 20节课程文档（面试导向）
 ├── interview/      # 面试专区（八股文、STAR面试稿、简历模板）
 ├── comics/         # 哆啦A梦风格漫画插图
-├── code/           # 核心代码实现
-├── assets/         # 静态资源
-└── output/         # PDF/HTML输出
+├── code/           # 核心教学实现与练习脚本
+├── tests/          # CPU 正确性与导出回归测试
+├── generate_output.py  # HTML / 合并 Markdown 导出
+├── requirements.txt    # Python 依赖
+└── output/         # 生成的 HTML / 合并 Markdown
 ```
 
 ---
@@ -53,7 +57,7 @@ learn-cs336/
 | [Lesson 15](docs/15-数据过滤与去重.md) | 数据过滤与去重 | MinHash、质量过滤策略 |
 | [Lesson 16](docs/16-Assignment3-4实战指南.md) | Assignment 3-4 实战 | 缩放实验与数据管道 |
 
-### 第四部分：对齐与部署篇（对应 Assignment 5）
+### 第四部分：对齐与部署篇（Assignment 5 与拓展学习）
 
 | 课程 | 主题 | 核心面试考点 |
 |------|------|-------------|
@@ -69,11 +73,11 @@ learn-cs336/
 | 文档 | 内容 |
 |------|------|
 | [面试八股文大全](interview/01-面试八股文大全.md) | 100+道面试题与详细答案 |
-| [岗位需求分析](interview/02-岗位需求分析.md) | 2026年AI大模型岗位JD分析 |
+| [岗位需求分析](interview/02-岗位需求分析.md) | AI/大模型岗位能力参考，非薪资统计 |
 | [项目简历模板](interview/03-项目简历模板.md) | CS336项目简历STAR写法（3种版本） |
 | [STAR面试稿](interview/04-STAR面试稿.md) | 10个核心STAR回答脚本 |
-| [面试问题全集](interview/05-面试问题全集.md) | 所有可能问题+STAR回答 |
-| [面经汇总](interview/06-面经汇总.md) | 牛客/小红书真实面经整理 |
+| [面试问题全集](interview/05-面试问题全集.md) | 面试话题清单与 STAR 回答模板 |
+| [面经汇总](interview/06-面经汇总.md) | 复习题单与面经来源说明 |
 
 ---
 
@@ -92,11 +96,30 @@ learn-cs336/
 
 ## 💻 核心代码
 
-- [`code/tokenizer/`](code/tokenizer/) — BPE分词器完整实现
+- [`code/tokenizer/`](code/tokenizer/) — 字节级 BPE 教学实现，非完整 GPT-2 tokenizer 接口
 - [`code/model/`](code/model/) — Transformer语言模型
 - [`code/training/`](code/training/) — 训练循环与优化器
-- [`code/systems/`](code/systems/) — FlashAttention与DDP
+- [`code/systems/`](code/systems/) — PyTorch 分块在线注意力与 DDP 教学实现，不是 Triton/FlashAttention-2 高性能内核
 - [`code/alignment/`](code/alignment/) — SFT与GRPO对齐
+
+GRPO 示例按原始 softmax 策略采样，保存原始生成 token 与旧策略 log-prob，再做 token 级裁剪更新；不要把任意 temperature/top-p 采样后重新编码的文本当作等价 rollout。SFT/GRPO 运行需准备模型权重与配套 tokenizer；单元测试使用本地小模型，不下载权重。简历和 STAR 中的指标必须替换为自己的实测数据。
+
+---
+
+## 🚀 安装与验证
+
+推荐 Python 3.11+，在项目根目录运行：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m unittest discover -s tests -v
+python code/basic_study/post_install_check.py
+```
+
+macOS/CPU 可运行基础模块与单元测试；`triton` 依赖仅在 Linux x86_64 安装。GPU 内核、NCCL 多卡与性能结论仍需在匹配的 Linux/CUDA 硬件上验证；安装 PyTorch 时应按 [官方安装说明](https://pytorch.org/get-started/locally/) 选择设备版本。
 
 ---
 
@@ -111,13 +134,19 @@ learn-cs336/
 
 ---
 
-## 📄 多格式下载
+## 📄 文档导出与预览
 
-- [PDF版本](output/cs336-guide.pdf)
-- [HTML版本](output/index.html)
+```bash
+python generate_output.py
+python -m http.server 8767 --bind 127.0.0.1
+```
+
+打开 [HTML 预览](http://127.0.0.1:8767/output/index.html)。本地输出包括 [HTML 文件](output/index.html) 和 [合并 Markdown](output/cs336-guide-combined.md)；源文件修改后需重新生成。也可使用 `python generate_output.py --output-dir <目录>` 指定输出位置。
+
+公式使用固定版本的 KaTeX CDN，需联网加载；页面提示“公式已渲染”后，可用浏览器打印并保存 PDF。本仓库不提供预生成 PDF，直接用 WeasyPrint 转换不会执行公式 JavaScript。HTML 的图片与代码链接依赖原仓库文件，移动输出时需要同时保留这些资源。
 
 ---
 
 ## License
 
-本项目仅供学习参考，课程内容版权归Stanford CS336课程组所有。
+本项目仅供学习参考。课程讲义与引用的第三方资料、图片应分别核对原来源的许可；仓库目前没有独立 `LICENSE` 文件，不能把“学习用途”当作所有内容均可商用的授权。

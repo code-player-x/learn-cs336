@@ -61,15 +61,15 @@
 **FlashAttention-2**（相对第一代）通常强调 **更少的非 matmul 开销、更合理的工作划分与并行策略**（细节以课程讲义与论文为准）。在 **Triton** 中实现时，典型关注点包括：
 
 - **沿序列维分块（tiling）**：外层按 **query 块** 调度，内层遍历 **K/V 块**。
-- **Online softmax**：按行维护 **运行最大值 \(m\)**、**运行归一化因子 \(\ell\)**（与 exp 和相关）、**输出累加 \(\mathbf{o}\)**；每来一个新块做 **rescale** 合并，避免完整物化 \(N\times N\) 注意力矩阵到 HBM。
-- **融合**：在 **少量 kernel** 内完成 \(QK^\top\)、缩放、mask、softmax 与对 \(V\) 的加权，显著降低 **HBM traffic**。
+- **Online softmax**：按行维护 **运行最大值 $m$**、**运行归一化因子 $\ell$**（与 exp 和相关）、**输出累加 $\mathbf{o}$**；每来一个新块做 **rescale** 合并，避免完整物化 $N\times N$ 注意力矩阵到 HBM。
+- **融合**：在 **少量 kernel** 内完成 $QK^\top$、缩放、mask、softmax 与对 $V$ 的加权，显著降低 **HBM traffic**。
 
 **Triton 内核开发流程（可写进简历/面试）**：
 
 1. **规格与形状**：固定 `B, H, T, D`；先写清 **因果 / 非因果**、**dtype**（fp16/bf16）。
 2. **参考实现**：PyTorch **朴素注意力**（小 `T`）、`F.scaled_dot_product_attention`（环境允许时）作为 **golden**。
 3. **最小可运行内核**：单头或小 `B`，只实现 forward；对齐 **mask 与 `1/sqrt(d)`**。
-4. **在线 softmax**：严格按递推式实现 \(m,\ell,\mathbf{o}\)，注意 **数值稳定**（减 max）。
+4. **在线 softmax**：严格按递推式实现 $m,\ell,\mathbf{o}$，注意 **数值稳定**（减 max）。
 5. **调块与并行**：调整 `BLOCK_M`、`BLOCK_N`、`BLOCK_K`（或课程命名），观察 **寄存器 spill、shared memory、occupancy**。
 6. **性能对比**：与 **naive**、**SDPA** 对比 **耗时与显存**；用 **nsys/ncu** 佐证瓶颈类型。
 
@@ -96,7 +96,7 @@
 
 **梯度同步与 hooks**：
 
-- `DistributedDataParallel` 在 **`backward`** 中注册 **gradient accumulation hooks**：梯度就绪后按 **bucket** 触发 **`all_reduce`**，并与 **反向计算重叠**（实现细节随 PyTorch 版本演进）。
+- `DistributedDataParallel` 在模型包装时注册、在 **`backward`** 中触发 **gradient accumulation hooks**：梯度就绪后按 **bucket** 触发 **`all_reduce`**，并与 **反向计算重叠**（实现细节随 PyTorch 版本演进）。
 - 一般业务代码 **无需手写** `all_reduce`；若自定义通信（如 **gradient compression**），才需了解 **hook 时机** 与 **bucket**。
 
 **混合精度（AMP）与 DDP**：
@@ -286,7 +286,7 @@ torch.testing.assert_close(ref, out, rtol=2e-2, atol=2e-2)
 | 维度 | Naive / 未融合 | Triton FlashAttention-2 类实现 |
 |------|-----------------|----------------------------------|
 | HBM 访问 | 常显著更高（物化大方阵等） | 分块融合，降低 traffic |
-| 峰值显存 | \(O(N^2)\) 级中间结果风险 | 通常更低（实现相关） |
+| 峰值显存 | $O(N^2)$ 级中间结果风险 | 通常更低（实现相关） |
 | 调优抓手 | 有限 | block、occupancy、融合度 |
 
 ---
@@ -340,6 +340,7 @@ def main():
         pin_memory=True,
     )
 
+    optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
     scaler = torch.cuda.amp.GradScaler(enabled=True)
 
     for epoch in range(epochs):
@@ -375,7 +376,7 @@ def main():
 ### 3.2 高频追问
 
 - **块大小怎么选**：资源约束 → 实测吞吐 → 是否 spill。
-- **Online softmax 三个量**：\(m,\ell,\mathbf{o}\) 与 **rescale**。
+- **Online softmax 三个量**：$m,\ell,\mathbf{o}$ 与 **rescale**。
 - **DDP vs ZeRO**：DDP **每卡全参**；ZeRO **切分优化器状态/梯度/参数**（进阶）。
 
 ---
@@ -439,10 +440,10 @@ def main():
 1. **Grid 划分**：按 **query 块**（或 `(batch, head, q_tile)`）映射到 program id。
 2. **加载 Q tile** 到片上（寄存器/shared，依实现）。
 3. **K/V 内层循环**：`tl.dot` 等计算 **块内 logits**（注意 **scale** 与 **mask**）。
-4. **Online softmax**：更新 \(m,\ell,\mathbf{o}\)，新块 **rescale** 历史输出。
+4. **Online softmax**：更新 $m,\ell,\mathbf{o}$，新块 **rescale** 历史输出。
 5. **写回**：将 **输出 tile** 写回全局内存；若作业要求 backward，常涉及 **重算** 或 **保存最小中间量**（依课程定义）。
 
-**一句话**：**不在 HBM 物化完整 \(N\times N\)**，并尽量减少 **round-trips**。
+**一句话**：**不在 HBM 物化完整 $N\times N$**，并尽量减少 **round-trips**。
 
 ---
 

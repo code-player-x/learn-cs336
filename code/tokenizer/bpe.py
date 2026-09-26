@@ -8,22 +8,16 @@ Byte Pair Encoding (BPE) tokenizer — GPT-2 style pre-tokenization and byte-lev
 from __future__ import annotations
 
 import json
-import re
 from collections import Counter
 from typing import Iterable
 
-# GPT-2 / tiktoken style pretokenization (requires `regex` for \\p{L} / \\p{N}).
-# 与 GPT-2 / tiktoken 一致的预分词正则（需 `regex` 以支持 Unicode 属性类）。
-try:
-    import regex
+import regex
 
-    _GPT2_SPLIT_RE = regex.compile(
-        r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-    )
-except ImportError:  # pragma: no cover - fallback for environments without `regex`
-    _GPT2_SPLIT_RE = re.compile(
-        r"""'s|'t|'re|'ve|'m|'ll|'d| ?[a-zA-Z]+| ?\d+| ?[^\s]+|\s+(?!\S)|\s+"""
-    )
+# GPT-2 pretokenization requires Unicode properties; do not silently substitute
+# an ASCII pattern, which would change merges and IDs across environments.
+_GPT2_SPLIT_RE = regex.compile(
+    r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+)
 
 
 def get_stats(ids: list[int]) -> dict[tuple[int, int], int]:
@@ -100,6 +94,8 @@ class BPETokenizer:
     """
 
     def __init__(self, vocab_size: int = 512) -> None:
+        if not isinstance(vocab_size, int) or vocab_size < 256:
+            raise ValueError("vocab_size must be an integer >= 256")
         self._target_vocab_size = vocab_size
         self.merges: list[tuple[int, int]] = []
         self._vocab: dict[int, bytes] = {i: bytes([i]) for i in range(256)}
@@ -129,8 +125,9 @@ class BPETokenizer:
             vocab_size: Target vocabulary size; defaults to constructor value.
         """
         target = vocab_size if vocab_size is not None else self._target_vocab_size
-        if target < 256:
-            raise ValueError("vocab_size must be >= 256")
+        if not isinstance(target, int) or target < 256:
+            raise ValueError("vocab_size must be an integer >= 256")
+        self._target_vocab_size = target
         num_merges = target - 256
         if num_merges == 0:
             self.merges = []
@@ -158,7 +155,9 @@ class BPETokenizer:
                 break
             best_count = max(pair_counts.values())
             candidates = [p for p, c in pair_counts.items() if c == best_count]
-            pair = min(candidates)  # tie-break: lexicographic order / 平局按字典序
+            # CS336 ties compare the original byte-string tuple, not IDs or
+            # concatenated bytes; newly allocated IDs do not preserve byte order.
+            pair = max(candidates, key=lambda p: (self._vocab[p[0]], self._vocab[p[1]]))
 
             seqs = [merge(seq, pair, next_id) for seq in seqs]
             self.merges.append(pair)
@@ -219,9 +218,16 @@ class BPETokenizer:
         with open(path, encoding="utf-8") as f:
             payload = json.load(f)
         merges_raw = payload.get("merges", [])
-        self.merges = [(int(a), int(b)) for a, b in merges_raw]
-        self._target_vocab_size = int(payload.get("target_vocab_size", 256 + len(self.merges)))
-        self._vocab = _build_vocab_from_merges(self.merges)
+        merges = [(int(a), int(b)) for a, b in merges_raw]
+        target = int(payload.get("target_vocab_size", 256 + len(merges)))
+        if target < 256 + len(merges):
+            raise ValueError("Target vocabulary size is smaller than the saved vocabulary.")
+        # Build before replacing existing state: invalid references must not leave
+        # a previously usable tokenizer half-loaded.
+        vocab = _build_vocab_from_merges(merges)
+        self.merges = merges
+        self._target_vocab_size = target
+        self._vocab = vocab
 
     @classmethod
     def from_file(cls, path: str) -> BPETokenizer:

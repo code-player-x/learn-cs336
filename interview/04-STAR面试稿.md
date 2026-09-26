@@ -1,6 +1,8 @@
 # CS336 项目 STAR 面试稿
 
-> 面向 Stanford **CS336：Language Modeling from Scratch** 的学习与项目复盘。以下为**口述脚本**：按 Situation → Task → Action → Result 组织，语气贴近真实面试。文中带 **X**、**区间数字** 处请按你本地实验日志替换，务必与简历、代码一致。
+> 面向 Stanford **CS336：Language Modeling from Scratch** 的学习与项目复盘。以下是**假设性口述模板，不是作者或本仓库的真实实验履历**：按 Situation → Task → Action → Result 组织。所有第一人称行动、故障故事、硬件、数据规模和数字都须用你的代码/测试/日志核对；未做的内容删除或改为“学习/计划”，不是仅替换 X 就能直接背诵。
+
+> **版本与实现边界**：参考 [CS336 Spring 2025](https://cs336.stanford.edu/spring2025/)，Lesson 编号对应本仓库 20 篇笔记。2025 年 A5 主线包含 zero-shot、SFT、Expert Iteration 与 GRPO，安全 DPO 是选做；该年主线 GRPO 不要求 reference KL。仓库里的纯 PyTorch 分块 attention 教学实现不等同于已实现高性能 Triton FlashAttention-2 内核，阅读笔记也不证明已完成多卡或 TB 级实验。
 
 **使用建议**：通读并标注与自身实现不一致之处；录音限时演练（STAR 1 约 2 分钟，STAR 2～10 每题约 1.5～2 分钟）；数字口径区分「子模块加速」与「端到端加速」、单次实验与中位数。
 
@@ -23,7 +25,7 @@
 
 ### 口述正文（约 15～20 句）
 
-我当时系统跟进了 Stanford 的 CS336，课名是 Language Modeling from Scratch，目标是从零把语言模型整条链路走通，而不是只调 API。背景上我主要在单机多卡环境做实验，比如 4×A100 40GB 这一类配置，数据侧以 Common Crawl 子集为主，配合可重复的清洗、去重管线。技术栈是 PyTorch 2.x，系统作业里用 Triton 写 FlashAttention 风格内核，并行用 torchrun 加 DDP。我的任务可以概括成三件事：一是关键模块要能自己实现或逐行讲清，包括字节级 BPE、Decoder-only Transformer、手写 AdamW、以及 IO-aware 的注意力内核；二是训练与评估协议要固定，同样 config 和种子能复现趋势；三是不能只报 loss，还要能解释算力怎么花在模型规模 N 和数据量 D 上，对齐阶段 SFT、DPO、GRPO 各自优化的是什么目标。具体做法上，我先实现 GPT-2 风格的预分词加 UTF-8 字节上的 BPE，再搭带 RMSNorm、RoPE、SwiGLU、GQA 的 Transformer，小模型过拟合验证后再放大；然后进入系统篇，用 Triton 实现 FlashAttention-2 思路的内核，和 PyTorch 的 scaled_dot_product_attention 做数值与吞吐对照；数据工程上做流式解析、语言过滤、近似去重和分片；训练侧用 DDP 扩并行，并做 IsoFLOPs 扫描理解「同算力下 N 与 D 的配比」；最后对齐阶段用 SFT 稳定格式，再在可验证任务上尝试 GRPO 这类组采样加相对优势的方法。结果上，预训练验证集交叉熵能平滑下降，val loss 落在与数据与规模相匹配的区间；长序列上 Attention 子模块相对朴素实现常见能拿到约 1.5×～3× 量级的加速，端到端会受 MLP 与数据加载影响而打折；4 卡 DDP 扩展效率我观测到大约 0.85～0.95 倍理想线性。整个项目让我能从算子、系统、数据、目标函数四个层次回答「为什么」，而不是只背名词。
+我当时系统跟进了 Stanford 的 CS336，课名是 Language Modeling from Scratch，目标是从零把语言模型整条链路走通，而不是只调 API。背景上我使用【真实硬件与卡数】做实验，数据侧以【真实数据集与规模】为主，配合可重复的清洗、去重管线。技术栈是 PyTorch 2.x，系统作业里用 Triton 写 FlashAttention 风格内核，并行用 torchrun 加 DDP。我的任务可以概括成三件事：一是关键模块要能自己实现或逐行讲清，包括字节级 BPE、Decoder-only Transformer、手写 AdamW、以及 IO-aware 的注意力内核；二是训练与评估协议要固定，同样 config 和种子能复现趋势；三是不能只报 loss，还要能解释算力怎么花在模型规模 N 和数据量 D 上，对齐阶段 SFT、DPO、GRPO 各自优化的是什么目标。具体做法上，我先实现 GPT-2 风格的预分词加 UTF-8 字节上的 BPE，再搭带 RMSNorm、RoPE、SwiGLU、GQA 的 Transformer，小模型过拟合验证后再放大；然后进入系统篇，用 Triton 实现 FlashAttention-2 思路的内核，和 PyTorch 的 scaled_dot_product_attention 做数值与吞吐对照；数据工程上做流式解析、语言过滤、近似去重和分片；训练侧用 DDP 扩并行，并做 IsoFLOPs 扫描理解「同算力下 N 与 D 的配比」；最后对齐阶段用 SFT 稳定格式，再在可验证任务上尝试 GRPO 这类组采样加相对优势的方法。结果上，我在【固定评测协议】下记录 val loss【起点→终点】；Attention 子模块相对【明确基线】的加速为【实测倍数】，端到端为【实测倍数】；【实际卡数】卡的扩展效率为【实测值，并说明强/弱扩展口径】。整个项目让我能从算子、系统、数据、目标函数四个层次回答「为什么」，而不是只背名词。
 
 ### 面试官可能追问
 
@@ -52,7 +54,7 @@
 
 ### 口述正文（约 22～28 句）
 
-**Situation** 是课程要求从零实现**字节级 BPE**：词表从 256 个字节初始化，再迭代合并相邻 token 对，保存 merges，词表常扩到 32k 量级；并且 GPT-2 风格下要用正则做预分词，合并不跨片段，否则训练统计与推理编码会对不齐。**Task** 一方面要绝对正确：encode 再 decode 可逆，emoji、中英文混排、数字边界都要测；另一方面语料上到 GB 级时，朴素「反复全表扫描」的 Python 实现很容易跑到小时级，迭代成本太高。**Action** 上我把训练拆成稳定循环：每轮先统计相邻对频次，再全局应用一次 merge，避免在整串上反复做昂贵替换；频次用哈希表维护 pair 到 count，并只更新受影响的局部区间；大语料用多进程 map-reduce，子进程各自统计、主进程归并相加，同时注意分片边界只在片段内统计 pair，避免跨 shard 漏统计或重复统计；merge 顺序上固定 tie-break，例如字典序，保证确定性；编码阶段严格按训练得到的 merges 优先级应用。我还用 100MB～1GB 子集做快速冒烟再上全量，并加回归测试保证编解码一致。**Result** 上，在 8 核 CPU 上，相较最初单进程版本，训练 32k merges 的总耗时从大约 90～120 分钟降到 20～35 分钟量级，让我能频繁调整正则与语料而不怕重训分词器；词表覆盖率与压缩比上，英文常见每字符 0.25～0.35 token 量级，中文因 UTF-8 多字节会更长；面试里能清楚讲**字节级没有传统 UNK**、OOV 语义与词级模型的差异。若对比「训练速度提升 X 倍」，我本地大致是 **4～6×** 这一档，词表对 held-out 字节的覆盖可达 **99.9%+**（按你统计口径填写）。
+**Situation** 是课程要求从零实现**字节级 BPE**：词表从 256 个字节初始化，再迭代合并相邻 token 对，保存 merges，词表常扩到 32k 量级；并且 GPT-2 风格下要用正则做预分词，合并不跨片段，否则训练统计与推理编码会对不齐。**Task** 一方面要绝对正确：encode 再 decode 可逆，emoji、中英文混排、数字边界都要测；另一方面语料上到 GB 级时，朴素「反复全表扫描」的 Python 实现很容易跑到小时级，迭代成本太高。**Action** 上我把训练拆成稳定循环：每轮先统计相邻对频次，再全局应用一次 merge，避免在整串上反复做昂贵替换；频次用哈希表维护 pair 到 count，并只更新受影响的局部区间；大语料用多进程 map-reduce，子进程各自统计、主进程归并相加，同时注意分片边界只在片段内统计 pair，避免跨 shard 漏统计或重复统计；merge 顺序上遵守对应年份讲义的 tie-break，明确比较字节串二元组及方向，而不按 token ID 比较，保证确定性；编码阶段严格按训练得到的 merges 优先级应用。我还用 100MB～1GB 子集做快速冒烟再上全量，并加回归测试保证编解码一致。**Result** 上，在【实际 CPU 与核数】上，相较【明确基线】，在【语料规模】上训练到【目标词表大小】的耗时从【基线时间】变为【优化时间】，加速比为【实测值】；目标词表大小包含 256 个字节和特殊 token，不能把词表大小当 merge 数。压缩率按 held-out 的【bytes/token 或 tokens/character】报告；完整字节词表的可表示性为 100%，不以 99.9% 覆盖率冒充实验收益。
 
 ### 面试官可能追问
 
@@ -60,7 +62,7 @@
 |------|----------------|
 | 为什么不用 tiktoken 直接训？ | 课程目标是理解**算法与边界**；自研能改 tie-break、验证与参考实现一致；上线可再换工业实现。 |
 | 中文为什么更耗 token？ | UTF-8 下汉字常占 3 字节，BPE 在字节上合并，且语料中英比例影响高频子词分布。 |
-| 复杂度大概多少？ | 朴素实现每轮扫描语料为 \(O(T)\) 量级，轮数约 merges；优化重点是**降低常数项**与并行，而非证明新渐近阶。 |
+| 复杂度大概多少？ | 朴素实现每轮扫描语料为 $O(T)$ 量级，轮数约 merges；优化重点是**降低常数项**与并行，而非证明新渐近阶。 |
 
 ### 补充追问（口述版）
 
@@ -68,10 +70,10 @@
 答：训练阶段 **merge 统计** 与 **推理阶段应用 merges 的顺序**必须一致；decode 若没按字节边界还原，会出现中文截断或乱码。单元测试里对「随机 UTF-8 字符串」做 round-trip 是最有效的保险。
 
 **问：你如何把「训练速度提升 X 倍」写进简历才不虚？**  
-答：写清**对比对象**（单进程朴素版 vs 多进程+哈希表优化）、**语料规模与 merges 数**、**硬件**（CPU 核数、是否 SSD）。X 取 **4～6×** 这类区间时，注明是「我本地一次实验」还是「三次取中位数」。
+答：写清**对比对象**（单进程朴素版 vs 多进程+哈希表优化）、**语料规模与 merges 数**、**硬件**（CPU 核数、是否 SSD）。X 必须来自实测；报告区间时注明样本数与范围，不能拿模板中的倍数当实验结果。
 
-**问：词表覆盖率 99.9% 指什么？**  
-答：常见口径是对 **held-out 语料中的 UTF-8 字节**，在 merge 后能用子词完全覆盖的比例；或「未出现需回退到字节 fallback 的比例」——**与面试官对齐口径**，避免各说各话。
+**问：字节级 BPE 的“词表覆盖率”该怎么解释？**  
+答：保留全部 **256 个字节 token**、不额外做有损归一化时，任意合法 UTF-8 文本都可编码，因此字节可表示性为 **100%**；它不是通过 merge 才达到 99.9%。若统计“合并 token 占比”或“每字符 token 数”，应另给定义、语料与计数结果，不能称作没有 UNK 的覆盖率。可逆性还需通过 `decode(encode(text))` 测试，不能对任意随机生成的 token 序列保证合法 UTF-8。
 
 ---
 
@@ -81,14 +83,14 @@
 
 ### 口述正文（约 22～28 句）
 
-**Situation** 是我实现 Decoder-only 因果语言模型，从小配置开始，比如 d_model=256、4 层、4 头，先用单 batch 过拟合合成数据。最难的 bug 往往不是立刻报错，而是 **shape 轻微不一致被 broadcast 悄悄吃掉**，表现为 loss 不降、梯度爆炸或 NaN，定位成本极高；BF16 下 softmax、归一化对数值范围更敏感；RoPE 若旋在错误维度上，注意力仍能算但语义错；GQA 下 K/V head 少于 Q head 时，repeat 与 cache 维序一错就会 silent wrong。**Task** 是建立可重复的调试流程：先在合成数据上「必降」，再对齐参考实现，关键张量 FP32 误差要在可接受范围，否则不调学习率掩盖实现错误。**Action** 上我用手写参考版 Attention 与模块版在小形状上做 `torch.allclose`；对 RoPE 单独测范数与周期；检查 causal mask 上三角为 -inf 且 dtype 与 softmax 一致；排查 RMSNorm 的 eps、初始化、Dropout 在 eval 关闭；核对梯度累积与学习率缩放与全局 batch 一致。印象最深的一次是 KV cache 推理路径与训练路径在 GQA repeat 上不一致，有的配置直接报错，有的则数值漂移。**Result** 上，修复后小模型在合成任务上几十步内 loss 能从 8～10 降到 0.5 以下；与参考对齐后关键层 L∞ 误差约 1e-5（FP32）量级；我养成了**先对齐算子再谈训练策略**的习惯，并用 `assert_close`、形状断言减少盲猜。对面试官我会总结：复杂模型调试靠的是**分层对照与数值契约**，不是只调超参。
+**Situation** 是我实现 Decoder-only 因果语言模型，从小配置开始，比如 d_model=256、4 层、4 头，先用单 batch 过拟合合成数据。最难的 bug 往往不是立刻报错，而是 **shape 轻微不一致被 broadcast 悄悄吃掉**，表现为 loss 不降、梯度爆炸或 NaN，定位成本极高；低精度下 softmax、归一化需关注数值误差，FP16 动态范围尤其有限，BF16 则尾数精度较低；RoPE 若旋在错误维度上，注意力仍能算但语义错；GQA 下 K/V head 少于 Q head 时，repeat 与 cache 维序一错就会 silent wrong。**Task** 是建立可重复的调试流程：先在合成数据上「必降」，再对齐参考实现，关键张量 FP32 误差要在可接受范围，否则不调学习率掩盖实现错误。**Action** 上我用手写参考版 Attention 与模块版在小形状上做 `torch.allclose`；对 RoPE 单独测范数与相对位置性质；检查 causal mask 上三角为 -inf 且 dtype 与 softmax 一致；排查 RMSNorm 的 eps、初始化、Dropout 在 eval 关闭；核对梯度累积与学习率缩放与全局 batch 一致。印象最深的一次是 KV cache 推理路径与训练路径在 GQA repeat 上不一致，有的配置直接报错，有的则数值漂移。**Result** 上，按【合成任务与固定配置】记录 loss【起点→终点、实际步数】，按【dtype/模块/形状】报告参考对齐的绝对与相对误差【实测值】；我养成了**先对齐算子再谈训练策略**的习惯，并用 `assert_close`、形状断言减少盲猜。对面试官我会总结：复杂模型调试靠的是**分层对照与数值契约**，不是只调超参。
 
 ### 面试官可能追问
 
 | 追问 | 建议回答要点 |
 |------|----------------|
 | 你怎么区分「实现错了」和「超参不好」？ | 合成数据过拟合、与参考实现逐层对齐；超参问题通常曲线「怪但一致」，实现错误常**不对齐或不稳定**。 |
-| 混合精度下你特别注意什么？ | loss scaling、softmax 前减 max、累加用 FP32；关键对比先在 FP32 对齐再开 BF16。 |
+| 混合精度下你特别注意什么？ | FP16 常用 loss scaling；BF16 通常不需要。softmax 前减 max、敏感累加用 FP32；关键对比先在 FP32 对齐再开低精度。 |
 | GQA 相对 MHA 多哪些坑？ | K/V repeat 广播维度、cache 布局、不同框架对 head 维约定不同。 |
 
 ### 补充追问（口述版）
@@ -110,7 +112,7 @@
 
 ### 口述正文（约 22～28 句）
 
-**Situation** 是标准注意力若物化 N×N 的 logits 或概率矩阵，显存是 \(\Theta(N^2)\)，长上下文时往往比 QKV 更先成为瓶颈；即使显存够，HBM 带宽也可能饿死算力。CS336 系统作业要求用 Triton 写 IO-aware 内核：分块 tiling、在线 softmax、把 matmul 与规约融合，本质是 FlashAttention-2 那套减少 HBM 往返的思路。**Task** 是数学上仍是**精确 softmax attention**（非常见稀疏近似），性能上要比朴素 baseline 明显更快，峰值显存不应再被 N² 主导，并提供与 `scaled_dot_product_attention` 或双精度参考的误差报告与不同序列长度下的吞吐。**Action** 上我先写清 online softmax：对每个 query tile 沿 key/value tile 扫描，维护运行最大值 m、归一化因子 ℓ、输出累加器，用重标度公式合并新块；Triton 里调 BLOCK_M、BLOCK_N，用 `tl.dot` 走 Tensor Core；特别注意 causal 在块边界上的可见范围；数值上每块先减 max 再 exp。验证从小到大：先在 N=128～512 对齐，再扩到 2k～8k，并用 profiler 看是否 memory-bound。**Result** 上，BF16 下与参考常见 max abs error 可压到 1e-2 量级或更严（依实现）；Attention 子模块在 N=4096、d_head=128 等设置相对朴素实现常见 **约 2× 或更高**；显存峰值不再由完整 N×N 矩阵主导，从而能把 batch 或序列长度往上推一档。端到端加速会小于子模块，因为 MLP 与 DataLoader 仍占相当比例。
+**Situation** 是标准注意力若物化 N×N 的 logits 或概率矩阵，显存是 $\Theta(N^2)$，长上下文时往往比 QKV 更先成为瓶颈；即使显存够，HBM 带宽也可能饿死算力。CS336 系统作业要求用 Triton 写 IO-aware 内核：分块 tiling、在线 softmax、把 matmul 与规约融合，本质是 FlashAttention-2 那套减少 HBM 往返的思路。**Task** 是数学上仍是**精确 softmax attention**（非常见稀疏近似），性能上要比朴素 baseline 明显更快，峰值显存不应再被 N² 主导，并提供与 `scaled_dot_product_attention` 或双精度参考的误差报告与不同序列长度下的吞吐。**Action** 上我先写清 online softmax：对每个 query tile 沿 key/value tile 扫描，维护运行最大值 m、归一化因子 ℓ、输出累加器，用重标度公式合并新块；Triton 里调 BLOCK_M、BLOCK_N，用 `tl.dot` 走 Tensor Core；特别注意 causal 在块边界上的可见范围；数值上每块先减 max 再 exp。验证从小到大：先在 N=128～512 对齐，再扩到 2k～8k，并用 profiler 看是否 memory-bound。**Result** 上，在【GPU、dtype、N、d_head 与 batch】下，输出与梯度误差为【实测绝对/相对误差】，相对【明确基线】的 attention 耗时为【前→后】，峰值显存为【前→后】。端到端加速另行实测；不能由子模块收益直接推出整体收益。
 
 ### 面试官可能追问
 
@@ -118,7 +120,7 @@
 |------|----------------|
 | FlashAttention 和「稀疏注意力」区别？ | Flash 通常是**精确 softmax 的融合实现**；稀疏/低秩才是近似模型。 |
 | online softmax 为什么是对的？ | 分块更新 running max 与归一化因子，使合并结果与一次性 softmax 等价（可简述重标度）。 |
-| 你实现 backward 了吗？ | 如实说范围：作业可能只要求 forward 或简化 backward；反向也可用重计算与分块，复杂度更高。 |
+| 你实现 backward 了吗？ | 如实区分教学 forward、autograd 路径与自定义 backward；是否满足 A2 以对应年份讲义与测试为准，不能因 forward 对齐就声称完整作业或训练内核已通过。 |
 
 ### 补充追问（口述版）
 
@@ -139,13 +141,13 @@
 
 ### 口述正文（约 22～28 句）
 
-**Situation** 是我主要用 PyTorch DDP：一进程一 GPU，每卡完整模型副本，数据并行。单机多卡受 NVLink/PCIe 拓扑影响；多机还要面对网卡、防火墙、NCCL 环境变量。最痛的不一定是不会写 torchrun，而是**某些 rank 静默卡住**：表面 loss 在跳，实际在等 AllReduce。**Task** 是保证梯度同步后的更新与全局 batch 约定一致，系统稳定、不随机超时，且数据划分无重复遗漏。**Action** 上我统一用 `DistributedSampler` 并在每个 epoch 调用 `set_epoch`；处理 `find_unused_parameters`：有条件分支导致部分参数无梯度时可能 NCCL 超时，要么打开该选项要么改结构使计算图一致；排查 `broadcast_buffers` 与 BN（LLM 多为 LayerNorm/RMSNorm）；遇到 NCCL 问题用 `NCCL_DEBUG=INFO`、检查 `NCCL_SOCKET_IFNAME`、驱动版本；用 torchrun 固定 MASTER_ADDR/PORT，rank0 断言 world size；核对学习率随全局 batch 的缩放约定；也曾发现「梯度不一致」实为不同 rank 预处理不一致。**Result** 上，一次典型故障是 AllReduce 卡死，根因是不同 rank 前向路径不一致，修复后 4 卡 step 时间从不稳定恢复到稳定区间，扩展效率回到 **0.85+**；另一个常见坑是有效 batch 理解错误，修完后学习率曲线才合理。我会用数字举例：1 卡某配置 180ms/step，4 卡理想 45ms，实测可能 52～60ms，并解释通信与 DataLoader 占比。
+**Situation** 是我主要用 PyTorch DDP：一进程一 GPU，每卡完整模型副本，数据并行。单机多卡受 NVLink/PCIe 拓扑影响；多机还要面对网卡、防火墙、NCCL 环境变量。最痛的不一定是不会写 torchrun，而是**某些 rank 静默卡住**：表面 loss 在跳，实际在等 AllReduce。**Task** 是保证梯度同步后的更新与全局 batch 约定一致，系统稳定、不随机超时，且数据划分、补齐或丢弃规则可解释并被检查。**Action** 上我统一用 `DistributedSampler` 并在每个 epoch 调用 `set_epoch`，确认默认补齐会重复少量索引、`drop_last=True` 会丢弃尾部，验证统计需去除重复或使用无补齐采样器；处理 `find_unused_parameters`：有条件分支导致部分参数无梯度时可能 NCCL 超时，要么打开该选项要么改结构使计算图一致；排查 `broadcast_buffers` 与 BN（LLM 多为 LayerNorm/RMSNorm）；遇到 NCCL 问题用 `NCCL_DEBUG=INFO`、检查 `NCCL_SOCKET_IFNAME`、驱动版本；用 torchrun 固定 MASTER_ADDR/PORT，rank0 断言 world size；核对学习率随全局 batch 的缩放约定；也曾发现「梯度不一致」实为不同 rank 预处理不一致。**Result** 上，只报告真实复现的【故障、日志与根因】，例如不同 rank 的 collective 调用次数或顺序不一致；修复后【实际卡数】卡的吞吐和扩展效率为【实测值】。比较单卡与多卡时说明全局 batch 固定的强扩展，还是每卡 batch 固定的弱扩展，不能混用 step time 直接宣称线性加速。
 
 ### 面试官可能追问
 
 | 追问 | 建议回答要点 |
 |------|----------------|
-| DDP 梯度怎么聚合？ | 各 rank 本地梯度 **AllReduce 求和再除以 world_size**（或等价缩放），使更新对应全局 batch。 |
+| DDP 梯度怎么聚合？ | 通常对各 rank 梯度 **AllReduce 后除以 world_size**。本地有效样本/token 数相等、loss 归约一致时等于全局均值；数量不等时需按有效数量缩放，不能把 rank 均值当全局 token 均值。 |
 | 和 DeepSpeed ZeRO 比呢？ | DDP 是**数据并行基线**；ZeRO 切分优化器/梯度/参数降显存，复杂度更高，按岗位如实答使用范围。 |
 | 多机最常踩的坑？ | 网卡绑定、防火墙、时钟与节点不一致、共享存储读写竞争。 |
 
@@ -158,7 +160,7 @@
 答：`nvidia-smi dmon` 看 GPU 是否空转；`NCCL_DEBUG=INFO` 看卡在哪个 collective；各 rank **同时打印 step 边界**，若只有部分 rank 前进，多半是通信或分支不一致。
 
 **问：单机多卡还需要模型并行吗？**  
-答：模型能塞进单卡时常用 **DDP 即可**；只有当层太大或要训超长上下文导致**单卡 OOM** 时，才考虑 **FSDP/张量并行**——与岗位相关，诚实答你课内主路径是 DDP。
+答：模型及训练状态能装入单卡时可先用 **DDP**；FSDP 分片与张量并行也可用于降低每卡显存或改善特定吞吐，不是必须先 OOM 才能选择。FSDP 通常属于分片数据并行，张量并行属于模型并行；如实说明自己的实验范围。
 
 ---
 
@@ -168,7 +170,7 @@
 
 ### 口述正文（约 22～28 句）
 
-**Situation** 是在架构族相对稳定时，验证集损失常与参数规模 N、数据规模 D、计算量 C 呈现可用幂律描述的关系；Kaplan 强调「大模型」，Chinchilla 强调算力约束下的最优配比，常用工具是 **IsoFLOPs 曲线**：固定总算力，扫不同 (N, D)。我算力有限，更强调**实验干净、结论可解释**，而不是铺几千次跑。**Task** 是回答：同样 FLOPs，预算更应该给参数还是给 token？需要一组算力近似恒定的点，测 val loss，在 log-log 下拟合，并避免 tokenizer、数据混合比等混杂因素。**Action** 上用粗估 **C ≈ 6ND** 把训练预算换算成 (N, D) 组合，常数因子各点一致即可；选定 IsoFLOPs 预算档对应到 GPU-hours；构造模型族调节层数/宽度使 N 变化；对每个模型配 D 使 ND 落在同一乘积尺度；固定 warmup、AdamW、权重衰减、clip、数据 shard 比例；评估协议固定同一验证集、上下文长度、eval batch；对 log loss 与 log N、log D 回归，看残差；记录大模型训练不稳定等工程现实。**Result** 上，在我的网格里通常能复现 Chinchilla 方向：**相对更小 N + 更大 D** 往往优于「大模型但 token 不足」；可报告量化例子如固定算力下某配比 val loss 差 **0.05～0.15 nats**（替换为你拟合值）。我也会强调：工业界可能过训练小模型换推理成本；数据质量差时 D 再大也可能无效；**Scaling laws 是经验规律，不是物理定律**。
+**Situation** 是在架构族相对稳定时，验证集损失常与参数规模 N、数据规模 D、计算量 C 呈现可用幂律描述的关系；Kaplan 强调「大模型」，Chinchilla 强调算力约束下的最优配比，常用工具是 **IsoFLOPs 曲线**：固定总算力，扫不同 (N, D)。我算力有限，更强调**实验干净、结论可解释**，而不是铺几千次跑。**Task** 是回答：同样 FLOPs，预算更应该给参数还是给 token？需要一组算力近似恒定的点，测 val loss，在 log-log 下拟合，并避免 tokenizer、数据混合比等混杂因素。**Action** 上用粗估 **C ≈ 6ND** 把训练预算换算成 (N, D) 组合，检查参数矩阵乘主导的假设；长序列 attention 与重计算需另计。选定 IsoFLOPs 预算，GPU-hours 仅作为实际耗时记录，不把相同墙钟时长等同于相同 FLOPs；构造模型族调节层数/宽度使 N 变化；对每个模型配 D 使 ND 落在同一乘积尺度；固定 warmup、AdamW、权重衰减、clip、数据 shard 比例；评估协议固定同一验证集、上下文长度、eval batch；若使用 Chinchilla 的加性模型，用非线性拟合估计不可约损失及容量/数据项；只有纯幂律或拟合最优前沿时，才可在 log-log 坐标下线性回归，并检查残差；记录大模型训练不稳定等工程现实。**Result** 上，报告【实际网格、预算、最优配比与验证损失】，以及拟合误差和外推范围；如果没有跑过实验，就只说明 Chinchilla 的理论结论，不声称自己复现了它。我也会强调：工业界可能过训练小模型换推理成本；数据质量差时 D 再大也可能无效；**Scaling laws 是经验规律，不是物理定律**。
 
 ### 面试官可能追问
 
@@ -187,7 +189,7 @@
 答：粗略说，Kaplan 时代常强调**加大 N**；Chinchilla 指出在**算力约束**下，**数据不足的大模型**会欠训练；IsoFLOPs 是检验手段。
 
 **问：实验里如何控制「训练不充分」混杂？**  
-答：每个 (N,D) 点用**相同 token 预算或相同 step**（需说明口径），并监控是否**收敛到平台**；若未收敛，比较 val loss 不公平。
+答：**IsoFLOPs 固定计算预算，不固定所有模型的 token 数或 step 数**；对不同 $N$ 选择 $D\approx C/(6N)$，并让学习率调度匹配各自训练预算。比较预算结束时的验证损失，不要求所有模型都收敛到平台；“大模型较早停止”恰是算力约束的权衡。固定数据、tokenizer 和评测协议，并报告近似 FLOPs 的口径。依据参见 [Chinchilla 的 IsoFLOP 实验](https://arxiv.org/html/2203.15556v1#S3.SS2)。
 
 ---
 
@@ -197,13 +199,13 @@
 
 ### 口述正文（约 22～28 句）
 
-**Situation** 是 Common Crawl 原始数据常为 WARC，体积可达 TB；直接训练会引入模板页、导航、重复抓取、低质文本，浪费算力并偏移 tokenizer 与下游评估。真实约束往往是**流水线能否并行、断点续跑、每步是否可量化**。**Task** 是把原始爬取变成训练可读的分片，如 JSONL 或预 token 化二进制 shard；每阶段有吞吐、丢弃率、语言分布、重复率估计；当 GPU 利用率低时要知道瓶颈在清洗还是读取。**Action** 上流式解析 WARC，不全量进内存；语言识别用 fastText lid 或轻量规则粗过滤；近似去重用 MinHash+LSH 或 SimHash 分桶，对 5-gram shingle 建签名，权衡算力与去重强度；质量过滤用启发式与小分类器并记录阈值带来的偏差；规范化统一空格、控制字符，避免过度清洗破坏代码与公式；按 hash 分片输出固定 shard 数；若 CPU tokenization 瓶颈则离线预 token 化或 mmap 数据集；用 profiler 看 GPU 利用率，长期 40%～55% 优先怀疑 DataLoader。**Result** 上，典型管线可能把数 TB 原始压缩到可用语料的某个比例，高度依赖阈值；去重可能使重复率从 30%～50% 降到 5%～15%（领域差异大）；通过预 token 化与调 workers，GPU 利用率可从约 45% 提到 **75%～85%**（用你实测替换）。我会强调数据工程是**可量化权衡**，不是越干净越好。
+**Situation** 是 Common Crawl 原始数据常为 WARC，体积可达 TB；直接训练会引入模板页、导航、重复抓取、低质文本，浪费算力并偏移 tokenizer 与下游评估。真实约束往往是**流水线能否并行、断点续跑、每步是否可量化**。**Task** 是把原始爬取变成训练可读的分片，如 JSONL 或预 token 化二进制 shard；每阶段有吞吐、丢弃率、语言分布、重复率估计；当 GPU 利用率低时要知道瓶颈在清洗还是读取。**Action** 上流式解析 WARC，不全量进内存；语言识别用 fastText lid 或轻量规则粗过滤；近似去重用 MinHash+LSH 或 SimHash 分桶，对 5-gram shingle 建签名，权衡算力与去重强度；质量过滤用启发式与小分类器并记录阈值带来的偏差；规范化统一空格、控制字符，避免过度清洗破坏代码与公式；按 hash 分片输出固定 shard 数；若 CPU tokenization 瓶颈则离线预 token 化或 mmap 数据集；用 profiler 区分 DataLoader 等待、通信、kernel 与同步开销；GPU 利用率低本身不能唯一定位到数据管道。**Result** 上，在【真实语料与规模】上记录过滤保留率【实测值】、重复率【定义及前→后】、预处理吞吐与训练等待时间【实测值】；去重阈值、语言分布和领域偏差一并说明，不把示例百分比当作通用收益。我会强调数据工程是**可量化权衡**，不是越干净越好。
 
 ### 面试官可能追问
 
 | 追问 | 建议回答要点 |
 |------|----------------|
-| MinHash 和精确去重区别？ | MinHash 用 Jaccard 估计，适合**大规模近似**；精确去重成本高，多用于小集或抽样校验。 |
+| MinHash 和精确去重区别？ | 精确文档去重可用哈希分桶，适合大规模完全重复；MinHash/LSH 用于近重复候选检索和 Jaccard 估计。只有对所有文档两两精确计算相似度才有二次成本，不能说精确文档去重通常只适合小集。 |
 | 过滤太强会怎样？ | 多样性下降、长尾能力受损、领域偏移；应用 FLOPs 与下游任务监控。 |
 | PII 与合规？ | Common Crawl 也需按团队策略做邮箱、电话等处理，**依实际项目**回答。 |
 
@@ -226,13 +228,13 @@
 
 ### 口述正文（约 22～28 句）
 
-**Situation** 是基座预训练优化的是「下一词预测」，更擅长像语料，不天然等于「像人类助手」。CS336 对齐部分覆盖 **SFT、RLHF、DPO、GRPO** 等路线。理解上：**RLHF** 是训练奖励模型再 PPO 类策略优化，流程重、对 RM 与稳定性要求高；**DPO** 直接用偏好对优化策略，避免显式 RM，实现相对轻；**GRPO** 适合同一提示下采样多条、用组内相对比较降方差，和**可验证奖励**（数学、代码）很搭。**Task** 上我关注的可观测指标是：格式可解析率、严格正确率、KL 不爆炸；任务域可选数学式推理，奖励基于答案匹配、符号等价或代码执行。**Action** 上先 SFT 稳定对话格式得 π_ref；组采样对每个 prompt 采 K 条，调温度与 top-p；奖励主信号为结果正确，辅信号为格式分，对过长输出惩罚缓解长度偏置；优势用组内减均值中心化；对参考模型加 KL，监控 token-level KL 与熵；梯度裁剪、warmup、过滤异常轨迹；用更难 held-out 验证集防 reward hacking。**Result** 上，格式可解析比例可从约 55%～65% 提升到 75%～85%（示例）；严格准确率提升依赖题库难度，可能有 **+5～15 个百分点**；也观察到套模板拿分等现象，需更难验证与 KL 约束。若问「和 DPO 比」，答：**偏好数据与实现成本**不同，DPO 适合成对偏好数据丰富场景；我这边强调可验证信号时 GRPO 更顺手。
+**Situation** 是基座预训练优化的是「下一词预测」，更擅长像语料，不天然等于「像人类助手」。课程笔记讲解 **SFT、RLHF、DPO、GRPO** 等路线，但 2025 年 A5 主线不是完整 RM+PPO 项目。理解上：**传统 PPO 式 RLHF** 是训练奖励模型再 PPO 类策略优化，流程重、对 RM 与稳定性要求高；**DPO** 直接用偏好对优化策略，避免显式 RM，实现相对轻；**GRPO** 适合同一提示下采样多条、用组内相对比较降方差，和**可验证奖励**（数学、代码）很搭。**Task** 上我关注的可观测指标是：格式可解析率、严格正确率、KL 不爆炸；任务域可选数学式推理，奖励基于答案匹配、符号等价或代码执行。**Action** 上先 SFT 稳定对话格式得 π_ref；组采样对每个 prompt 采 K 条，调温度与 top-p；奖励主信号为结果正确，辅信号为格式分，对过长输出惩罚缓解长度偏置；优势按实验版本使用组内减均值、再除标准差，或明确标注不除标准差的消融；原始 GRPO 使用 KL，2025 年作业主线不要求 reference KL，扩展加入时需单独说明；监控熵和适用的策略漂移指标；梯度裁剪、warmup、过滤异常轨迹；用更难 held-out 验证集防 reward hacking。**Result** 上，按【固定、未用于调参的评测集与解码设置】报告格式可解析率【前→后】、严格正确率【前→后】、输出长度与奖励投机案例【实际记录】；改善不预设范围。KL 或奖励设计也不能保证杜绝 reward hacking。若问「和 DPO 比」，答：**偏好数据与实现成本**不同，DPO 适合成对偏好数据丰富场景；我这边强调可验证信号时 GRPO 更顺手。
 
 ### 面试官可能追问
 
 | 追问 | 建议回答要点 |
 |------|----------------|
-| DPO 的损失在优化什么？ | 在隐式偏好下最大化赢面、抑制输面，**等价于带 KL 约束的策略改进**的一种闭式写法（说清符号依赖课内口径）。 |
+| DPO 的损失在优化什么？ | 用 chosen/rejected 回答相对 reference 的 log-ratio 差构造偏好分类损失；从 Bradley–Terry 偏好模型和 KL 正则目标推导，不是每次 SGD 都精确求出最优策略或满足严格 KL 上界。参见 [DPO 原论文](https://arxiv.org/abs/2305.18290)。 |
 | RLHF 最大难点？ | RM 泛化、PPO 稳定性、reward hacking、与人类价值观对齐的可扩展性。 |
 | 你为什么选 GRPO 做实验？ | 组基线降方差、与多采样兼容、数学任务上**可验证奖励**信号硬。 |
 
@@ -255,14 +257,14 @@
 
 ### 口述正文（约 22～28 句）
 
-**Situation** 是 Transformer 训练瓶颈分布在 Attention/MLP、激活显存、优化器状态、数据加载、分布式通信；若不 profiler，容易「以为在训模型其实在等 DataLoader」。**Task** 是给出可量化 before/after：tokens/s/GPU、step time、峰值显存，并解释原因；在**不改变数学**的前提下提升吞吐或支持更长上下文。**Action** 上 Attention 用 FlashAttention-2 或 SDPA；BF16 autocast，对 loss 累加等保留 FP32 策略；长序列开 activation checkpointing，用额外计算换显存；DataLoader 调 num_workers、pin_memory、prefetch，避免训练循环里频繁 `.item()` 同步；DDP 合理设置 bucket；IO 瓶颈时预 token 化、本地 NVMe staging。**Result** 上用一组答辩友好对比（**请全部替换为实测**）：例如吞吐从 **18k 提到 32k tokens/s/GPU**，约 **1.7×**；显存从 **38GB 降到 26GB**，从而全局 batch 或序列长度可上调；端到端同样 token 预算 wall-clock 缩短 **35%～45%**；profiler 上 Attention 占比从 45% 降到 28%、DataLoader 从 18% 降到 7% 等。我会同时说明：**子模块 2× 不等于端到端 2×**，并区分「算子优化」与「数据管线优化」各自贡献。
+**Situation** 是 Transformer 训练瓶颈分布在 Attention/MLP、激活显存、优化器状态、数据加载、分布式通信；若不 profiler，容易「以为在训模型其实在等 DataLoader」。**Task** 是给出可量化 before/after：tokens/s/GPU、step time、峰值显存，并解释原因；在**不改变数学**的前提下提升吞吐或支持更长上下文。**Action** 上 Attention 用 FlashAttention-2 或 SDPA；BF16 autocast，对 loss 累加等保留 FP32 策略；长序列开 activation checkpointing，用额外计算换显存；DataLoader 调 num_workers、pin_memory、prefetch，避免训练循环里频繁 `.item()` 同步；DDP 合理设置 bucket；IO 瓶颈时预 token 化、本地 NVMe staging。**Result** 上报告【固定 GPU、卡数、batch、seq、精度、版本与 token 预算】下的吞吐【前→后】、峰值显存【前→后】、端到端 wall-clock【前→后】，并用 profiler 给出关键阶段的绝对耗时和占比【实测值】。我会同时说明：**子模块 2× 不等于端到端 2×**，并区分「算子优化」与「数据管线优化」各自贡献。
 
 ### 面试官可能追问
 
 | 追问 | 建议回答要点 |
 |------|----------------|
 | 为什么端到端加速小于 Attention 加速？ | MLP、归一化、优化器、IO 与通信仍占时间；Amdahl 定律。 |
-| checkpointing 的代价？ | 前向重算增加计算 **20%～35%** 换显存 **30%～50%**（依实现与层数变化）。 |
+| checkpointing 的代价？ | 反向传播中重算部分前向，用额外计算换较少激活存储；收益与重算范围、内核、模型和 batch 有关，应报告自己的峰值显存与训练时间，不能套用固定百分比。 |
 | 你怎么证明是优化而不是随机波动？ | 多次 run 取中位数、固定版本与数据 shard、同一 step 区间对比 tok/s。 |
 
 ### 补充追问（口述版）
@@ -284,7 +286,7 @@
 
 ### 口述正文（约 22～28 句）
 
-**Situation** 是即使是课程小组项目，只要两人以上，**接口与配置不一致**的成本就会指数上升；模块大致分数据工程、训练代码、系统内核与并行、评测与对齐。**Task** 是每周有可演示里程碑：BPE、单卡收敛、DDP、Scaling 图、对齐曲线；避免「只能在他电脑上跑」；统一环境、配置字段与日志 schema。**Action** 上分支策略保护 main、开发走 feat 分支、合并前 PR review；ruff/black 与关键 API 类型标注；用单一 YAML/JSON schema 规定超参与实验字段；WandB 或 TensorBoard 统一 project，run name 带 git sha 与 config hash；分工上可示例：我负责内核与性能，同伴负责数据与评测，对齐阶段共建奖励与数据；每周同步 NCCL、环境、数据许可证等风险；README 给一键训练、评估、复现图表命令。**Result** 上，前期接口未冻结时集成问题集中，冻结后返工下降；交付物包括多次可复现实验记录、统一日志与答辩用对比表。冲突处理上，例如「性能换可复现」的争执，用 **profiler 数据与盲测 loss** 做决策而不是主观争论。若个人项目则强调：**里程碑、配置即文档、实验可追溯**，效果类似小团队。
+**Situation** 是即使是课程小组项目，只要两人以上，**接口与配置不一致**会显著增加集成和沟通成本；模块大致分数据工程、训练代码、系统内核与并行、评测与对齐。**Task** 是每周有可演示里程碑：BPE、单卡收敛、DDP、Scaling 图、对齐曲线；避免「只能在他电脑上跑」；统一环境、配置字段与日志 schema。**Action** 上分支策略保护 main、开发走 feat 分支、合并前 PR review；ruff/black 与关键 API 类型标注；用单一 YAML/JSON schema 规定超参与实验字段；WandB 或 TensorBoard 统一 project，run name 带 git sha 与 config hash；分工上可示例：我负责内核与性能，同伴负责数据与评测，对齐阶段共建奖励与数据；每周同步 NCCL、环境、数据许可证等风险；README 给一键训练、评估、复现图表命令。**Result** 上，前期接口未冻结时集成问题集中，冻结后返工下降；交付物包括多次可复现实验记录、统一日志与答辩用对比表。冲突处理上，例如「性能换可复现」的争执，用 **profiler 数据与盲测 loss** 做决策而不是主观争论。若个人项目则强调：**里程碑、配置即文档、实验可追溯**，效果类似小团队。
 
 ### 面试官可能追问
 
@@ -345,7 +347,7 @@
 
 ## 附录 D：一分钟电梯陈述（备用）
 
-我用 CS336 从零搭了 **字节级 BPE → Decoder-only Transformer → Triton FlashAttention → DDP 训练 → IsoFLOPs 缩放实验 → SFT 与 DPO/GRPO 对齐** 的完整链路。系统侧把长序列 Attention 做成 IO-aware 融合内核，并用 profiler 证明吞吐与显存变化。数据侧处理 TB 级 Common Crawl 子集，做语言过滤与近似去重，输出可分片训练格式。方法论上能解释 Chinchilla 与 Kaplan 的差异，以及可验证奖励在数学任务上如何稳定组相对优化。您若感兴趣，我可以深入任何一层：算子、系统、数据或目标函数。
+我参考 CS336 完成了【真实实现的模块清单】，用【测试/日志/报告链接】验证结果。系统侧实际使用【纯 PyTorch 教学分块实现 / SDPA / 自定义 Triton 内核，择一】，在【配置】下测得【吞吐与显存】；数据侧处理【真实数据与规模】，完成【实际过滤/去重步骤】。我也学习了【尚未实施的主题】，但不把阅读或计划当成项目产出。您若感兴趣，我可以深入【最熟悉且有证据的模块】。
 
 ---
 
@@ -363,7 +365,7 @@
    答：相对位置归纳、外推性讨论多；实现上要清楚 **旋转施加在哪些维度**、与 head 维拆分方式。
 
 4. **你如何估算一次训练的 FLOPs？**  
-   答：把主要算子拆成 matmul，用 **2MNK** 估乘法次数，再乘层数与前向/反向系数；说明是**数量级估算**，用于 Scaling 与预算，不是财务审计。
+   答：对 $M\times K$ 与 $K\times N$ 的稠密矩阵乘，约有 **MNK 次乘法与 MNK 次加法**；按一次乘加计 2 FLOPs 的口径，计算量约为 **2MNK FLOPs**。再乘层数与前向/反向系数，说明是否计入注意力、重计算和优化器。
 
 5. **遇到 OOM 你按什么顺序排查？**  
    答：**batch × seq × 激活**、优化器状态、是否意外保存了整段激活、是否可开 gradient checkpointing、是否该用 DDP 而非重复模型（DDP 不省单卡显存）等——按你真实操作顺序说。
@@ -390,7 +392,7 @@
 | A2 Systems | 系统 | GPU/显存层级、FlashAttention 类内核、DDP，追求吞吐与稳定 |
 | A3 Scaling | 缩放 | IsoFLOPs、Chinchilla 叙事、算力与数据配比实验 |
 | A4 Data | 数据 | Common Crawl、过滤、去重、shard，服务预训练 |
-| A5 Alignment | 对齐 | SFT、RLHF/DPO/GRPO，目标函数从「似然」到「偏好/奖励」 |
+| A5 Alignment（2025） | 对齐与推理 RL | zero-shot、SFT、Expert Iteration、GRPO 数学推理主线；安全 DPO 为选做，不是必做 PPO/RLHF 项目 |
 
 面试时把 **STAR 1** 与上表对齐，可快速回应「你项目分几个阶段」类问题。
 

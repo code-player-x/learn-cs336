@@ -20,10 +20,10 @@
 ### 1.2 学完本课你应该能回答
 
 - 「Attention Is All You Need」相对 RNN 的核心主张是什么？
-- Self-Attention 中 Q、K、V 如何一步步算出输出？为什么要除以 \(\sqrt{d_k}\)？
+- Self-Attention 中 Q、K、V 如何一步步算出输出？为什么要除以 $\sqrt{d_k}$？
 - 多头注意力与 FFN 分工是什么？Pre-Norm 与残差如何配合？
 - 因果掩码如何实现？与自回归训练、推理的关系？
-- 如何估算 \(L\) 层、维度 \(d\)、词表 \(V\) 下的参数量级？
+- 如何估算 $L$ 层、维度 $d$、词表 $V$ 下的参数量级？
 
 ### 1.3 预备知识
 
@@ -47,7 +47,7 @@ BPE 分词 ──→ 【本课：Transformer 块级架构】──→ 多头细�
 
 **序列建模的早期范式**
 
-- **RNN**：第 \(t\) 步隐藏状态 \(h_t\) 依赖 \(h_{t-1}\) 与当前输入 \(x_t\)，形成**时间上的递归**。信息沿时间步传递，**长距离依赖**需经过很多步，易出现**梯度消失/爆炸**。
+- **RNN**：第 $t$ 步隐藏状态 $h_t$ 依赖 $h_{t-1}$ 与当前输入 $x_t$，形成**时间上的递归**。信息沿时间步传递，**长距离依赖**需经过很多步，易出现**梯度消失/爆炸**。
 - **LSTM/GRU**：通过门控与记忆单元**缓解**长依赖与梯度问题，但本质仍是**逐步计算**，**时间步之间难以完全并行**（训练时虽有 Truncated BPTT 等技巧，但并行度仍受限）。
 
 **CNN 作为序列模型的补充**
@@ -177,34 +177,42 @@ Vaswani 等人在 **「Attention Is All You Need」**（NeurIPS 2017）中提出
 
 #### （1）Input Embedding 与位置信息
 
-- **Token Embedding**：查表矩阵 \(E \in \mathbb{R}^{V \times d}\)，第 \(i\) 个 token 得到 \(d\) 维向量。输出形状 `[B, n, d]`。
-- **为何需要位置编码**：Self-Attention 若只看内容向量，对位置**置换**缺乏区分能力（排列 token 顺序会得到相同的注意力结构）。必须注入**位置信息**（绝对正弦、可学习位置、**RoPE** 等，RoPE 在 Lesson 04 展开）。
-- **常见做法**：\(X = \text{TokEmb} + \text{PosEmb}\)（或 RoPE 作用于 Q/K）。
+- **Token Embedding**：查表矩阵 $E \in \mathbb{R}^{V \times d}$，第 $i$ 个 token 得到 $d$ 维向量。输出形状 `[B, n, d]`。
+- **为何需要位置编码**：无位置编码、也无固定因果掩码的 Self-Attention 对输入置换**等变**，不能仅凭内容区分顺序；置换后输出随之置换，而非原地不变。通常用绝对正弦、可学习位置或 **RoPE** 注入位置；因果掩码本身也提供顺序约束。
+- **常见做法**：$X = \text{TokEmb} + \text{PosEmb}$（或 RoPE 作用于 Q/K）。
 
 #### （2）Self-Attention 逐步推导（Q、K、V）
 
-对单头、忽略 batch，隐藏维度为 \(d\)，每头维度 \(d_k = d / H\)（\(H\) 为头数）。
+忽略 batch，输入隐藏维度为 $d$，头数为 $H$，以下推导多头注意力中的第 $h$ 个头。采用常见的 $d_k = d_v = d/H$ 设置；真正的单头情形对应 $H=1$、$d_k=d$。下文统一采用行向量/右乘权重的记法。
 
-1. **线性投影**：对输入 \(X \in \mathbb{R}^{n \times d}\)，  
-   \(Q = X W_Q,\quad K = X W_K,\quad V = X W_V\)，  
-   其中 \(W_Q, W_K, W_V \in \mathbb{R}^{d \times d}\)（多头时通常先投影到 \(d\) 再拆头）。
-2. **注意力分数**：\( \text{Scores} = Q K^\top \in \mathbb{R}^{n \times n}\)，第 \(i\) 行表示位置 \(i\) 对每个位置 \(j\) 的相似度。
-3. **缩放**：\( \text{Scores}' = \text{Scores} / \sqrt{d_k} \)。
-4. **掩码（Decoder）**：对**不允许 attend** 的位置（未来位置）将分数置为 \(-\infty\)，Softmax 后概率为 0。
-5. **Softmax（按行）**：\(A = \text{softmax}(\text{Scores}', \text{dim}=\text{last})\)，\(A \in \mathbb{R}^{n \times n}\)。
-6. **聚合**：输出 \(O = A V \in \mathbb{R}^{n \times d}\)。
-7. **输出投影**：\(O' = O W_O\)，\(W_O \in \mathbb{R}^{d \times d}\)。
+1. **线性投影**：对输入 $X \in \mathbb{R}^{n \times d}$，
+   $Q_h = X W_{Q,h},\quad K_h = X W_{K,h},\quad V_h = X W_{V,h}$，
+   其中 $W_{Q,h}, W_{K,h}, W_{V,h} \in \mathbb{R}^{d \times d_k}$，所以 $Q_h, K_h, V_h \in \mathbb{R}^{n \times d_k}$。工程上通常把各头投影合并为三个 $d \times d$ 矩阵，先投影到 $d$ 再拆头。
+2. **注意力分数**：$S_h = Q_h K_h^\top \in \mathbb{R}^{n \times n}$，第 $i$ 行表示位置 $i$ 对每个位置 $j$ 的相似度。
+3. **缩放**：$\widetilde{S}_h = S_h / \sqrt{d_k}$。
+4. **掩码（Decoder）**：使用加性掩码 $M$，允许位置取 $M_{ij}=0$，未来位置（$j>i$）取 $M_{ij}=-\infty$。Softmax 前加到缩放后的分数上，未来位置概率为 0。无掩码的 Encoder 注意力可取 $M=0$。
+5. **Softmax（按行）**：$A_h = \operatorname{softmax}(\widetilde{S}_h + M)$，$A_h \in \mathbb{R}^{n \times n}$；对每个查询位置，沿键位置维归一化。
+6. **聚合**：每头输出 $O_h = A_h V_h \in \mathbb{R}^{n \times d_k}$。
+7. **拼接与输出投影**：$O = \operatorname{Concat}(O_1,\ldots,O_H) \in \mathbb{R}^{n \times d}$，再计算 $O' = O W_O$，其中 $W_O \in \mathbb{R}^{d \times d}$。
+
+**每头的完整公式**：
+
+$$
+O_h = \operatorname{softmax}\left(\frac{Q_h K_h^\top}{\sqrt{d_k}} + M\right)V_h
+$$
+
+公式与投影维度可对照 [Attention Is All You Need，§3.2](https://arxiv.org/html/1706.03762v7#S3.SS2)。
 
 **直觉**：每个位置用**查询 Q** 去和**键 K** 匹配，得到权重，再对**值 V** 加权求和——即「按内容相关性」从全序列收集信息。
 
-#### （3）为什么要除以 \(\sqrt{d_k}\)？与 Softmax 饱和
+#### （3）为什么要除以 $\sqrt{d_k}$？与 Softmax 饱和
 
-- **方差稳定**：若 \(q, k\) 各分量近似零均值、有限方差，则点积 \(q^\top k\) 的方差随 \(d_k\) **线性增长**。除以 \(\sqrt{d_k}\) 使点积尺度**不随维度爆炸**，Softmax 不会过早进入**极端饱和区**。
-- **与梯度的关系**：Softmax 在输入**极大或极小**时梯度接近 0（饱和），不利于学习；缩放使 logits 保持在更温和的范围，**优化更稳定**。面试中可表述为：**避免点积过大导致 Softmax 几乎 one-hot、梯度消失**（与「梯度稳定」同一方向）。
+- **方差稳定**：在 $q, k$ 的各分量相互独立、零均值、方差为 1 的简化假设下，$\operatorname{Var}(q^\top k)=d_k$，而 $\operatorname{Var}(q^\top k/\sqrt{d_k})=1$。除以 $\sqrt{d_k}$ 使点积尺度**不随维度爆炸**，降低 Softmax 过早进入**极端饱和区**的风险。
+- **与梯度的关系**：Softmax 对所有 logits 加同一个常数并不敏感；真正导致饱和的是 **logits 的相对差距过大**，使概率几乎 one-hot、梯度接近 0。缩放有助于控制这种差距，**优化更稳定**，但不保证任何输入下都不会饱和。
 
 #### （4）Multi-Head Attention
 
-将 \(d\) 拆成 \(H\) 个头，每头独立一组 \(Q_h, K_h, V_h\)（维度 \(d_k = d/H\)），并行计算 \(H\) 个注意力，再 **concat** 并经 \(W_O\) 融合。
+将 $d$ 拆成 $H$ 个头，每头独立一组 $Q_h, K_h, V_h$（维度 $d_k = d/H$），并行计算 $H$ 个注意力，再 **concat** 并经 $W_O$ 融合。
 
 **直觉**：多头 = **多个子空间**上并行做「谁该看谁」，有的头偏句法、有的头偏共指等（具体模式由训练涌现）。
 
@@ -212,22 +220,22 @@ Vaswani 等人在 **「Attention Is All You Need」**（NeurIPS 2017）中提出
 
 每层通常对每个位置**独立**做两层 MLP：
 
-\[
-\text{FFN}(x) = W_2\,\sigma(W_1 x + b_1) + b_2
-\]
+$$
+\operatorname{FFN}(x) = \sigma(x W_1 + b_1) W_2 + b_2
+$$
 
-中间维度 \(d_{\text{ff}}\) 常取 **\(4d\)**。\(\sigma\) 常用 GELU/ReLU。
+这里 $x \in \mathbb{R}^{1 \times d}$，$W_1 \in \mathbb{R}^{d \times d_{\text{ff}}}$，$W_2 \in \mathbb{R}^{d_{\text{ff}} \times d}$，偏置按输出维广播。中间维度 $d_{\text{ff}}$ 常取 **$4d$**。$\sigma$ 常用 GELU/ReLU。
 
 **分工**：Attention **混合位置间信息**；FFN **在每个位置做强非线性变换**，常被视为**容量与记忆**的重要部分（教学类比，非严格证明）。
 
 #### （6）残差连接与 Layer Normalization
 
-- **残差**：\(x_{\text{out}} = x + \text{Sublayer}(x)\)（Pre-Norm 时子层输入先 LN）。提供近似**恒等路径**，利于梯度回传与**深层堆叠**。
+- **残差**：基本形式为 $x_{\text{out}} = x + \operatorname{Sublayer}(x)$；Pre-Norm 写作 $x_{\text{out}} = x + \operatorname{Sublayer}(\operatorname{LN}(x))$，Post-Norm 写作 $x_{\text{out}} = \operatorname{LN}(x + \operatorname{Sublayer}(x))$。残差提供**恒等路径**，利于梯度回传与**深层堆叠**。
 - **LayerNorm**：在**特征维**上归一化（Transformer 序列任务中通常对每个 token 向量归一），稳定激活分布。
 
 #### （7）输出投影与 Softmax
 
-最后一层隐藏状态 \(h \in \mathbb{R}^d\) 经 **LM Head** \(W_{\text{lm}} \in \mathbb{R}^{V \times d}\) 得 logits，再 Softmax 得词表上的概率分布。训练时常对**下一 token** 位置做交叉熵。
+最后一层隐藏状态按行向量记为 $h \in \mathbb{R}^{1 \times d}$。沿用 PyTorch 的权重存储形状，**LM Head** 的 $W_{\text{lm}} \in \mathbb{R}^{V \times d}$，无偏置时 $\text{logits} = h W_{\text{lm}}^\top \in \mathbb{R}^{1 \times V}$，再 Softmax 得词表上的概率分布。训练时常对**下一 token** 位置做交叉熵。
 
 ---
 
@@ -235,12 +243,12 @@ Vaswani 等人在 **「Attention Is All You Need」**（NeurIPS 2017）中提出
 
 **因果掩码（Causal / Lower-Triangular Mask）**
 
-- 位置 \(i\) 只能 attend \(j \le i\)。在 \(n \times n\) 注意力矩阵中，**禁止** \(j > i\) 的位置。
-- 实现：将 **上三角（不含对角）** 的 logits 置为 \(-\infty\)，Softmax 后这些位置权重为 0。
+- 位置 $i$ 只能 attend $j \le i$。在 $n \times n$ 注意力矩阵中，**禁止** $j > i$ 的位置。
+- 实现：将 **上三角（不含对角）** 的 logits 置为 $-\infty$，Softmax 后这些位置权重为 0。
 
 **自回归生成（Autoregressive）**
 
-- 生成第 \(t+1\) 个 token 时，仅依赖已生成的 \(1\ldots t\)。训练时**并行 teacher forcing** 在同一前向中计算所有位置，但每个位置的标签仍是「预测下一个 token」，与推理一致。
+- 生成第 $t+1$ 个 token 时，仅依赖已生成的 $1\ldots t$。训练时**并行 teacher forcing** 在同一前向中计算所有位置，但每个位置的标签仍是「预测下一个 token」，与推理一致。
 
 ---
 
@@ -253,81 +261,95 @@ Vaswani 等人在 **「Attention Is All You Need」**（NeurIPS 2017）中提出
 | **注意力** | 因果自注意力 | 双向自注意力 | 因果；常用 GQA、RoPE 等 | Encoder 双向 + Decoder 因果 + Cross-Attn |
 | **典型预训练目标** | Next-Token / 自回归 | MLM、NSP 等 | NTP（自回归） | Span Corruption 等 seq2seq |
 | **强项** | 生成、对话、通用 LM | 分类、检索、句向量 | 开源生态、推理优化多 | 翻译、摘要、文本到文本 |
-| **位置编码** | 可学习 / RoPE | 可学习片段 | **RoPE**（常见） | 相对位置等（依版本） |
+| **位置编码** | 可学习 / RoPE | 可学习绝对位置（另有 segment embedding） | **RoPE**（常见） | 相对位置等（依版本） |
 | **Norm/FFN** | 依代际不同 | LayerNorm + 标准 FFN | 常见 **RMSNorm + SwiGLU**（Lesson 05） | Pre-LN 等 |
 
 ---
 
 ### 2.7 模型参数量估算公式
 
-**记号**：\(V\) 词表，\(d\) 模型宽度，\(L\) 层数，\(d_{\text{ff}}\) FFN 中间维，注意力头数影响 \(d_k\) 但不改变 \(d\times d\) 投影的主项阶（标准 MHA 下）。
+**记号**：$V$ 词表，$d$ 模型宽度，$L$ 层数，$d_{\text{ff}}$ FFN 中间维，注意力头数影响 $d_k$ 但不改变 $d\times d$ 投影的主项阶（标准 MHA 下）。
+
+**适用假设**：以下估算针对 Decoder-only、标准 MHA、标准两矩阵 FFN，忽略 bias、Norm 和位置参数；不直接适用于含 Cross-Attention 的 Decoder 层或 GQA/MQA。若使用可学习绝对位置嵌入，还需另加 $n_{\max}d$ 个位置参数。
 
 **Embedding**
 
-\[
+$$
 P_{\text{emb}} \approx V \cdot d
-\]
+$$
 
-（若与 output **权重共享 weight tying**，则不计第二次 \(Vd\)。）
+（若与 output **权重共享 weight tying**，则不计第二次 $Vd$。）
 
-**每层 Self-Attention（四个 \(d\times d\) 投影 \(W_Q, W_K, W_V, W_O\)）**
+**每层 Self-Attention（四个 $d\times d$ 投影 $W_Q, W_K, W_V, W_O$）**
 
-\[
+$$
 P_{\text{attn}} \approx 4 d^2
-\]
+$$
 
-**每层标准 FFN（两层：\(d \to d_{\text{ff}} \to d\)）**
+**每层标准 FFN（两层：$d \to d_{\text{ff}} \to d$）**
 
-\[
+$$
 P_{\text{ffn}} \approx 2 \cdot d \cdot d_{\text{ff}}
-\]
+$$
 
-当 \(d_{\text{ff}} = 4d\) 时，\(P_{\text{ffn}} \approx 8d^2\)。
+当 $d_{\text{ff}} = 4d$ 时，$P_{\text{ffn}} \approx 8d^2$。
 
 **每层合计（标准假设）**
 
-\[
+$$
 P_{\text{layer}} \approx 4d^2 + 2 d d_{\text{ff}} \approx 12 d^2 \quad (\text{当 } d_{\text{ff}}=4d)
-\]
+$$
 
-**\(L\) 层 Transformer Block**
+**$L$ 层 Transformer Block**
 
-\[
+$$
 P_{\text{blocks}} \approx L \cdot (4d^2 + 2 d d_{\text{ff}})
-\]
+$$
 
 **总参数量（粗算，忽略 bias、Norm 小项）**
 
-\[
-P_{\text{total}} \approx V d + L(4d^2 + 2 d d_{\text{ff}}) + \text{（若不 tying 则再加 } Vd\text{）}
-\]
+$$
+P_{\text{total}} \approx P_{\text{io}} + L(4d^2 + 2 d d_{\text{ff}})
+$$
+
+其中输入 Embedding 与 LM Head 合计为：
+
+$$
+P_{\text{io}} =
+\begin{cases}
+Vd, & \text{共享权重} \\
+2Vd, & \text{不共享权重}
+\end{cases}
+$$
 
 **SwiGLU FFN（LLaMA 等常用）**
 
-SwiGLU 可看作门控：中间有三个投影（up、gate、down），维度常取 **\(\frac{2}{3} \cdot 4d\)** 等以保持 FLOPs 近似。参数量常按三矩阵估算，例如中间宽 \(d_{\text{ff}}\) 时：
+SwiGLU 可看作门控：中间有三个投影（up、gate、down），维度常取 **$\frac{2}{3} \cdot 4d$** 等以保持 FLOPs 近似。参数量常按三矩阵估算，例如中间宽 $d_{\text{ff}}$ 时：
 
-\[
+$$
 P_{\text{ffn}}^{\text{SwiGLU}} \approx 3 \cdot d \cdot d_{\text{ff}}
-\]
+$$
 
-若目标总 FLOPs 与「\(d_{\text{ff}}=4d\) 的两层 MLP」对齐，常取 \(d_{\text{ff}} = \frac{2}{3} \cdot 4d\)，则：
+若目标总 FLOPs 与「$d_{\text{ff}}=4d$ 的两层 MLP」对齐，常取 $d_{\text{ff}} = \frac{2}{3} \cdot 4d$，则：
 
-\[
+$$
 P_{\text{ffn}}^{\text{SwiGLU}} \approx 3 d \cdot \frac{8}{3}d = 8d^2
-\]
+$$
 
-与标准 \(8d^2\) **同量级**（具体系数依实现与是否含 bias 略有出入）。面试说明**假设**即可。
+与标准 $8d^2$ **同量级**（具体系数依实现与是否含 bias 略有出入）。面试说明**假设**即可。
 
-**另一种常见记法（与「把 hidden 设为 \(\frac{2}{3} \times 4d\) 以保持算力」对齐）**
+**另一种常见记法（与「把 hidden 设为 $\frac{2}{3} \times 4d$ 以保持算力」对齐）**
 
-若将「标准 FFN 的中间维」记为 \(4d\)，SwiGLU 为保持前向 FLOPs 近似不变，常取 **中间瓶颈维** \(d_{\text{ff}}^{\text{SwiGLU}} = \frac{2}{3} \times 4d\)，则三个矩阵 \(d \times d_{\text{ff}}^{\text{SwiGLU}}\) 的参数量可记为：
+若将「标准 FFN 的中间维」记为 $4d$，SwiGLU 为保持主要矩阵乘的前向 FLOPs 近似不变，常取 **中间瓶颈维** $d_{\text{ff}}^{\text{SwiGLU}} \approx \frac{2}{3} \times 4d$。up、gate 两个矩阵形状为 $d \times d_{\text{ff}}^{\text{SwiGLU}}$，down 矩阵形状为 $d_{\text{ff}}^{\text{SwiGLU}} \times d$，三者参数量相同，总量可记为：
 
-\[
+$$
 P_{\text{ffn}}^{\text{SwiGLU}} \approx 3 \cdot d \cdot d_{\text{ff}}^{\text{SwiGLU}}
 = 3 \cdot d \cdot \frac{2}{3} \cdot 4d = 8d^2
-\]
+$$
 
-即与「两层标准 FFN、\(d_{\text{ff}}=4d\)」在 **\(8d^2\)** 上**同阶**。面试时写清「**三矩阵 × 中间维**」比死记系数更重要。
+即与「两层标准 FFN、$d_{\text{ff}}=4d$」在 **$8d^2$** 上**同阶**。面试时写清「**三矩阵 × 中间维**」比死记系数更重要。
+
+实际实现通常把中间维取整到便于硬件计算的倍数，上述 $8d^2$ 是未取整时的估算；“FLOPs 对齐”主要比较矩阵乘，不表示激活、门控逐元素运算也完全相同。三矩阵与中间维缩减的依据见 [GLU Variants Improve Transformer，§2](https://arxiv.org/html/2002.05202v1#S2)。
 
 ---
 
@@ -443,7 +465,7 @@ class TinyDecoderLM(nn.Module):
         return self.lm_head(x)
 ```
 
-**自查清单**：因果掩码是否作用在 **scores** 上？残差是否在 Attention 与 FFN **各一次**？\(\sqrt{d_k}\) 是否用 **每头维度** 而非 \(d_{\text{model}}\)？
+**自查清单**：因果掩码是否作用在 **scores** 上？残差是否在 Attention 与 FFN **各一次**？$\sqrt{d_k}$ 是否用 **每头维度** 而非 $d_{\text{model}}$？
 
 ---
 
@@ -457,18 +479,18 @@ class TinyDecoderLM(nn.Module):
 
 ### 4.2 Self-Attention 的计算复杂度是多少？
 
-**答**：对序列长度 \(n\)、模型维度 \(d\)（单头维度 \(d_k = d/H\)）：
+**答**：对序列长度 $n$、模型维度 $d$（单头维度 $d_k = d/H$）：
 
-- 计算 \(Q, K, V\) 与输出投影：**\(O(n d^2)\)**（主导项为矩阵乘）。
-- 注意力矩阵 \(QK^\top\) 与加权：**\(O(n^2 d_k) = O(n^2 d)\)**（\(H\) 个头总复杂度同级）。
+- 计算 $Q, K, V$ 与输出投影：**$O(n d^2)$**（主导项为矩阵乘）。
+- 注意力矩阵 $Q_hK_h^\top$ 与加权：**单头为 $O(n^2 d_k)$**；全部 $H$ 个头合计为 **$O(H n^2 d_k) = O(n^2 d)$**，因为 $H d_k=d$。
 
-**总**：**\(O(n^2 d + n d^2)\)**。当 \(n\) 很大时，**\(n^2 d\)** 项常主导时间与显存，因此有 FlashAttention、序列并行等。**与 RNN 每步 \(O(d^2)\)、总长 \(O(n d^2)\)** 相比，Attention 在长序列上**平方项**是主要瓶颈。
+**总时间复杂度**：**$O(n^2 d + n d^2)$**。当 $n$ 相对 $d$ 足够大时，**$n^2 d$** 项会主导计算；朴素实现中，显式存储各头注意力矩阵需要 **$O(Hn^2)$** 的空间（忽略 batch），不要将这一空间复杂度与时间复杂度混淆。[FlashAttention](https://arxiv.org/abs/2205.14135) 通过分块避免完整物化注意力矩阵、降低显存占用与访存开销，但不改变精确稠密注意力的二次计算主项。**与 RNN 每步 $O(d^2)$、总长 $O(n d^2)$** 相比，Attention 在长序列上**平方项**是主要瓶颈。
 
 ---
 
-### 4.3 为什么要除以 \(\sqrt{d_k}\)？
+### 4.3 为什么要除以 $\sqrt{d_k}$？
 
-**答**：点积 \(q^\top k\) 若各维独立零均值、方差 1，则方差约为 \(d_k\)，随维度增大 logits **尺度变大**，Softmax 趋近 one-hot，**梯度饱和**。除以 \(\sqrt{d_k}\) 使点积方差**与 \(d_k\) 无关**，Softmax 更平滑、**训练稳定**。面试可补充：这是**缩放**而非任意常数，与维度匹配。
+**答**：点积 $q^\top k$ 若各维独立零均值、方差 1，则方差约为 $d_k$，随维度增大 logits **尺度变大**，Softmax 趋近 one-hot，**梯度饱和**。除以 $\sqrt{d_k}$ 使点积方差**与 $d_k$ 无关**，Softmax 更平滑、**训练稳定**。面试可补充：这是**缩放**而非任意常数，与维度匹配。
 
 ---
 
@@ -484,7 +506,7 @@ class TinyDecoderLM(nn.Module):
 
 ### 4.5 残差连接的作用是什么？
 
-**答**：提供 **\(x \mapsto x\)** 的近似恒等通路，使梯度更易回传，**缓解深层网络梯度消失/退化**，让 **几十层** 堆叠可训练；与 **LayerNorm**、合适初始化与学习率共同构成稳定训练的基础。
+**答**：提供 **$x \mapsto x$** 的近似恒等通路，使梯度更易回传，**缓解深层网络梯度消失/退化**，让 **几十层** 堆叠可训练；与 **LayerNorm**、合适初始化与学习率共同构成稳定训练的基础。
 
 ---
 
@@ -501,19 +523,19 @@ class TinyDecoderLM(nn.Module):
 
 **答**：分项估算后求和：
 
-1. **Embedding**：约 \(Vd\)（是否 **weight tying** 决定是否再加 \(Vd\)）。
-2. **每层 Attention**：四个 \(d \times d\) 矩阵，约 **\(4d^2\)**。
-3. **每层 FFN**：约 **\(2 d d_{\text{ff}}\)**；若 \(d_{\text{ff}}=4d\)，约 **\(8d^2\)**。
-4. **SwiGLU**：约 **\(3 d d_{\text{ff}}\)**，按 \(d_{\text{ff}}\) 取值与标准 FFN 对齐 FLOPs 时常与 **\(8d^2\)** 同量级。
-5. **LayerNorm、bias** 相对 \(d^2\) 常可忽略（除非问细节）。
+1. **Embedding**：约 $Vd$（是否 **weight tying** 决定是否再加 $Vd$）。
+2. **每层 Attention**：四个 $d \times d$ 矩阵，约 **$4d^2$**。
+3. **每层 FFN**：约 **$2 d d_{\text{ff}}$**；若 $d_{\text{ff}}=4d$，约 **$8d^2$**。
+4. **SwiGLU**：约 **$3 d d_{\text{ff}}$**，按 $d_{\text{ff}}$ 取值与标准 FFN 对齐 FLOPs 时常与 **$8d^2$** 同量级。
+5. **LayerNorm、bias** 相对 $d^2$ 常可忽略（除非问细节）。
 
-**主项**：\(P \approx Vd + L(4d^2 + 2dd_{\text{ff}})\)（在明确假设下）。
+**主项**：$P \approx Vd + L(4d^2 + 2dd_{\text{ff}})$（Decoder-only、标准 MHA/FFN、输入 Embedding 与 LM Head 共享；不共享时再加 $Vd$，其余假设见 2.7）。
 
 ---
 
 ### 4.8 因果掩码（causal mask）是如何实现的？
 
-**答**：对长度 \(n\)，构造 **\(n \times n\)** 掩码：**位置 \(i\) 仅允许 \(j \le i\)**。在 **Softmax 之前**，将 **\(j > i\)** 的 logits 设为 **\(-\infty\)**，Softmax 后这些位置概率为 0。实现上常用 **`torch.triu(..., diagonal=1)`** 得到上三角 True，再 `masked_fill`。广播到 **batch 与 head** 维。
+**答**：对长度 $n$，构造 **$n \times n$** 掩码：**位置 $i$ 仅允许 $j \le i$**。在 **Softmax 之前**，将 **$j > i$** 的 logits 设为 **$-\infty$**，Softmax 后这些位置概率为 0。实现上常用 **`torch.triu(..., diagonal=1)`** 得到上三角 True，再 `masked_fill`。广播到 **batch 与 head** 维。
 
 ---
 
@@ -543,22 +565,22 @@ class TinyDecoderLM(nn.Module):
 
 ### 4.12 多头注意力（Multi-Head）解决什么问题？
 
-**答**：单头注意力在**一个**子空间里学习「谁看谁」，表达能力有限。**多头**将 \(d\) 拆成 \(H\) 份，在 **\(H\) 个并行子空间**里各自学习不同的相关模式（如句法、共指、局部短语），再经 \(W_O\) **融合**。效果上类似**多视角投票**，降低单头需同时拟合多种关系的压力，是 Transformer **表达力**的关键之一。
+**答**：单头注意力在**一个**子空间里学习「谁看谁」，表达能力有限。**多头**将 $d$ 拆成 $H$ 份，在 **$H$ 个并行子空间**里各自学习不同的相关模式（如句法、共指、局部短语），再经 $W_O$ **融合**。效果上类似**多视角投票**，降低单头需同时拟合多种关系的压力，是 Transformer **表达力**的关键之一。
 
 ---
 
 ## 5. 练习题
 
-1. **手推形状**：设 \(B=2, n=128, d=768, H=12\)，写出 \(Q,K,V\) 在拆头前后的形状，以及 \(A = \text{softmax}(QK^\top/\sqrt{d_k})\) 的形状。
-2. **掩码**：\(n=4\) 时，列出位置 \(i=2\) 在因果注意力中可见的 \(j\) 集合。
-3. **参数量**：\(d=4096, L=32, d_{\text{ff}}=16384, V=32000\)，在 **embedding 与 lm_head 共享** 时，估算 **\(12Ld^2\) 量级** 与 **\(Vd\)** 谁更大？
-4. **复杂度**：解释为何上下文从 \(2K\) 增到 \(32K\) 时，**注意力**部分近似按 **\(n^2\)** 放大。
+1. **手推形状**：设 $B=2, n=128, d=768, H=12$，写出 $Q,K,V$ 在拆头前后的形状，以及 $A = \text{softmax}(QK^\top/\sqrt{d_k})$ 的形状。
+2. **掩码**：$n=4$ 时，列出位置 $i=2$ 在因果注意力中可见的 $j$ 集合（位置从 1 开始编号）。
+3. **参数量**：$d=4096, L=32, d_{\text{ff}}=16384, V=32000$，在 **embedding 与 lm_head 共享** 时，估算 **$12Ld^2$ 量级** 与 **$Vd$** 谁更大？
+4. **复杂度**：解释为何上下文从 $2K$ 增到 $32K$ 时，**注意力**部分近似按 **$n^2$** 放大。
 5. **架构选择**：各举一个「更适合 T5 而非纯 GPT」与「更适合 BERT 而非 GPT」的任务。
 6. **对比**：用不超过五句话说明 LLaMA 相对「原版 GPT-2 风格」在常见实现上的两点差异（提示：RoPE、Norm、FFN）。
-7. **缩放因子**：若错误地使用 \(\sqrt{d}\)（模型宽度）而非 \(\sqrt{d_k}\)（每头维度）做缩放，当 \(H>1\) 时会对训练产生什么影响？
+7. **缩放因子**：若错误地使用 $\sqrt{d}$（模型宽度）而非 $\sqrt{d_k}$（每头维度）做缩放，当 $H>1$ 时会对训练产生什么影响？
 8. **Post-Norm 与 Pre-Norm**：各用一句话写出 Post-Norm 与 Pre-Norm 下「Attention 子层 + 残差 + LayerNorm」的典型顺序差异。
 9. **Cross-Attention**：在 T5 中，Cross-Attention 的 Q、K、V 分别来自哪里？若 K/V 维与 Decoder 隐状态维不一致，通常如何处理？
-10. **权重绑定**：什么是 input embedding 与 LM head 的 weight tying？它如何改变参数量估算中的 \(Vd\) 项？
+10. **权重绑定**：什么是 input embedding 与 LM head 的 weight tying？它如何改变参数量估算中的 $Vd$ 项？
 
 **提示**：题 3 需代入数量级比较；题 6 可查阅 Lesson 05 的 RMSNorm/SwiGLU；题 7 答「缩放过强/过弱导致 softmax 与梯度行为异常」；题 9 答「Q 来自 Decoder，K/V 来自 Encoder；投影矩阵对齐维度」。
 
@@ -578,11 +600,11 @@ class TinyDecoderLM(nn.Module):
 
 | 概念 | 一句话 |
 |------|--------|
-| 缩放点积注意力 | \( \text{softmax}(QK^\top/\sqrt{d_k})V \) |
-| 因果掩码 | \(j > i\) 处 logits 为 \(-\infty\) |
+| 缩放点积注意力 | $\text{softmax}(QK^\top/\sqrt{d_k})V$ |
+| 因果掩码 | $j > i$ 处 logits 为 $-\infty$ |
 | 残差 | 恒等路径，利于深层优化 |
-| 参数量主项（\(d_{\text{ff}}=4d\)） | 每层约 \(12d^2\)，共 \(L\) 层 |
-| 长序列瓶颈 | Attention \(O(n^2 d)\) |
+| 参数量主项（$d_{\text{ff}}=4d$） | 每层约 $12d^2$，共 $L$ 层 |
+| 长序列瓶颈 | Attention $O(n^2 d)$ |
 
 ---
 
@@ -590,7 +612,7 @@ class TinyDecoderLM(nn.Module):
 
 ---
 
-## 补充 A：用户要求「15+ 道」面试题补全（附简答）
+## 补充 A：面试追问与简答
 
 ### Q：Transformer 的核心创新是什么？
 **答**：以 **Scaled Dot-Product Self-Attention** 替代序列递归结构，使全局依赖可并行计算；配合多头、残差与归一化形成可扩展深度架构。
@@ -599,13 +621,13 @@ class TinyDecoderLM(nn.Module):
 **答**：RNN 时间步存在链式依赖；Transformer 主要计算为 **大块矩阵乘**，在 GPU 上对长度与特征维并行度高（Decoder 仍有因果掩码约束可见性，但算子并行）。
 
 ### Q：Causal Mask 是什么？为什么需要？
-**答**：禁止位置 \(i\) attend 到 \(j>i\)；保证训练与自回归推理一致，避免「偷看未来」。
+**答**：禁止位置 $i$ attend 到 $j>i$；保证训练与自回归推理一致，避免「偷看未来」。
 
 ### Q：Embedding 参数量？
-**答**：\(V \times d\)；若与 LM head **权重共享**则不计两次。
+**答**：$V \times d$；若与 LM head **权重共享**则不计两次。
 
 ### Q：FFN 隐层通常多少？为什么？
-**答**：经典 **\(4d\)**；容量与算力折中；现代 SwiGLU 会调整有效宽度（Lesson 05）。
+**答**：经典 **$4d$**；容量与算力折中；现代 SwiGLU 会调整有效宽度（Lesson 05）。
 
 ### Q：Transformer 中 dropout 常见位置？
 **答**：注意力输出/概率、残差后、FFN、embedding 等依实现；`eval()` 关闭。
@@ -617,10 +639,10 @@ class TinyDecoderLM(nn.Module):
 **答**：**RMSNorm**、**RoPE**、**SwiGLU**、**GQA** 等（Lesson 04–05）。
 
 ### Q：参数量如何算？
-**答**：Embedding \(Vd\) + 每层 Attention \(4d^2\) 量级 + FFN \(2d\cdot d_{ff}\) + 小项；给假设后估 \(12Ld^2\) 量级。
+**答**：共享 Embedding/LM Head 时计 $Vd$，不共享时计 $2Vd$；再加 $L$ 层的 Attention 与 FFN 参数，即 $L(4d^2+2d\cdot d_{\text{ff}})$ + 小项。标准 MHA 且 $d_{\text{ff}}=4d$ 时，Block 主项为 $12Ld^2$。
 
 ### Q：FLOPs 如何算？
-**答**：Attention \(O(n^2 d)\) 与投影 \(O(n d^2)\) 组合；随 \(n\) 增大平方项主导。
+**答**：Attention $O(n^2 d)$ 与投影 $O(n d^2)$ 组合；随 $n$ 增大平方项主导。
 
 ---
 
@@ -629,268 +651,12 @@ class TinyDecoderLM(nn.Module):
 ```python
 # 仅结构示意：Embedding + L × (RMSNorm + Attn + RMSNorm + SwiGLU) + Norm + LM head
 def forward(ids):  # ids: (B,T)
-    x = tok_emb(ids) + pos_info(ids)  # pos_info 可为 RoPE 在 attn 内
+    x = tok_emb(ids)  # 本例采用 RoPE，不额外相加位置向量
+    positions = torch.arange(ids.shape[1], device=ids.device)
     for block in blocks:
-        x = x + block.attn(block.norm1(x))
+        x = x + block.attn(block.norm1(x), positions=positions)  # 内部旋转 Q/K
         x = x + block.ffn(block.norm2(x))
     return lm_head(norm(x))
 ```
 
 ---
-
-## 补充 C：扩展背诵条目（1～250）
-
-1. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-2. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-3. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-4. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-5. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-6. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-7. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-8. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-9. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-10. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-11. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-12. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-13. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-14. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-15. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-16. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-17. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-18. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-19. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-20. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-21. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-22. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-23. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-24. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-25. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-26. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-27. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-28. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-29. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-30. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-31. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-32. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-33. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-34. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-35. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-36. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-37. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-38. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-39. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-40. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-41. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-42. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-43. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-44. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-45. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-46. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-47. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-48. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-49. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-50. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-51. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-52. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-53. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-54. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-55. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-56. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-57. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-58. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-59. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-60. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-61. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-62. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-63. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-64. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-65. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-66. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-67. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-68. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-69. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-70. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-71. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-72. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-73. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-74. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-75. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-76. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-77. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-78. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-79. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-80. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-81. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-82. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-83. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-84. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-85. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-86. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-87. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-88. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-89. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-90. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-91. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-92. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-93. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-94. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-95. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-96. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-97. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-98. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-99. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-100. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-101. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-102. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-103. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-104. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-105. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-106. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-107. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-108. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-109. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-110. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-111. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-112. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-113. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-114. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-115. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-116. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-117. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-118. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-119. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-120. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-121. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-122. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-123. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-124. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-125. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-126. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-127. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-128. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-129. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-130. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-131. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-132. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-133. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-134. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-135. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-136. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-137. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-138. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-139. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-140. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-141. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-142. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-143. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-144. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-145. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-146. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-147. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-148. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-149. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-150. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-151. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-152. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-153. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-154. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-155. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-156. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-157. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-158. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-159. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-160. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-161. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-162. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-163. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-164. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-165. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-166. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-167. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-168. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-169. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-170. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-171. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-172. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-173. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-174. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-175. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-176. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-177. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-178. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-179. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-180. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-181. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-182. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-183. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-184. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-185. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-186. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-187. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-188. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-189. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-190. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-191. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-192. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-193. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-194. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-195. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-196. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-197. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-198. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-199. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-200. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-201. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-202. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-203. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-204. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-205. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-206. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-207. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-208. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-209. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-210. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-211. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-212. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-213. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-214. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-215. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-216. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-217. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-218. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-219. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-220. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-221. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-222. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-223. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-224. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-225. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-226. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-227. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-228. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-229. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-230. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-231. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-232. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-233. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-234. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-235. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-236. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-237. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-238. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-239. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-240. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-241. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-242. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-243. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-244. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-245. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-246. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-247. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-248. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-249. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-250. Transformer 扩展条目：Decoder-only、因果掩码、残差、Pre-Norm、复杂度、参数量、FLOPs。
-
----
-
-**【Lesson 03 全文完 · 800+ 行】**

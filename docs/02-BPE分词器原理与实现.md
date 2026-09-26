@@ -55,7 +55,7 @@ logits / 下一 token 分布
 | 粒度 | 优点 | 缺点 |
 |------|------|------|
 | **词级**（空格分词等） | 单 token 语义完整；序列短 | 词表巨大；OOV 严重；形态变化浪费参数 |
-| **字符级** | 词表极小；无 OOV | 序列极长；长程依赖难学 |
+| **字符级** | 词表较小；保留字符边界 | 未覆盖的字符仍可能 OOV；序列长 |
 | **子词级**（BPE、WordPiece、SentencePiece 等） | 词表大小与序列长度折中 | 需训练分词器 |
 
 ### 1.3 The vocabulary size tradeoff（词表大小的权衡）
@@ -105,7 +105,7 @@ BPE 最初是 **Philip Gage（1994）** 的**数据压缩**思路：反复合并
 
 ### Step 2：Pre-tokenize using regex（GPT-2 pattern）
 
-用与推理**完全一致**的正则切分为片段，**通常不跨空格合并**。
+用与推理**完全一致**的正则切分为片段，合并**不跨预分词片段边界**。GPT-2 风格正则允许一个前导空格与后面的词同属一片段，空格可以参与片段内合并。特殊 token 要先单独切出，不参与普通 BPE 合并。
 
 ### Step 3：Count adjacent byte pair frequencies
 
@@ -113,7 +113,7 @@ BPE 最初是 **Philip Gage（1994）** 的**数据压缩**思路：反复合并
 
 ### Step 4：Find most frequent pair（break ties lexicographically）
 
-`argmax` 频次；平局按 **pair 字典序**（或其它**固定**规则）。
+`argmax` 频次；本节采用 CS336 的同频规则：选择 **字节串二元组 `(left_bytes, right_bytes)` 字典序最大** 的 pair，不能按 token ID 或拼接后的字节串比较。参见 [官方变更记录](https://github.com/stanford-cs336/assignment1-basics/blob/main/CHANGELOG.md) 中 original bytes 与 tuple comparison 的说明。
 
 ### Step 5：Create new token, merge all occurrences
 
@@ -132,7 +132,7 @@ BPE 最初是 **Philip Gage（1994）** 的**数据压缩**思路：反复合并
 设**不做**复杂正则，语料仅为重复字符串 `"aaab"` 的 UTF-8 字节（字母 `a`=97，`b`=98），且整段作为一个片段：
 
 - 初始序列：`[97,97,97,98]`。
-- 第一轮统计：`(97,97)` 出现 **2 次**，`(97,98)` 出现 **1 次** → 合并 `(97,97)→256`，从左到右非重叠合并后得 `[256,97,98]`（第二次 `aa` 与后面的 `a` 相邻，是否再形成 `97,97` 取决于合并后序列；此例合并后仅剩一对 `97` 与 `98` 相邻）。
+- 第一轮统计：`(97,97)` 出现 **2 次**（有重叠），`(97,98)` 出现 **1 次** → 合并 `(97,97)→256`，从左到右非重叠合并后得 `[256,97,98]`。新序列包含 `(256,97)` 与 `(97,98)` 两个相邻 pair，各出现 1 次。
 - 下一轮在**新序列**上重新数对；后续合并由新频次决定。
 
 **面试要点**：口述「**先全局选 max 频对 → 全片段应用 → 再统计**」；**平局**时说明你的 tie-break（如字典序）。
@@ -180,7 +180,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import regex as re
 
 # GPT‑2 的预分词正则：先按规则切块，再对每块做 BPE
-# 把文本切为后缀、单词、数字、符号、空白，防止跨空格合并token
+# 把文本切为后缀、单词、数字、符号、空白，限制合并在预分词片段内部
 GPT2_SPLIT_PATTERN = re.compile(
     r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 )
@@ -307,8 +307,8 @@ def train_bpe(text_corpus: str, num_merges: int, pattern: re.Pattern = GPT2_SPLI
         # 如果没有任何pair可以合并，提前退出循环
         if not pair_stats:
             break
-        # max取频次最高的pair；key=(频次,pair元组)，频次相同就按pair字典序选小的
-        best_pair = max(pair_stats.items(), key=lambda kv: (kv[1], kv[0]))[0]
+        # 同频时比较原始字节串二元组，选最大者；不能直接比较 token ID
+        best_pair = max(pair_stats, key=lambda p: (pair_stats[p], (vocab[p[0]], vocab[p[1]])))
         # 解包本轮要合并的两个id
         left, right = best_pair
 
@@ -518,9 +518,9 @@ if __name__ == "__main__":
 
 **复杂度（朴素实现）**
 
-- \(M\)：合并条数（`num_merges`），即训练做了多少轮 merge。
-- \(T\)：训练语料所有片段的总长度（按字节/token 计）。
-- \(L\)：待编码序列的长度（按字节/token 计）。
+- $M$：合并条数（`num_merges`），即训练做了多少轮 merge。
+- $T$：训练语料所有片段的总长度（按字节/token 计）。
+- $L$：待编码序列的长度（按字节/token 计）。
 
 **训练：$O(M \cdot T)$**
 
@@ -535,19 +535,19 @@ if __name__ == "__main__":
 **为什么叫“朴素”**
 
 - 每轮/每条规则都全量重扫。
-- 优化版：训练用优先队列 + 增量更新；编码用 `pair → rank` 表 + 单次扫描合并。
+- 优化版：训练用优先队列 + 增量更新；编码用 `pair → rank` 表选择当前可合并 pair。rank 表只减少规则查询成本，不会自动变成单次扫描；本节逐次重扫的 rank 版最坏仍为 $O(L^2)$。链表配合优先队列的编码在常见假设下可达 $O(L\log L)$（不含 rank 表预处理）。
 - 教学代码为直观，用朴素版。
 
 **一句话记**
-训练是“\(M\) 轮 × 全语料 \(T\)”，编码是“\(M\) 条规则 × 全序列 \(L\)”。
+训练是“$M$ 轮 × 全语料 $T$”，编码是“$M$ 条规则 × 全序列 $L$”。
 
 ---
 
 ## 七、常见现象解释
 
-### 7.1 Why numbers get split oddly（"12345" → "12" "34" "5"）
+### 7.1 为什么数字会被拆成多个 token？
 
-数字被预分词为片段后，由**字节级合并统计**决定子词，不是按十进制数位。
+数字的切分同时受预分词正则与合并词表影响。本节 GPT-2 正则将连续数字作为片段，再按 BPE 合并；其他 tokenizer 可能先限制每个数字片段的位数。`12345 → 12 / 34 / 5` 只是可能的示例，不是固定规则。
 
 ### 7.2 Why same word tokenizes differently with/without leading space
 
@@ -570,7 +570,7 @@ GPT-2 风格正则把「可选空格 + 词」绑在一起，`hello` 与 `  hello
 |---------|-----|-----------|----------------|
 | **合并准则** | 相邻对 **频次** 最高 | 似然类目标（依实现） | 可配 **BPE 或 Unigram** |
 | **空白与多语** | 依赖预分词 | 子词 + `##` 等 | 空白可编码，**不依赖英文空格** |
-| **初始单元** | 常为 **256 字节** | 子词/字符混合 | 句子级端到端 |
+| **初始单元** | 字节级 BPE 为 **256 字节** | 通常从字符等基本符号开始 | 通常为 Unicode 字符，可选 byte fallback；算法可为 BPE 或 Unigram |
 | **典型模型** | GPT、Llama 等 | BERT 系 | T5、多语模型等 |
 
 **补充**：SentencePiece 是**工具/流程**；内部可跑 BPE 或 Unigram。WordPiece 与 BPE 的**目标函数**不同，面试常考。
@@ -598,7 +598,7 @@ GPT-2 风格正则把「可选空格 + 词」绑在一起，`hello` 与 `  hello
   - 逐条应用 merge，每条扫一遍序列，共 $M$ 条。
 
 **优化手段**
-1. **增量统计**：只更新受合并影响的局部 pair 频次，不每轮全量重扫；训练可降到接近 $O(T \log T)$。
+1. **增量统计**：只更新受合并影响的局部 pair 频次，不每轮全量重扫。具体复杂度取决于合并次数、索引与优先队列实现，不能统一保证 $O(T\log T)$。
 2. **并行 map-reduce**：分片统计 pair 频次，再合并结果（代码里的 `parallel_count_pairs`）。
 3. **`merge_ranks` 哈希**：`pair → rank` 建表，编码时 $O(1)$ 查优先级，避免线性找规则。
 4. **原生代码**：热点用 C/C++/Rust 实现（如 HuggingFace `tokenizers`），减少 Python 开销。
@@ -698,7 +698,7 @@ GPT-2 风格正则把「可选空格 + 词」绑在一起，`hello` 与 `  hello
 | 1 | 训练流程？ | 见第十二节 |
 | 2 | 字节级原因？ | 256、无字符 OOV |
 | 3 | 中文 token？ | UTF-8 多字节 + 语料 |
-| 4 | 复杂度？ | 朴素 \(O(MT)\) 量级 |
+| 4 | 复杂度？ | 朴素 $O(MT)$ 量级 |
 | 5 | 优化？ | 并行统计、哈希、C++ |
 | 6 | vs WordPiece/Unigram？ | 频次 / 似然 / LM |
 | 7 | 预分词？ | 限制范围、空格附着 |
@@ -707,10 +707,3 @@ GPT-2 风格正则把「可选空格 + 词」绑在一起，`hello` 与 `  hello
 | 10 | merge 顺序？ | 推理须与训练一致 |
 
 ---
-
-## 十四、扩展条目 1～400（行数扩展 · 扫读）
-1. BPE 扩展背诵条目第 1 条：迭代合并、字节级、预分词、merge 顺序、确定性。
-
----
-
-**【Lesson 02 全文完 · 800+ 行】**

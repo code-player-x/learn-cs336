@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import math
+import random
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
@@ -65,6 +66,10 @@ class TextDataset(Dataset):
         return (self._data.numel() - 1) // self.seq_len
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        if idx < 0:
+            idx += len(self)
+        if not 0 <= idx < len(self):
+            raise IndexError("TextDataset index out of range")
         start = idx * self.seq_len
         block = self._data[start : start + self.seq_len + 1]
         x = block[:-1].contiguous()
@@ -121,14 +126,16 @@ class Trainer:
         x = x.to(self.device)
         y = y.to(self.device)
         logits = self.model(x)
-        if logits.dim() != 3:
+        if logits.dim() != 3 or logits.shape[:-1] != y.shape:
             raise ValueError("Expected model(x) logits of shape (B, T, V).")
+        valid_tokens = (y != self.ignore_index).sum()
         loss = F.cross_entropy(
-            logits.reshape(-1, logits.size(-1)),
+            logits.float().reshape(-1, logits.size(-1)),
             y.reshape(-1),
             ignore_index=self.ignore_index,
+            reduction="sum",
         )
-        return loss
+        return loss / valid_tokens.clamp_min(1)
 
     def train_one_epoch(self) -> Dict[str, float]:
         """Run a full pass over ``train_loader`` and return average metrics. / 训练一个 epoch。"""
@@ -142,6 +149,11 @@ class Trainer:
             iterator = tqdm(self.train_loader, desc=f"train epoch {self.epoch}", leave=False)
 
         for batch in iterator:
+            # An entirely masked batch has no learning signal. In particular,
+            # do not advance AdamW/weight decay or the schedule for this batch.
+            tok = int((batch[1] != self.ignore_index).sum())
+            if tok == 0:
+                continue
             lr = self._sync_lr_from_scheduler()
             self.optimizer.zero_grad(set_to_none=True)
             loss = self._forward_loss(batch)
@@ -152,8 +164,6 @@ class Trainer:
 
             self.optimizer.step()
 
-            bs = batch[0].size(0)
-            tok = bs * batch[0].size(1)
             total_loss += float(loss.detach()) * tok
             total_tokens += tok
             self.global_step += 1
@@ -171,8 +181,10 @@ class Trainer:
                 else:
                     iterator.set_postfix(loss=float(loss), lr=lr, ppl=ppl, tok_s=tput)
 
+        if total_tokens == 0:
+            raise ValueError("train_loader contains no non-ignored target tokens.")
         self.epoch += 1
-        avg_loss = total_loss / max(total_tokens, 1)
+        avg_loss = total_loss / total_tokens
         elapsed = time.perf_counter() - t0
         out = {
             "loss": avg_loss,
@@ -187,6 +199,7 @@ class Trainer:
         """Validation loop; returns mean loss and perplexity. / 验证集评估。"""
         if self.val_loader is None:
             raise ValueError("val_loader is not set.")
+        was_training = self.model.training
         self.model.eval()
         total_loss = 0.0
         total_tokens = 0
@@ -195,18 +208,27 @@ class Trainer:
         if tqdm is not None:
             iterator = tqdm(self.val_loader, desc="eval", leave=False)
 
-        for batch in iterator:
-            loss = self._forward_loss(batch)
-            bs = batch[0].size(0)
-            tok = bs * batch[0].size(1)
-            total_loss += float(loss) * tok
-            total_tokens += tok
+        try:
+            for batch in iterator:
+                tok = int((batch[1] != self.ignore_index).sum())
+                if tok == 0:
+                    continue
+                loss = self._forward_loss(batch)
+                total_loss += float(loss) * tok
+                total_tokens += tok
+        finally:
+            self.model.train(was_training)
 
-        avg_loss = total_loss / max(total_tokens, 1)
+        if total_tokens == 0:
+            raise ValueError("val_loader contains no non-ignored target tokens.")
+        avg_loss = total_loss / total_tokens
         return {"loss": avg_loss, "perplexity": math.exp(min(avg_loss, 20.0))}
 
     def save_checkpoint(self, path: PathLike, **extra: Any) -> None:
-        """Save model, optimizer, scheduler hyperparameters, step, and epoch. / 保存检查点。"""
+        """Save state and RNGs for epoch-boundary resumption, not a mid-epoch cursor.
+
+        保存模型、优化器、调度参数与随机状态；不保存 epoch 内数据游标。
+        """
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         sched = {
@@ -223,19 +245,51 @@ class Trainer:
             "epoch": self.epoch,
             "base_lrs": self._base_lrs,
             "sched_max_lr": self._sched_max_lr,
+            "torch_rng_state": torch.get_rng_state(),
+            "python_rng_state": random.getstate(),
             "extra": extra,
         }
+        if torch.cuda.is_available():
+            payload["cuda_rng_states"] = torch.cuda.get_rng_state_all()
+        if self.train_loader.generator is not None:
+            payload["loader_rng_state"] = self.train_loader.generator.get_state()
+        try:
+            import numpy as np
+        except ImportError:  # NumPy is optional for this trainer.
+            pass
+        else:
+            name, keys, pos, has_gauss, cached = np.random.get_state()
+            payload["numpy_rng_state"] = (name, keys.tolist(), pos, has_gauss, cached)
         torch.save(payload, path)
 
     def load_checkpoint(self, path: PathLike, map_location: Optional[str] = None) -> Dict[str, Any]:
         """Load weights and optimizer state; restore step counters. / 加载检查点。"""
         path = Path(path)
         loc = map_location or str(self.device)
-        ckpt = torch.load(path, map_location=loc)
+        ckpt = torch.load(path, map_location=loc, weights_only=True)
         self.model.load_state_dict(ckpt["model"])
         self.optimizer.load_state_dict(ckpt["optimizer"])
         self.global_step = int(ckpt.get("global_step", 0))
         self.epoch = int(ckpt.get("epoch", 0))
         self._base_lrs = [float(x) for x in ckpt.get("base_lrs", self._base_lrs)]
         self._sched_max_lr = float(ckpt.get("sched_max_lr", self._sched_max_lr))
+        for key, value in ckpt.get("scheduler", {}).items():
+            if value is not None and hasattr(self.scheduler, key):
+                setattr(self.scheduler, key, value)
+        if "torch_rng_state" in ckpt:
+            torch.set_rng_state(ckpt["torch_rng_state"].cpu())
+        if "python_rng_state" in ckpt:
+            random.setstate(ckpt["python_rng_state"])
+        if "cuda_rng_states" in ckpt and torch.cuda.is_available():
+            torch.cuda.set_rng_state_all([state.cpu() for state in ckpt["cuda_rng_states"]])
+        if "loader_rng_state" in ckpt and self.train_loader.generator is not None:
+            self.train_loader.generator.set_state(ckpt["loader_rng_state"].cpu())
+        if "numpy_rng_state" in ckpt:
+            try:
+                import numpy as np
+            except ImportError:
+                pass
+            else:
+                name, keys, pos, has_gauss, cached = ckpt["numpy_rng_state"]
+                np.random.set_state((name, np.asarray(keys, dtype=np.uint32), pos, has_gauss, cached))
         return ckpt.get("extra", {})

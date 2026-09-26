@@ -11,7 +11,7 @@ import math
 class CosineWithWarmup:
     """Linear warmup, then cosine decay from ``max_lr`` to ``min_lr``.
 
-    前 ``warmup_steps`` 步线性从 0 升到 ``max_lr``，随后在剩余步数上余弦衰减至 ``min_lr``。
+    第一个 warmup 更新使用 ``max_lr / warmup_steps``，随后升到峰值并余弦衰减。
     """
 
     def __init__(
@@ -21,10 +21,14 @@ class CosineWithWarmup:
         warmup_steps: int,
         max_steps: int,
     ) -> None:
-        if warmup_steps < 0:
-            raise ValueError("warmup_steps must be non-negative.")
-        if max_steps < 1:
-            raise ValueError("max_steps must be at least 1.")
+        if not isinstance(warmup_steps, int) or warmup_steps < 0:
+            raise ValueError("warmup_steps must be a non-negative integer.")
+        if not isinstance(max_steps, int) or max_steps < 1:
+            raise ValueError("max_steps must be a positive integer.")
+        if warmup_steps > max_steps:
+            raise ValueError("warmup_steps must not exceed max_steps.")
+        if not math.isfinite(max_lr) or not math.isfinite(min_lr) or not 0 <= min_lr <= max_lr:
+            raise ValueError("Learning rates must be finite and satisfy 0 <= min_lr <= max_lr.")
         self.max_lr = float(max_lr)
         self.min_lr = float(min_lr)
         self.warmup_steps = int(warmup_steps)
@@ -36,11 +40,11 @@ class CosineWithWarmup:
         if step < 0:
             step = 0
 
-        if self.warmup_steps > 0 and step < self.warmup_steps:
-            return self.max_lr * float(step + 1) / float(self.warmup_steps)
-
         if step >= self.max_steps:
             return self.min_lr
+
+        if self.warmup_steps > 0 and step < self.warmup_steps:
+            return self.max_lr * float(step + 1) / float(self.warmup_steps)
 
         decay_steps = max(self.max_steps - self.warmup_steps, 1)
         t = float(step - self.warmup_steps) / float(decay_steps)

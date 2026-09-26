@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any, Callable, Dict, Iterable, List, Optional, Union
 
 import torch
@@ -15,7 +16,7 @@ class AdamW:
 
     支持 param_groups，各组可设不同 lr / weight_decay；含一、二阶矩偏差修正。
 
-    Update (per tensor): adaptive step then decoupled weight decay:
+    Update (per tensor): decay the pre-update parameter, then adaptive step:
     ``θ ← θ - lr * m_hat / (sqrt(v_hat) + ε) - lr * λ * θ``.
     """
 
@@ -27,12 +28,15 @@ class AdamW:
         eps: float = 1e-8,
         weight_decay: float = 0.01,
     ) -> None:
-        if isinstance(params, (list, tuple)) and len(params) > 0 and isinstance(params[0], dict):
-            self.param_groups = [dict(g) for g in params]
+        items = list(params)
+        if not items:
+            raise ValueError("AdamW requires at least one parameter group.")
+        if isinstance(items[0], dict):
+            self.param_groups = [dict(g) for g in items]
         else:
             self.param_groups = [
                 {
-                    "params": list(params),
+                    "params": items,
                     "lr": lr,
                     "betas": betas,
                     "eps": eps,
@@ -44,6 +48,14 @@ class AdamW:
         self._defaults = {"lr": lr, "betas": betas, "eps": eps, "weight_decay": weight_decay}
         for i, group in enumerate(self.param_groups):
             self.param_groups[i] = self._normalize_group(group)
+        seen = set()
+        for group in self.param_groups:
+            for p in group["params"]:
+                if not isinstance(p, torch.Tensor):
+                    raise TypeError("Optimizer parameters must be tensors.")
+                if id(p) in seen:
+                    raise ValueError("A parameter must not appear in multiple optimizer entries.")
+                seen.add(id(p))
 
     def _normalize_group(self, group: dict) -> dict:
         g = dict(group)
@@ -51,7 +63,12 @@ class AdamW:
         g.setdefault("betas", self._defaults["betas"])
         g.setdefault("eps", self._defaults["eps"])
         g.setdefault("weight_decay", self._defaults["weight_decay"])
-        g["params"] = list(g["params"])
+        g["params"] = [g["params"]] if isinstance(g["params"], torch.Tensor) else list(g["params"])
+        for key in ("lr", "eps", "weight_decay"):
+            if not math.isfinite(g[key]) or g[key] < 0:
+                raise ValueError(f"{key} must be finite and non-negative.")
+        if len(g["betas"]) != 2 or any(not 0 <= beta < 1 for beta in g["betas"]):
+            raise ValueError("betas must contain two values in [0, 1).")
         return g
 
     def zero_grad(self, set_to_none: bool = False) -> None:
@@ -105,10 +122,9 @@ class AdamW:
                 v_hat = exp_avg_sq / bias_c2
                 denom = m_hat.div(v_hat.sqrt().add_(eps))
 
-                p.add_(denom, alpha=-lr)
-
                 if wd != 0.0:
-                    p.add_(p, alpha=-lr * wd)
+                    p.mul_(1.0 - lr * wd)
+                p.add_(denom, alpha=-lr)
 
         return loss
 
@@ -126,16 +142,18 @@ class AdamW:
             else:
                 state_list.append(
                     {
-                        "step": st["step"].detach().cpu(),
-                        "exp_avg": st["exp_avg"].detach().cpu(),
-                        "exp_avg_sq": st["exp_avg_sq"].detach().cpu(),
+                        "step": st["step"].detach().cpu().clone(),
+                        "exp_avg": st["exp_avg"].detach().cpu().clone(),
+                        "exp_avg_sq": st["exp_avg_sq"].detach().cpu().clone(),
                     }
                 )
 
         groups_out: List[dict] = []
+        offset = 0
         for g in self.param_groups:
             d = {k: v for k, v in g.items() if k != "params"}
-            d["params"] = [id(p) for p in g["params"]]
+            d["params"] = list(range(offset, offset + len(g["params"])))
+            offset += len(g["params"])
             groups_out.append(d)
 
         return {"state": state_list, "param_groups": groups_out}
@@ -150,12 +168,26 @@ class AdamW:
         if len(flat_params) != len(state_list):
             raise ValueError("Checkpoint parameter count does not match optimizer.")
 
-        self.state.clear()
+        saved_groups = state_dict["param_groups"]
+        if len(saved_groups) != len(self.param_groups) or any(
+            len(saved["params"]) != len(current["params"])
+            for saved, current in zip(saved_groups, self.param_groups)
+        ):
+            raise ValueError("Checkpoint parameter groups do not match optimizer.")
+        restored_groups = [
+            self._normalize_group({**saved, "params": current["params"]})
+            for saved, current in zip(saved_groups, self.param_groups)
+        ]
+        restored_state = {}
         for p, st_saved in zip(flat_params, state_list):
             if not st_saved:
                 continue
-            self.state[p] = {
-                "step": st_saved["step"].to(p.device).to(dtype=torch.int64),
-                "exp_avg": st_saved["exp_avg"].to(device=p.device, dtype=p.dtype),
-                "exp_avg_sq": st_saved["exp_avg_sq"].to(device=p.device, dtype=p.dtype),
+            if st_saved["exp_avg"].shape != p.shape or st_saved["exp_avg_sq"].shape != p.shape:
+                raise ValueError("Checkpoint moment shapes do not match optimizer parameters.")
+            restored_state[p] = {
+                "step": st_saved["step"].to(device=p.device, dtype=torch.int64).clone(),
+                "exp_avg": st_saved["exp_avg"].to(device=p.device, dtype=p.dtype).clone(),
+                "exp_avg_sq": st_saved["exp_avg_sq"].to(device=p.device, dtype=p.dtype).clone(),
             }
+        self.param_groups = restored_groups
+        self.state = restored_state

@@ -18,7 +18,7 @@
 
 | 动机 | 说明 |
 |------|------|
-| 显存瓶颈 | 模型/优化器/激活过大，需分片或多副本策略 |
+| 显存瓶颈 | 模型/优化器/激活过大，需参数/优化器分片或模型并行；普通 DDP 的全副本不能解决整模单卡装不下 |
 | 时间成本 | 希望用更多算力换更短训练周期 |
 | 工程现实 | 生产环境普遍为多卡服务器或 K8s 多节点集群 |
 
@@ -69,15 +69,15 @@
 
 ### 3.2 数据划分
 
-全局 batch size 记为 \(B\)，若有 \(N\) 个进程，通常每个进程的 **local batch size** 为 \(B_{\text{local}} = B / N\)（需整除）。各进程从各自数据子集取样，保证**每个 step 各卡数据不同**，等价于增大吞吐。
+全局 batch size 记为 $B$，若有 $N$ 个进程，通常每个进程的 **local batch size** 为 $B_{\text{local}} = B / N$（需整除）。各进程从各自数据子集取样，保证**每个 step 各卡数据不同**，等价于增大吞吐。
 
 ### 3.3 梯度同步：AllReduce
 
 反向传播后，各卡得到**本地 batch 上的梯度**。为使所有副本等价于在全局 batch 上训练，需对梯度做**平均**（或等价缩放后再同步）：
 
-\[
+$$
 \bar{g} = \frac{1}{N} \sum_{i=1}^{N} g_i
-\]
+$$
 
 实现上常用 **AllReduce**：所有进程最终都得到相同的规约结果。若先 Reduce 到 rank 0 再 Broadcast，语义可一致但效率通常不如 AllReduce。
 
@@ -95,16 +95,16 @@ DDP 梯度同步核心是 **AllReduce**；部分优化器分片或 FSDP 会用�
 
 ### 3.5 Ring-AllReduce 算法（直观）
 
-**目标**：在 \(N\) 个进程上对向量做求和（或平均），使每进程最终都有全局和。
+**目标**：在 $N$ 个进程上对向量做求和（或平均），使每进程最终都有全局和。
 
-**环形拓扑**：进程排成环 \(0 \to 1 \to \cdots \to N-1 \to 0\)。
+**环形拓扑**：进程排成环 $0 \to 1 \to \cdots \to N-1 \to 0$。
 
 **两阶段**（以 sum 为例）：
 
-1. **Reduce-Scatter 阶段**：数据向量切成 \(N\) 块。经过 \(N-1\) 步，每步每个进程把**自己负责的一块**在环上传递并累加；结束后，**每个进程完整拥有某一块的全局部分和**（不同块在不同进程上）。
-2. **AllGather 阶段**：再经过 \(N-1\) 步，把各块在环上转一圈，使**每个进程拼出完整的全局和向量**。
+1. **Reduce-Scatter 阶段**：数据向量切成 $N$ 块。经过 $N-1$ 步，每步每个进程把**自己负责的一块**在环上传递并累加；结束后，**每个进程完整拥有某一块的全局部分和**（不同块在不同进程上）。
+2. **AllGather 阶段**：再经过 $N-1$ 步，把各块在环上转一圈，使**每个进程拼出完整的全局和向量**。
 
-**带宽直觉**：在理想环形与均衡切分下，总时间近似与数据量、链路带宽相关；比朴素“集中到 rank0”更充分利用**双向链路**。
+**带宽直觉**：环让各 rank 分担流量，避免集中式单点瓶颈；单环通常沿一个方向发送，不能把它等同于必然充分利用双向链路。多环、树和分层算法由具体实现与拓扑选择。
 
 ### 3.6 梯度分桶（Gradient Bucketing）与重叠
 
@@ -154,6 +154,7 @@ def cleanup():
 
 ```python
 def build_model_on_device(local_rank):
+    torch.manual_seed(0)  # 教学手动同步版：各 rank 参数初始值必须相同
     model = nn.Linear(1024, 1024).cuda(local_rank)
     return model
 ```
@@ -170,7 +171,7 @@ def allreduce_grads(model, world_size):
             p.grad.div_(world_size)  # 等价于全局平均梯度
 ```
 
-更贴近 DDP 的写法是用 **hook** 在反向中排队通信（示意）：
+另一种教学示意是参数 hook：下面使用**阻塞** AllReduce，不实现计算/通信重叠。只适用于各 rank 相同静态图、相同参数就绪顺序；动态图可能使 collective 顺序不一致而挂起。生产使用原生 DDP，不要把两种同步方式叠加。
 
 ```python
 def register_ddp_hooks(model, world_size):
@@ -198,8 +199,9 @@ from torch.utils.data import DataLoader, DistributedSampler, TensorDataset
 
 def make_loader(rank, world_size, batch_size):
     # 示例：合成数据
-    x = torch.randn(1000, 1024)
-    y = torch.randn(1000, 1024)
+    generator = torch.Generator().manual_seed(123)  # 各 rank 共享同一数据集内容
+    x = torch.randn(1000, 1024, generator=generator)
+    y = torch.randn(1000, 1024, generator=generator)
     ds = TensorDataset(x, y)
     sampler = DistributedSampler(ds, num_replicas=world_size, rank=rank, shuffle=True)
     loader = DataLoader(ds, batch_size=batch_size, sampler=sampler, num_workers=2)
@@ -211,22 +213,22 @@ def make_loader(rank, world_size, batch_size):
 ### 4.5 完整训练循环骨架
 
 ```python
-def train_one_epoch(model, loader, sampler, optimizer, rank, world_size, epoch):
+def train_one_epoch(model, loader, sampler, optimizer, local_rank, world_size, epoch):
     model.train()
     sampler.set_epoch(epoch)
     criterion = nn.MSELoss()
 
     for batch_x, batch_y in loader:
-        batch_x = batch_x.cuda(rank, non_blocking=True)
-        batch_y = batch_y.cuda(rank, non_blocking=True)
+        batch_x = batch_x.cuda(local_rank, non_blocking=True)
+        batch_y = batch_y.cuda(local_rank, non_blocking=True)
 
         optimizer.zero_grad(set_to_none=True)
         out = model(batch_x)
         loss = criterion(out, batch_y)
         loss.backward()
 
-        # 若未用 register_hook 自动同步，则在此处手动 allreduce
-        # allreduce_grads(model, world_size)
+        # 本例采用 backward 后手动同步；不要同时启用 hook 或原生 DDP
+        allreduce_grads(model, world_size)
 
         optimizer.step()
 
@@ -241,7 +243,7 @@ def main():
     # handles = register_ddp_hooks(model, world_size)
 
     for epoch in range(10):
-        train_one_epoch(model, loader, sampler, optimizer, rank, world_size, epoch)
+        train_one_epoch(model, loader, sampler, optimizer, local_rank, world_size, epoch)
 
     cleanup()
 
@@ -303,12 +305,12 @@ ZeRO（Zero Redundancy Optimizer）通过**消除数据并行中的冗余状态*
 
 ### 8.1 单次 AllReduce 数据量
 
-对 FP32 梯度，参数量为 \(P\)，AllReduce 传输量常按**算法与实现**在 \(O(P)\) 到约 \(2P\) 等量级估算（Ring 等需多轮，但带宽模型常用有效带宽近似）。
+FP32 梯度总大小为 $S=4P$ 字节。理想 Ring-AllReduce 中每 rank 发送约 $2\frac{N-1}{N}S$ 字节，并接收同等字节数；发送量、收发合计与全网络总量是不同口径。时间还包含 $2(N-1)$ 轮启动延迟。
 
 ### 8.2 与 batch、模型关系
 
 - **数据并行**：通信量主要随**模型大小（梯度维度）**增长，与 local batch 大小无线性关系（batch 只影响计算时间）。
-- **瓶颈**：当 **计算时间 \(\ll\) 通信时间** 时，扩展效率下降。
+- **瓶颈**：当 **计算时间 $\ll$ 通信时间** 时，扩展效率下降。
 
 ### 8.3 重叠的意义
 
@@ -320,7 +322,7 @@ ZeRO（Zero Redundancy Optimizer）通过**消除数据并行中的冗余状态*
 
 ### 9.1 理想线性加速
 
-若用 \(N\) 张卡，理想 wall-clock 变为原来的 \(1/N\)。定义 **加速比** \(S(N) = T_1 / T_N\)，理想 \(S(N)=N\)。
+若用 $N$ 张卡，理想 wall-clock 变为原来的 $1/N$。定义 **加速比** $S(N) = T_1 / T_N$，理想 $S(N)=N$。
 
 ### 9.2 实际因素
 
@@ -331,7 +333,7 @@ ZeRO（Zero Redundancy Optimizer）通过**消除数据并行中的冗余状态*
 
 ### 9.3 扩展效率公式
 
-常定义 **scaling efficiency** 为 \(\eta(N) = S(N) / N\)。若 \(\eta(N)\) 随 \(N\) 快速下降，说明通信或负载不均占主导。
+常定义 **scaling efficiency** 为 $\eta(N) = S(N) / N$。若 $\eta(N)$ 随 $N$ 快速下降，说明通信或负载不均占主导。
 
 ---
 
@@ -346,7 +348,7 @@ ZeRO（Zero Redundancy Optimizer）通过**消除数据并行中的冗余状态*
 ### Q2：AllReduce 是什么？Ring-AllReduce 如何工作？
 
 **答**：**AllReduce** 是集合通信：每个进程提供输入张量，对所有进程的输入做规约（如求和），**每个进程都得到相同的规约结果**。  
-**Ring-AllReduce** 将数据分块，进程排成环，分 **Reduce-Scatter** 与 **AllGather** 两阶段，每阶段约 \(N-1\) 步，使每步通信可与邻居进行，**充分利用环形带宽**，避免单节点成为中心瓶颈。最终每进程都有完整向量的全局和，再除以 \(N\) 即得平均。
+**Ring-AllReduce** 将数据分块，进程排成环，分 **Reduce-Scatter** 与 **AllGather** 两阶段，每阶段约 $N-1$ 步，使每步通信可与邻居进行，**充分利用环形带宽**，避免单节点成为中心瓶颈。最终每进程都有完整向量的全局和，再除以 $N$ 即得平均。
 
 ---
 
@@ -359,7 +361,7 @@ ZeRO（Zero Redundancy Optimizer）通过**消除数据并行中的冗余状态*
 
 ### Q4：梯度同步的通信开销如何计算？
 
-**答**：粗略上，与**梯度总字节数**和 **AllReduce 的有效带宽** 有关。FP32 下梯度约 \(4 \times P\) 字节（\(P\) 为参数量）；BF16/FP16 减半。实际时间 \(\approx\) 传输量 / 有效带宽 + 延迟；Ring 等多步算法用**带宽模型**估算。DDP 中若 **bucket 重叠**成功，**暴露**的通信时间小于未重叠情形。多机时机间带宽常是瓶颈。
+**答**：粗略上，与**梯度总字节数**和 **AllReduce 的有效带宽** 有关。FP32 下梯度约 $4 \times P$ 字节（$P$ 为参数量）；BF16/FP16 减半。实际时间 $\approx$ 传输量 / 有效带宽 + 延迟；Ring 等多步算法用**带宽模型**估算。DDP 中若 **bucket 重叠**成功，**暴露**的通信时间小于未重叠情形。多机时机间带宽常是瓶颈。
 
 ---
 
@@ -384,7 +386,7 @@ ZeRO（Zero Redundancy Optimizer）通过**消除数据并行中的冗余状态*
 
 ### Q8：分布式训练中如何保证梯度一致性？
 
-**答**：各卡本地梯度是对**本地 batch** 的平均（或和）；通过 **AllReduce SUM + 除以 world_size** 得到**全局平均梯度**，等价于在**拼接后的全局 batch** 上的梯度（在标准平均损失定义下）。所有进程使用**相同规约结果**和相同优化器公式更新，故参数保持一致。前提是 **随机种子、Sampler 划分、数值顺序** 在实现上无 bug，且无不参与同步的参数。
+**答**：若各 rank 损失均为等量有效样本/token 的平均，AllReduce SUM 后除以 world_size 等价于全局平均。若监督 token 数不同，需要按各 rank 的有效 token 数加权。相同参数初值、相同更新规则和同步梯度才能保持副本一致；不同 rank 的 dropout/数据随机种子可以不同。
 
 ---
 
@@ -396,7 +398,7 @@ ZeRO（Zero Redundancy Optimizer）通过**消除数据并行中的冗余状态*
 
 ### Q10：如何计算分布式训练的扩展效率？
 
-**答**：测单机单卡（或单节点基准）一步时间 \(T_1\)，与 \(N\) 卡（或 \(N\) 节点）下一步时间 \(T_N\)。**加速比** \(S(N)=T_1/T_N\)，**扩展效率** \(\eta(N)=S(N)/N\)。若 \(\eta\) 明显低于 1，分析：**通信占比**、**batch 过小**、**IO**、**straggler**、**学习率与 batch 缩放**是否匹配。也可用 **吞吐量（tokens/s）** 随资源增长是否接近线性来评估。
+**答**：测单机单卡（或单节点基准）一步时间 $T_1$，与 $N$ 卡（或 $N$ 节点）下一步时间 $T_N$。**加速比** $S(N)=T_1/T_N$，**扩展效率** $\eta(N)=S(N)/N$。若 $\eta$ 明显低于 1，分析：**通信占比**、**batch 过小**、**IO**、**straggler**、**学习率与 batch 缩放**是否匹配。也可用 **吞吐量（tokens/s）** 随资源增长是否接近线性来评估。
 
 ---
 

@@ -13,6 +13,17 @@ import torch
 import torch.nn.functional as F
 
 
+def _validate_inputs(Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor) -> None:
+    if min(Q.ndim, K.ndim, V.ndim) < 2 or min(Q.size(-1), K.size(-2), V.size(-1)) < 1:
+        raise ValueError("attention tensors need sequence/head dimensions and nonempty keys")
+    if Q.size(-1) != K.size(-1) or K.size(-2) != V.size(-2):
+        raise ValueError("query/key head dimensions and key/value sequence lengths must match")
+    if not Q.is_floating_point() or Q.dtype != K.dtype or Q.dtype != V.dtype:
+        raise ValueError("Q, K, V must share a floating-point dtype")
+    if Q.device != K.device or Q.device != V.device:
+        raise ValueError("Q, K, V must share a device")
+
+
 def standard_attention(
     Q: torch.Tensor,
     K: torch.Tensor,
@@ -23,12 +34,17 @@ def standard_attention(
     Standard dot-product attention: softmax(QK^T / sqrt(d)) V.
     标准点积注意力，用于与 flash 实现对照。
     """
+    _validate_inputs(Q, K, V)
     d = Q.size(-1)
     if scale is None:
         scale = 1.0 / math.sqrt(d)
-    logits = torch.matmul(Q, K.transpose(-2, -1)) * scale
+    if not math.isfinite(scale):
+        raise ValueError("scale must be finite")
+    # Match the tiled implementation's FP32 accumulation for half/bfloat16.
+    acc_dtype = torch.float64 if Q.dtype == torch.float64 else torch.float32
+    logits = torch.matmul(Q.to(acc_dtype), K.to(acc_dtype).transpose(-2, -1)) * scale
     attn = F.softmax(logits, dim=-1)
-    return torch.matmul(attn, V)
+    return torch.matmul(attn, V.to(acc_dtype)).to(Q.dtype)
 
 
 def flash_attention_forward(
@@ -42,19 +58,29 @@ def flash_attention_forward(
     通过分块与在线 softmax（维护行方向 running max m 与 sum l）避免物化完整 T×T 分数矩阵。
 
     Shapes: (..., T, D); returns (..., T, D). Last dim is head_dim.
+    This illustrates the forward algorithm, not a fused CUDA kernel/custom
+    backward: autograd may retain intermediates from all blocks during training.
     """
     if Q.shape != K.shape or Q.shape != V.shape:
         raise ValueError("Q, K, V must have the same shape")
+    _validate_inputs(Q, K, V)
+    if Q.ndim < 2 or Q.size(-2) < 1 or Q.size(-1) < 1:
+        raise ValueError("Q, K, V need nonempty sequence and head dimensions")
+    if not isinstance(block_size, int) or block_size < 1:
+        raise ValueError("block_size must be a positive integer")
     d = Q.size(-1)
     scale = 1.0 / math.sqrt(d)
 
     T = Q.size(-2)
-    out = torch.empty_like(Q)
+    # empty_like preserves noncontiguous strides; reshaping it could allocate a
+    # copy and leave the returned output uninitialized. Write to contiguous storage.
+    out = torch.empty(Q.shape, dtype=Q.dtype, device=Q.device)
+    acc_dtype = torch.float64 if Q.dtype == torch.float64 else torch.float32
 
     # Flatten batch heads to 3D for the kernel loop
-    q3 = Q.reshape(-1, T, d)
-    k3 = K.reshape(-1, T, d)
-    v3 = V.reshape(-1, T, d)
+    q3 = Q.reshape(-1, T, d).to(acc_dtype)
+    k3 = K.reshape(-1, T, d).to(acc_dtype)
+    v3 = V.reshape(-1, T, d).to(acc_dtype)
     o3 = out.reshape(-1, T, d)
 
     br = bc = block_size
@@ -63,9 +89,9 @@ def flash_attention_forward(
             tr_end = min(tr + br, T)
             qb = q3[b, tr:tr_end, :]  # (rows, d)
             rows = qb.size(0)
-            m = torch.full((rows,), -float("inf"), device=Q.device, dtype=Q.dtype)
-            l = torch.zeros((rows,), device=Q.device, dtype=Q.dtype)
-            o = torch.zeros((rows, d), device=Q.device, dtype=Q.dtype)
+            m = torch.full((rows,), -float("inf"), device=Q.device, dtype=acc_dtype)
+            l = torch.zeros((rows,), device=Q.device, dtype=acc_dtype)
+            o = torch.zeros((rows, d), device=Q.device, dtype=acc_dtype)
 
             for tc in range(0, T, bc):
                 tc_end = min(tc + bc, T)
@@ -88,6 +114,7 @@ def flash_attention_forward(
     return out
 
 
+@torch.inference_mode()
 def benchmark_flash_vs_standard(
     seq_len: int = 512,
     dim: int = 64,
@@ -101,23 +128,25 @@ def benchmark_flash_vs_standard(
     Compare peak memory and wall time of standard vs flash attention.
     对比标准注意力与 Flash 风格的峰值显存与耗时（若可用 CUDA 则记录显存）。
     """
+    if min(seq_len, dim, batch, block_size, n_iters) < 1 or n_warmup < 0:
+        raise ValueError("dimensions, block_size and n_iters must be positive; n_warmup nonnegative")
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     dev = torch.device(device)
+    if dev.type not in ("cpu", "cuda"):
+        raise ValueError("this benchmark supports CPU/CUDA only; other backends need explicit synchronization")
 
     q = torch.randn(batch, seq_len, dim, device=dev, dtype=torch.float32)
     k = torch.randn(batch, seq_len, dim, device=dev, dtype=torch.float32)
     v = torch.randn(batch, seq_len, dim, device=dev, dtype=torch.float32)
 
     def run_peak_mem(fn):
-        if dev.type == "cuda":
-            torch.cuda.reset_peak_memory_stats(dev)
-            torch.cuda.synchronize(dev)
-        t0 = time.perf_counter()
         for _ in range(n_warmup):
             fn()
         if dev.type == "cuda":
             torch.cuda.synchronize(dev)
+            torch.cuda.reset_peak_memory_stats(dev)
+        t0 = time.perf_counter()
         for _ in range(n_iters):
             fn()
         if dev.type == "cuda":

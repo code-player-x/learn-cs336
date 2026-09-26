@@ -152,7 +152,7 @@ Below is an instruction that describes a task, paired with an input that provide
 
 #### 仅对 Assistant 回复计算损失（Loss Masking）
 
-在 SFT 中，标准做法是：**仅对 assistant 回复（及多轮里模型应生成的部分）的 token 参与交叉熵**，对 system、user、以及模板中的固定前缀 token **mask 掉 loss**（常见实现：`labels` 在这些位置设为 `-100` 或等价 `ignore_index`）。
+在 response-only SFT 中，常见做法是：**仅对 assistant 回复中应生成的 token 计算交叉熵**，对 system、user、固定前缀和 padding 的标签设为 `-100`。这不是所有 SFT 的唯一目标；也有 full-sequence loss 配方，需要明确所用定义。
 
 **原因简述**：
 
@@ -160,13 +160,13 @@ Below is an instruction that describes a task, paired with an input that provide
 2. **梯度效率**：避免在用户措辞上过拟合，把容量用在「如何答」上。
 3. **与推理一致**：推理时模型只看到前文，不会「预测用户下一句」。
 
-**数学上**，若 \(m_t \in \{0,1\}\) 表示位置 \(t\) 是否参与监督，常写作：
+**数学上**，若 $m_t \in \{0,1\}$ 表示位置 $t$ 是否参与监督，常写作：
 
-\[
+$$
 \mathcal{L}_{\text{SFT}} = - \frac{1}{\sum_t m_t} \sum_{t} m_t \log p_\theta(x_t \mid x_{<t})
-\]
+$$
 
-实现上需注意：**多轮对话**中每一轮 assistant 段都要计入 loss；若使用工具调用等特殊格式，团队需统一规则（哪些 token 算模型责任）。
+实现上需明确监督所有 assistant 轮次还是仅最后一轮；工具调用、结束符等也要统一规则。移位后必须至少有一个有效标签，否则平均交叉熵可能为 NaN。
 
 #### Padding
 
@@ -184,31 +184,31 @@ Below is an instruction that describes a task, paired with an input that provide
 
 ### 1.7 参数高效微调：LoRA 与 QLoRA
 
-#### LoRA 数学：\(W = W_0 + BA\)，秩 \(r\) 与 \(\alpha\) 缩放
+#### LoRA 数学：低秩增量、秩 $r$ 与 $\alpha$ 缩放
 
-对某线性层原权重 \(W_0 \in \mathbb{R}^{d_{\text{out}} \times d_{\text{in}}}\)（实现中常等价讨论转置），LoRA **冻结** \(W_0\)，仅训练低秩增量：
+对某线性层原权重 $W_0 \in \mathbb{R}^{d_{\text{out}} \times d_{\text{in}}}$（实现中常等价讨论转置），LoRA **冻结** $W_0$，仅训练低秩增量：
 
-\[
-W = W_0 + \Delta W,\quad \Delta W = B A
-\]
+$$
+W = W_0 + \Delta W,\quad \Delta W = \frac{\alpha}{r} B A
+$$
 
-其中 \(B \in \mathbb{R}^{d_{\text{out}} \times r}\)，\(A \in \mathbb{R}^{r \times d_{\text{in}}}\)，**秩 \(r \ll \min(d_{\text{in}}, d_{\text{out}})\)**。
+其中 $B \in \mathbb{R}^{d_{\text{out}} \times r}$，$A \in \mathbb{R}^{r \times d_{\text{in}}}$，**秩 $r \ll \min(d_{\text{in}}, d_{\text{out}})$**。
 
-前向（以输入 \(x\) 为例，忽略 bias）：
+前向（以输入 $x$ 为例，忽略 bias）：
 
-\[
+$$
 y = W_0 x + \frac{\alpha}{r} \cdot B A x
-\]
+$$
 
-**\(\alpha\)** 为 LoRA 缩放超参（与 \(r\) 常一起调）：\(\alpha/r\) 使在改变 \(r\) 时保持**更新幅度的大致可比性**（不同框架命名可能为 `lora_alpha`，实现细节以所用库为准）。
+**$\alpha$** 为 LoRA 缩放超参（与 $r$ 常一起调）：$\alpha/r$ 使在改变 $r$ 时保持**更新幅度的大致可比性**（不同框架命名可能为 `lora_alpha`，实现细节以所用库为准）。
 
-**Rank \(r\)**：越大容量越大，可训练参数约 \(r(d_{\text{in}}+d_{\text{out}})\)；过大可能过拟合，常见 8、16、32、64。
+**Rank $r$**：越大容量越大，可训练参数约 $r(d_{\text{in}}+d_{\text{out}})$；过大可能过拟合，常见 8、16、32、64。
 
-**施加在哪些层**：常见对 **注意力层的 \(W_q, W_k, W_v, W_o\)**（及有时 FFN）加 LoRA；**全层 LoRA** 更强但更贵。面试可答：**先 attention，再视任务扩到 FFN**。
+**施加在哪些层**：常见对 **注意力层的 $W_q, W_k, W_v, W_o$**（及有时 FFN）加 LoRA；**全层 LoRA** 更强但更贵。面试可答：**先 attention，再视任务扩到 FFN**。
 
 #### 为什么 LoRA 往往有效：低秩与内在维度
 
-**直观解释**：大量经验表明，**特定任务上的有效权重更新**往往落在**低维子空间**内——即「微调需要的方向」不必填满整个高维权重矩阵。用 \(BA\) 低秩分解，用较少参数近似该子空间中的主要更新方向，从而**省显存、省存储、减轻灾难性遗忘**（相对全参而言）。
+**直观解释**：大量经验表明，**特定任务上的有效权重更新**往往落在**低维子空间**内——即「微调需要的方向」不必填满整个高维权重矩阵。用 $BA$ 低秩分解，用较少参数近似该子空间中的主要更新方向，从而**省显存、省存储、减轻灾难性遗忘**（相对全参而言）。
 
 **补充**：这与「**内在维度（intrinsic dimension）**」相关文献一致：许多下游适配可用远小于全参的自由度描述。**并非**声称所有能力都低秩，而是**任务相关的偏移**常可低秩近似。
 
@@ -229,9 +229,9 @@ y = W_0 x + \frac{\alpha}{r} \cdot B A x
 
 | 维度 | Full Fine-Tuning | LoRA | QLoRA |
 |------|------------------|------|-------|
-| **更新对象** | 全部权重 | 冻结 \(W_0\)，训 \(A,B\) | 同 LoRA，基座 4-bit |
+| **更新对象** | 全部权重 | 冻结 $W_0$，训 $A,B$ | 同 LoRA，基座 4-bit |
 | **显存 / 优化器** | 最高（全参 Adam 状态） | 较低 | **最低**（基座量化） |
-| **表达能力上限** | 最高 | 受 \(r\) 与层选择限制 | 同 LoRA（数值上受量化影响） |
+| **表达能力上限** | 最高 | 受 $r$ 与层选择限制 | 同 LoRA（数值上受量化影响） |
 | **Checkpoint** | 全量大文件 | 小适配器权重 | 小适配器 + 可选合并脚本 |
 | **灾难性遗忘** | 相对更易「改写」基座 | 通常较轻 | 通常较轻 |
 | **典型场景** | 数据足、需深度改基座 | 默认 PEFT、多任务多适配器 | **单卡大模型**、资源紧 |
@@ -277,15 +277,15 @@ Stanford **CS336 Assignment 5（Alignment）** 在课程叙事中把 **SFT、RL�
 1. **数据**：数学推理等场景下的 **instruction–response**（常含 **思维链 CoT** 与可解析答案格式，如 `\boxed{}`）。
 2. **损失**：标准 **Causal LM 交叉熵**，**仅对 assistant 完成部分** 累计；`labels` 在 user/system/padding 处 **ignore**。
 3. **训练**：学习率、epoch、精度（BF16 等）、梯度裁剪；可选 **LoRA/QLoRA** 以降低资源占用。
-4. **接口**：SFT 产出的 checkpoint 常作为 **RL 阶段的初始策略** 与 **冻结的 reference 模型** \(\pi_{\text{ref}}\)，用于 **KL 惩罚** 或优势基线。
+4. **接口**：SFT checkpoint 可作为 RL 初始策略；若启用 KL 正则，可另冻结为 reference。reference 用于 KL，不是 critic/value baseline；是否需要 reference 取决于作业版本和损失定义。
 
 **公式对齐**（与 Assignment 5 文档一致）：
 
-\[
+$$
 \mathcal{L}_{\text{SFT}} = - \frac{1}{\sum_t m_t} \sum_{t} m_t \log p_\theta(x_t \mid x_{<t})
-\]
+$$
 
-其中 \(m_t\) 仅在 **模型应生成的 token** 上为 1。具体文件名与测试以**当年官方仓库**为准。
+其中 $m_t$ 仅在 **模型应生成的 token** 上为 1。具体文件名与测试以**当年官方仓库**为准。
 
 ---
 
@@ -298,7 +298,7 @@ Stanford **CS336 Assignment 5（Alignment）** 在课程叙事中把 **SFT、RL�
 ```python
 from transformers import AutoTokenizer
 
-tokenizer = AutoTokenizer.from_pretrained("your-model-name", trust_remote_code=True)
+tokenizer = AutoTokenizer.from_pretrained("your-model-name")
 
 messages = [
     {"role": "system", "content": "你是一个有帮助的助手。"},
@@ -310,17 +310,19 @@ encoded = tokenizer.apply_chat_template(
     messages,
     tokenize=True,
     return_dict=True,
-    return_assistant_tokens_mask=True,  # 若 tokenizer 支持
+    return_assistant_tokens_mask=True,  # 模板必须包含 {% generation %} 区间
 )
 
 input_ids = encoded["input_ids"]
-labels = [
-    tid if m else -100
-    for tid, m in zip(input_ids, encoded.get("assistant_tokens_mask", [False] * len(input_ids)))
-]
+assistant_mask = encoded.get("assistant_masks")
+if assistant_mask is None or len(assistant_mask) != len(input_ids):
+    raise ValueError("模板未返回有效 assistant_masks")
+labels = [tid if m else -100 for tid, m in zip(input_ids, assistant_mask)]
+if not any(tid != -100 for tid in labels[1:]):
+    raise ValueError("没有可监督的 assistant token，请检查模板/截断")
 ```
 
-若 `assistant_tokens_mask` 不可用，则需**手动**根据模板中 assistant 起始 special token 位置切分并构造 mask。
+参数名是 `return_assistant_tokens_mask`，返回字段是 **`assistant_masks`**，且模板需支持 `{% generation %}`。不要用全 False 默认值掩盖不支持的模板。应逐 token 验证边界与结束符；不支持时可用下节的单轮前缀法，或实现经测试的多轮区间解析。参见 [Transformers 模板 API](https://huggingface.co/docs/transformers/main_classes/tokenizer#transformers.PreTrainedTokenizerBase.apply_chat_template)。
 
 ### 2.2 只对 response 求交叉熵（PyTorch）
 
@@ -332,6 +334,8 @@ def masked_ce_loss(logits, labels, ignore_index=-100):
     # logits: (B, T, V), labels: (B, T)
     shift_logits = logits[..., :-1, :].contiguous()
     shift_labels = labels[..., 1:].contiguous()
+    if not (shift_labels != ignore_index).any():
+        raise ValueError("no supervised tokens after causal shift")
     return F.cross_entropy(
         shift_logits.view(-1, shift_logits.size(-1)),
         shift_labels.view(-1),
@@ -348,8 +352,13 @@ import torch.nn as nn
 import torch
 
 class LoRALinear(nn.Module):
-    def __init__(self, in_features, out_features, rank=8, alpha=16):
+    def __init__(self, base_linear, rank=8, alpha=16):
         super().__init__()
+        if rank < 1:
+            raise ValueError("rank must be positive")
+        self.base = base_linear
+        self.base.requires_grad_(False)
+        in_features, out_features = base_linear.in_features, base_linear.out_features
         self.r = rank
         self.alpha = alpha
         self.scaling = alpha / rank
@@ -357,9 +366,11 @@ class LoRALinear(nn.Module):
         self.lora_b = nn.Linear(rank, out_features, bias=False)
         nn.init.kaiming_uniform_(self.lora_a.weight, a=5**0.5)
         nn.init.zeros_(self.lora_b.weight)
+        self.lora_a.to(device=base_linear.weight.device, dtype=base_linear.weight.dtype)
+        self.lora_b.to(device=base_linear.weight.device, dtype=base_linear.weight.dtype)
 
-    def forward(self, x, base_linear):
-        return base_linear(x) + self.scaling * self.lora_b(self.lora_a(x))
+    def forward(self, x):
+        return self.base(x) + self.scaling * self.lora_b(self.lora_a(x))
 ```
 
 生产环境应使用 **`peft`** 或框架内置 LoRA，以正确处理保存、合并与推理。
@@ -382,14 +393,14 @@ from peft import LoraConfig, get_peft_model, TaskType
 
 MODEL_ID = "meta-llama/Llama-3.2-1B-Instruct"  # 示例；按权限与显存替换
 
-tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
 tokenizer.pad_token = tokenizer.pad_token or tokenizer.eos_token
+tokenizer.padding_side = "right"
+use_bf16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
 
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
-    torch_dtype=torch.bfloat16,
-    device_map="auto",
-    trust_remote_code=True,
+    torch_dtype=torch.bfloat16 if use_bf16 else torch.float32,
 )
 
 peft_config = LoraConfig(
@@ -412,17 +423,25 @@ raw = [
 ]
 
 def preprocess(example):
-    text = tokenizer.apply_chat_template(
-        example["messages"],
-        tokenize=False,
-        add_generation_prompt=False,
+    messages = example["messages"]
+    # 单轮示例：可含 system，但只允许最后一条是 assistant
+    if messages[-1]["role"] != "assistant" or any(
+        m["role"] == "assistant" for m in messages[:-1]
+    ):
+        raise ValueError("此示例只支持单个最终 assistant 回答")
+    prefix = tokenizer.apply_chat_template(
+        messages[:-1], tokenize=True, return_dict=False, add_generation_prompt=True,
     )
-    enc = tokenizer(text, max_length=512, truncation=True)
+    enc = tokenizer.apply_chat_template(
+        messages, tokenize=True, return_dict=True, add_generation_prompt=False,
+    )
+    if enc["input_ids"][:len(prefix)] != prefix:
+        raise ValueError("模板前缀不一致，应改用经过验证的 assistant 区间 mask")
+    enc = {k: v[:512] for k, v in enc.items()}
     input_ids = enc["input_ids"]
-    # 简化：若 tokenizer 支持 assistant mask，应在此填 labels；否则用手动区间
-    labels = input_ids.copy()
-    # 占位：真实项目必须用 assistant_tokens_mask 或定位 assistant 起止
-    enc["labels"] = labels
+    if len(prefix) >= len(input_ids):
+        raise ValueError("截断删除了全部回答 token")
+    enc["labels"] = [-100] * len(prefix) + input_ids[len(prefix):]
     return enc
 
 ds = Dataset.from_list(raw)
@@ -434,7 +453,7 @@ args = TrainingArguments(
     gradient_accumulation_steps=8,
     num_train_epochs=1,
     learning_rate=2e-4,  # LoRA 常用略高于全参 SFT；全参常 1e-5~5e-5
-    bf16=True,
+    bf16=use_bf16,
     logging_steps=10,
     save_steps=200,
     report_to=[],
@@ -454,7 +473,8 @@ tokenizer.save_pretrained("./sft-lora-adapter")
 
 **说明**：
 
-- **`labels` 构造**：上例为骨架；**生产级**必须用 `return_assistant_tokens_mask=True` 或解析模板，将非 assistant 位置置 `-100`。
+- **`labels` 构造**：上例用经前缀一致性检查的单轮 response-only mask，不支持多轮。直接由模板 tokenize，避免重复添加 BOS/EOS。padding 按位置设为 `-100`，不能因 pad id 等于 EOS 就把真实回答的结束符一并屏蔽。
+- **设备**：由 Trainer 管理训练设备，不使用面向大模型推理的 `device_map="auto"`。示例模型可能需要访问许可；完整训练仍需足够资源。
 - **QLoRA**：将 `from_pretrained` 换为 `BitsAndBytesConfig` 加载 4-bit，其余 LoRA 类似（见 `peft` 与 `bitsandbytes` 文档）。
 - **学习率**：LoRA 有时用 `1e-4`～`3e-4`；**全参 SFT** 更保守；以验证集为准。
 
@@ -468,7 +488,7 @@ tokenizer.save_pretrained("./sft-lora-adapter")
 4. **Loss**：**只对 assistant 生成段**做 NTP；system/user/pad **mask**。
 5. **Padding / Packing**：pad 不参与 loss；packing 需防跨样本注意力与错误 position。
 6. **数据**：人工 + Self-Instruct + Evol-Instruct + 蒸馏；**质量、多样性、一致性**。
-7. **LoRA**：\(W=W_0+BA\)，\(\alpha/r\) 缩放，\(r\) 控容量；**低秩有效**与任务子空间直觉。
+7. **LoRA**：$W=W_0+(\alpha/r)BA$，$r$ 控容量；冻结基座，只训练适配器。
 8. **QLoRA**：4-bit 基座 + LoRA 适配器，**省显存**。
 9. **遗忘**：混合数据、小 LR、少 epoch、PEFT、KL、回放。
 10. **评测**：**MMLU**（知识）、**HumanEval**（代码）、**MT-Bench**（多轮对话）+ 人工。
@@ -497,15 +517,15 @@ tokenizer.save_pretrained("./sft-lora-adapter")
 
 ---
 
-### Q4：LoRA 的公式是什么？\(\alpha\) 和 \(r\) 起什么作用？
+### Q4：LoRA 的公式是什么？$\alpha$ 和 $r$ 起什么作用？
 
-**答**：\(\Delta W = BA\)，\(B\in\mathbb{R}^{d_{\text{out}}\times r}\)，\(A\in\mathbb{R}^{r\times d_{\text{in}}}\)，前向常写 \(y = W_0 x + \frac{\alpha}{r} BAx\)。**\(r\)** 控制秩与容量；**\(\alpha\)** 与 **\(\alpha/r\)** 调节 LoRA 分支幅度，便于在改变 \(r\) 时保持尺度可比。实际常用 **PEFT** 实现，超参需在小验证集上扫。
+**答**：$\Delta W = BA$，$B\in\mathbb{R}^{d_{\text{out}}\times r}$，$A\in\mathbb{R}^{r\times d_{\text{in}}}$，前向常写 $y = W_0 x + \frac{\alpha}{r} BAx$。**$r$** 控制秩与容量；**$\alpha$** 与 **$\alpha/r$** 调节 LoRA 分支幅度，便于在改变 $r$ 时保持尺度可比。实际常用 **PEFT** 实现，超参需在小验证集上扫。
 
 ---
 
 ### Q5：为什么说权重更新具有低秩性？LoRA 为什么有效？
 
-**答**：经验与「内在维度」研究表明，许多**任务特定微调**的有效更新可集中在**低维子空间**，不必填满整个权重矩阵。LoRA 用 \(BA\) **参数化该子空间中的主要方向**，从而**大幅减少可训练参数与显存**，并常减轻对基座的全局改写。**注意**：不是断言所有现象都低秩，而是**适配偏移**常可低秩近似。
+**答**：经验与「内在维度」研究表明，许多**任务特定微调**的有效更新可集中在**低维子空间**，不必填满整个权重矩阵。LoRA 用 $BA$ **参数化该子空间中的主要方向**，从而**大幅减少可训练参数与显存**，并常减轻对基座的全局改写。**注意**：不是断言所有现象都低秩，而是**适配偏移**常可低秩近似。
 
 ---
 

@@ -51,9 +51,9 @@ class RMSNorm(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         dtype = x.dtype
-        x_f = x.float()
+        x_f = x.float() if dtype in (torch.float16, torch.bfloat16) else x
         rms = torch.rsqrt(x_f.pow(2).mean(-1, keepdim=True) + self.eps)
-        return (x_f * rms).to(dtype) * self.weight
+        return (x_f * rms * self.weight).to(dtype)
 
 
 def rotate_half(x: torch.Tensor) -> torch.Tensor:
@@ -83,8 +83,8 @@ def apply_rotary_emb(
 
 class RotaryEmbedding(nn.Module):
     """
-    RoPE: precompute inverse frequencies and cache cos/sin per position.
-    RoPE：预计算逆频率并按位置缓存 cos/sin。
+    RoPE: build float32 rotation tables and cast them to the input dtype.
+    RoPE：用 float32 计算旋转表，再转为输入 dtype（不缓存 KV）。
     """
 
     def __init__(
@@ -94,7 +94,12 @@ class RotaryEmbedding(nn.Module):
         base: float = 10000.0,
     ) -> None:
         super().__init__()
+        if dim < 2 or dim % 2:
+            raise ValueError("RoPE dimension must be positive and even.")
+        if not math.isfinite(base) or base <= 0:
+            raise ValueError("RoPE base must be finite and positive.")
         self.dim = dim
+        self.base = base
         inv_freq = 1.0 / (
             base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim)
         )
@@ -112,8 +117,13 @@ class RotaryEmbedding(nn.Module):
         """
         if seq_len is None:
             seq_len = x.shape[1]
-        t = torch.arange(seq_len, device=x.device, dtype=self.inv_freq.dtype)
-        freqs = torch.outer(t, self.inv_freq)
+        # Module.half()/bfloat16() also cast buffers. Recreate frequencies in
+        # float32 so long-context positions are not rounded before rotation.
+        inv_freq = 1.0 / (
+            self.base ** (torch.arange(0, self.dim, 2, device=x.device, dtype=torch.float32) / self.dim)
+        )
+        t = torch.arange(seq_len, device=x.device, dtype=torch.float32)
+        freqs = torch.outer(t, inv_freq)
         emb = torch.cat((freqs, freqs), dim=-1)
         cos = emb.cos().to(dtype=x.dtype)
         sin = emb.sin().to(dtype=x.dtype)
@@ -139,7 +149,12 @@ class MultiHeadAttention(nn.Module):
         self.d_model = d_model
         self.n_heads = n_heads
         self.n_kv_heads = n_kv_heads if n_kv_heads is not None else n_heads
-        assert n_heads % self.n_kv_heads == 0, "n_heads must be divisible by n_kv_heads"
+        if n_heads < 1 or self.n_kv_heads < 1:
+            raise ValueError("Attention head counts must be positive.")
+        if d_model < 1 or d_model % n_heads:
+            raise ValueError("d_model must be positive and divisible by n_heads.")
+        if n_heads % self.n_kv_heads:
+            raise ValueError("n_heads must be divisible by n_kv_heads.")
         self.n_rep = n_heads // self.n_kv_heads
         self.head_dim = d_model // n_heads
 
@@ -159,6 +174,7 @@ class MultiHeadAttention(nn.Module):
         x: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
+        """Apply causal attention; a boolean/0-1 mask uses True/1 for allowed keys."""
         bsz, seq_len, _ = x.shape
         q = self.q_proj(x).view(bsz, seq_len, self.n_heads, self.head_dim).transpose(1, 2)
         k = self.k_proj(x).view(bsz, seq_len, self.n_kv_heads, self.head_dim).transpose(1, 2)
@@ -175,7 +191,12 @@ class MultiHeadAttention(nn.Module):
             v = v.repeat_interleave(self.n_rep, dim=1)
 
         scale = 1.0 / math.sqrt(self.head_dim)
-        attn_scores = torch.matmul(q, k.transpose(-2, -1)) * scale
+        # Accumulate in float32 for low-precision inputs; scaling after an fp16
+        # matmul would be too late to prevent overflow in the dot product.
+        score_q = q.float() if q.dtype in (torch.float16, torch.bfloat16) else q
+        score_k = k.to(score_q.dtype)
+        with torch.autocast(device_type=x.device.type, enabled=False):
+            attn_scores = torch.matmul(score_q, score_k.transpose(-2, -1)) * scale
 
         causal = torch.triu(
             torch.ones(seq_len, seq_len, device=x.device, dtype=torch.bool),
@@ -185,14 +206,20 @@ class MultiHeadAttention(nn.Module):
 
         if attention_mask is not None:
             if attention_mask.dim() == 2:
-                mask = attention_mask[:, None, None, :].to(dtype=torch.bool)
+                if attention_mask.shape != (bsz, seq_len):
+                    raise ValueError("A 2D attention mask must have shape (batch, seq_len).")
+                mask = attention_mask[:, None, None, :].to(device=x.device, dtype=torch.bool)
             else:
-                mask = attention_mask.to(dtype=torch.bool)
+                mask = attention_mask.to(device=x.device, dtype=torch.bool)
             attn_scores = attn_scores.masked_fill(~mask, float("-inf"))
 
-        attn_weights = F.softmax(attn_scores, dim=-1)
+        # Left padding (or an entirely padded sample) can mask every key for a
+        # query. Its attention output is zero rather than softmax(-inf) -> NaN.
+        empty_rows = torch.isneginf(attn_scores).all(dim=-1, keepdim=True)
+        attn_scores = attn_scores.masked_fill(empty_rows, 0.0)
+        attn_weights = F.softmax(attn_scores, dim=-1).masked_fill(empty_rows, 0.0)
         attn_weights = self.attn_dropout(attn_weights)
-        out = torch.matmul(attn_weights, v)
+        out = torch.matmul(attn_weights.to(v.dtype), v)
         out = out.transpose(1, 2).contiguous().view(bsz, seq_len, self.n_heads * self.head_dim)
         return self.o_proj(out)
 
@@ -291,9 +318,12 @@ class TransformerLM(nn.Module):
         self.norm = RMSNorm(d_model)
         self.lm_head: Optional[nn.Linear] = None
         self._init_weights()
+        # Register the head before optimizers/checkpoints are constructed; a
+        # forward pass must not change the model's parameter/state schema.
+        self.tie_weights()
 
     def tie_weights(self) -> None:
-        """Tie output projection with input embeddings (LLaMA-style). / 输出层与词嵌入权重绑定。"""
+        """Tie output projection with input embeddings. / 本教学模型绑定输出与嵌入权重。"""
         if self.lm_head is None:
             self.lm_head = nn.Linear(self.d_model, self.vocab_size, bias=False)
         self.lm_head.weight = self.embed_tokens.weight
@@ -341,26 +371,54 @@ class TransformerLM(nn.Module):
         Autoregressive sampling with temperature and nucleus (top-p).
         使用温度与 nucleus (top-p) 的自回归采样。
         """
+        if not isinstance(max_new_tokens, int) or max_new_tokens < 0:
+            raise ValueError("max_new_tokens must be a non-negative integer.")
+        if not math.isfinite(temperature) or temperature < 0:
+            raise ValueError("temperature must be finite and non-negative (0 selects greedy decoding).")
+        if not math.isfinite(top_p) or not 0 < top_p <= 1:
+            raise ValueError("top_p must be in (0, 1].")
+        if input_ids.ndim != 2 or input_ids.shape[0] == 0 or input_ids.shape[1] == 0:
+            raise ValueError("Generation requires a non-empty (batch, seq_len) prompt.")
+        if self.pad_token_id is not None and (input_ids[:, -1] == self.pad_token_id).any():
+            raise ValueError("Generation requires prompts without right padding; use left padding instead.")
+        if eos_token_id is not None and not 0 <= eos_token_id < self.vocab_size:
+            raise ValueError("eos_token_id is outside the vocabulary.")
+        was_training = self.training
         self.eval()
         out = input_ids
-        for _ in range(max_new_tokens):
-            logits = self.forward(out)
-            next_logits = logits[:, -1, :] / max(temperature, 1e-8)
-
-            if top_p < 1.0:
-                sorted_logits, sorted_idx = torch.sort(next_logits, descending=True, dim=-1)
-                probs = F.softmax(sorted_logits, dim=-1)
-                cumsum = torch.cumsum(probs, dim=-1)
-                mask = cumsum - probs > top_p
-                sorted_logits = sorted_logits.masked_fill(mask, float("-inf"))
-                probs = F.softmax(sorted_logits, dim=-1)
-                sampled = torch.multinomial(probs, num_samples=1)
-                next_token = torch.gather(sorted_idx, -1, sampled)
-            else:
-                probs = F.softmax(next_logits, dim=-1)
-                next_token = torch.multinomial(probs, num_samples=1)
-
-            out = torch.cat([out, next_token], dim=1)
-            if eos_token_id is not None and (next_token == eos_token_id).all():
-                break
-        return out
+        finished = torch.zeros(input_ids.shape[0], device=input_ids.device, dtype=torch.bool)
+        try:
+            for _ in range(max_new_tokens):
+                next_logits = self.forward(out)[:, -1, :].float()
+                if temperature == 0:
+                    next_token = next_logits.argmax(dim=-1, keepdim=True)
+                else:
+                    # Subtracting the maximum preserves the distribution and
+                    # avoids positive overflow at very low temperatures.
+                    next_logits = (next_logits - next_logits.amax(dim=-1, keepdim=True)) / max(
+                        temperature, torch.finfo(next_logits.dtype).tiny
+                    )
+                    if top_p < 1.0:
+                        sorted_logits, sorted_idx = torch.sort(next_logits, descending=True, dim=-1)
+                        probs = F.softmax(sorted_logits, dim=-1)
+                        cumsum = torch.cumsum(probs, dim=-1)
+                        # Keep the first token crossing the threshold as well.
+                        remove = cumsum > top_p
+                        remove[:, 1:] = remove[:, :-1].clone()
+                        remove[:, 0] = False
+                        sorted_logits = sorted_logits.masked_fill(remove, float("-inf"))
+                        probs = F.softmax(sorted_logits, dim=-1)
+                        sampled = torch.multinomial(probs, num_samples=1)
+                        next_token = torch.gather(sorted_idx, -1, sampled)
+                    else:
+                        probs = F.softmax(next_logits, dim=-1)
+                        next_token = torch.multinomial(probs, num_samples=1)
+                if eos_token_id is not None:
+                    next_token = next_token.masked_fill(finished[:, None], eos_token_id)
+                    finished |= next_token[:, 0] == eos_token_id
+                out = torch.cat([out, next_token], dim=1)
+                if eos_token_id is not None and finished.all():
+                    break
+            return out
+        finally:
+            self.train(was_training)
