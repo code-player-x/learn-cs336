@@ -1,0 +1,9 @@
+{
+  "fixture_version": "paragraph-bm25-quotes-v1",
+  "documents": [
+    {"id": "refund", "version": "v1", "path": "corpus/refund.md", "readers": ["customer", "staff"]},
+    {"id": "shipping", "version": "v1", "path": "corpus/shipping.md", "readers": ["customer", "staff"]},
+    {"id": "service", "version": "v1", "path": "corpus/service.md", "readers": ["customer", "staff"]},
+    {"id": "internal", "version": "v1", "path": "corpus/internal.md", "readers": ["staff"]}
+  ]
+}

@@ -1,0 +1,10 @@
+[
+  {"id": "shipping_fee", "question": "普通商品的标准配送运费是多少？", "role": "customer", "expected_status": "answered", "gold_chunk_ids": ["shipping:1"]},
+  {"id": "free_shipping", "question": "订单实付金额满多少元时免标准配送运费？", "role": "customer", "expected_status": "answered", "gold_chunk_ids": ["shipping:2"]},
+  {"id": "shipping_days", "question": "标准配送预计几个工作日送达？", "role": "customer", "expected_status": "answered", "gold_chunk_ids": ["shipping:3"]},
+  {"id": "service_hours", "question": "客服在线时间是什么？", "role": "customer", "expected_status": "answered", "gold_chunk_ids": ["service:1"]},
+  {"id": "unknown_phone", "question": "客服电话是多少？", "role": "customer", "expected_status": "refused", "gold_chunk_ids": []},
+  {"id": "staff_approval", "question": "员工报销审批上限是多少？", "role": "staff", "expected_status": "answered", "gold_chunk_ids": ["internal:1"]},
+  {"id": "customer_approval", "question": "员工报销审批上限是多少？", "role": "customer", "expected_status": "refused", "gold_chunk_ids": []},
+  {"id": "two_sources", "question": "标准配送预计几个工作日送达？客服在线时间是什么？", "role": "customer", "expected_status": "answered", "gold_chunk_ids": ["shipping:3", "service:1"]}
+]

@@ -97,6 +97,35 @@ class ExportTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             export.read_md_file(Path('/definitely-missing/cs336-source.md'))
 
+    def test_knowledge_docs_are_included_and_cross_linked(self):
+        files = export.knowledge_files()
+        self.assertTrue(files)
+        self.assertEqual(files[0].name, 'README.md')
+        with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):
+            output = Path(directory)
+            page = Page()
+            page.feed(export.generate_html(output).read_text(encoding='utf-8'))
+            self.assertIn('knowledge', page.ids)
+            for source in files:
+                self.assertIn(export.section_id(source), page.ids)
+            self.assertIn('#AI知识体系构建-README', page.links)
+            self.assertIn('#AI知识体系构建-基础与模型原理', page.links)
+            self.assertIn('#docs-03-Transformer架构详解', page.links)
+            combined = export.generate_combined_markdown(output).read_text(encoding='utf-8')
+            for source in files:
+                heading = source.read_text(encoding='utf-8').splitlines()[0]
+                self.assertTrue(heading in combined, f'{source.name} missing from combined export')
+            self.assertTrue('docs/AI' in combined, 'knowledge links were not rebased')
+
+    def test_knowledge_math_has_no_unparsed_dollar_delimiters(self):
+        formula_count = 0
+        for source in export.knowledge_files():
+            page = Page()
+            page.feed(export.md_to_html(source.read_text(encoding='utf-8')))
+            self.assertNotIn('$', ''.join(page.prose), f'{source.name}: unparsed math delimiter')
+            formula_count += len(page.math)
+        self.assertGreater(formula_count, 30)
+
     def test_full_project_export_has_no_broken_local_links_or_duplicate_ids(self):
         with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):
             output = Path(directory)
@@ -106,6 +135,7 @@ class ExportTests(unittest.TestCase):
             self.assertGreater(len(page.math), 2000)
             self.assertNotIn('$$', ''.join(page.prose), 'A display formula was not parsed')
             self.assertIn('code', page.ids)
+            self.assertIn('knowledge', page.ids)
             self.assertEqual(len(page.ids), len(set(page.ids)))
             for href in page.links + page.images:
                 url = urlsplit(href)

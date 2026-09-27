@@ -1,0 +1,5 @@
+[
+  {"id": "refund_window", "question": "普通商品签收后几天内可申请退货？", "role": "customer", "expected_status": "answered", "gold_chunk_ids": ["refund:1"]},
+  {"id": "custom_refund", "question": "定制商品支持无理由退货吗？", "role": "customer", "expected_status": "answered", "gold_chunk_ids": ["refund:2"]},
+  {"id": "refund_order", "question": "退货申请需要提供什么？", "role": "customer", "expected_status": "answered", "gold_chunk_ids": ["refund:3"]}
+]

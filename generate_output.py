@@ -184,6 +184,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             <h1>CS336 面试导向学习指南</h1>
             <div>
                 <a href="#lessons">课程文档</a>
+                <a href="#knowledge">大模型知识体系</a>
                 <a href="#interview">面试专区</a>
                 <a href="#code">代码实现</a>
                 <a href="#comics">漫画图解</a>
@@ -280,6 +281,12 @@ def read_md_file(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def knowledge_files() -> list[Path]:
+    """Include the engineering knowledge map separately from numbered lessons."""
+    files = (DOCS_DIR / "AI知识体系构建").glob("*.md")
+    return sorted(files, key=lambda path: (path.name != "README.md", path.name))
+
+
 def generate_html(output_dir: Path = OUTPUT_DIR) -> Path:
     print("Generating HTML...")
     output_dir = Path(output_dir).resolve()
@@ -291,10 +298,16 @@ def generate_html(output_dir: Path = OUTPUT_DIR) -> Path:
     sections.append('<li><strong>课程文档</strong></li>')
 
     doc_files = sorted(DOCS_DIR.glob("*.md"))
+    knowledge_docs = knowledge_files()
     interview_files = sorted(INTERVIEW_DIR.glob("*.md"))
-    included = {f.resolve() for f in doc_files + interview_files}
+    included = {f.resolve() for f in doc_files + knowledge_docs + interview_files}
     for f in doc_files:
         name = f.stem
+        sections.append(f'<li><a href="#{html.escape(section_id(f))}">{html.escape(name)}</a></li>')
+
+    sections.append('<li><strong>大模型知识体系</strong></li>')
+    for f in knowledge_docs:
+        name = "总索引" if f.name == "README.md" else f.stem
         sections.append(f'<li><a href="#{html.escape(section_id(f))}">{html.escape(name)}</a></li>')
 
     sections.append('<li><strong>面试专区</strong></li>')
@@ -308,6 +321,13 @@ def generate_html(output_dir: Path = OUTPUT_DIR) -> Path:
     for f in doc_files:
         md_text = read_md_file(f)
         html_content = md_to_html(md_text, source=f, output_dir=output_dir, included=included)
+        sections.append(
+            f'<div class="content" id="{html.escape(section_id(f))}">{html_content}</div>'
+        )
+
+    sections.append('<h1 id="knowledge">大模型知识体系</h1>')
+    for f in knowledge_docs:
+        html_content = md_to_html(read_md_file(f), source=f, output_dir=output_dir, included=included)
         sections.append(
             f'<div class="content" id="{html.escape(section_id(f))}">{html_content}</div>'
         )
@@ -379,6 +399,11 @@ def generate_combined_markdown(output_dir: Path = OUTPUT_DIR) -> Path:
 
     doc_files = sorted(DOCS_DIR.glob("*.md"))
     for f in doc_files:
+        parts.append(rebase_markdown(read_md_file(f), f, output_dir))
+        parts.append("\n\n---\n\n")
+
+    parts.append("# 大模型知识体系\n\n")
+    for f in knowledge_files():
         parts.append(rebase_markdown(read_md_file(f), f, output_dir))
         parts.append("\n\n---\n\n")
 
