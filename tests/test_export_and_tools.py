@@ -100,7 +100,9 @@ class ExportTests(unittest.TestCase):
     def test_knowledge_docs_are_included_and_cross_linked(self):
         files = export.knowledge_files()
         self.assertTrue(files)
-        self.assertEqual(files[0].name, 'README.md')
+        self.assertEqual(files[0].name, '00-总索引.md')
+        for index, source in enumerate(files):
+            self.assertTrue(source.name.startswith(f'{index:02d}-'), source.name)
         with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):
             output = Path(directory)
             page = Page()
@@ -108,8 +110,8 @@ class ExportTests(unittest.TestCase):
             self.assertIn('knowledge', page.ids)
             for source in files:
                 self.assertIn(export.section_id(source), page.ids)
-            self.assertIn('#AI知识体系构建-README', page.links)
-            self.assertIn('#AI知识体系构建-基础与模型原理', page.links)
+            self.assertIn('#AI知识体系构建-00-总索引', page.links)
+            self.assertIn('#AI知识体系构建-02-基础与模型原理', page.links)
             self.assertIn('#docs-03-Transformer架构详解', page.links)
             combined = export.generate_combined_markdown(output).read_text(encoding='utf-8')
             for source in files:

@@ -282,9 +282,9 @@ def read_md_file(path: Path) -> str:
 
 
 def knowledge_files() -> list[Path]:
-    """Include the engineering knowledge map separately from numbered lessons."""
+    """Include the numbered knowledge map in file-name order."""
     files = (DOCS_DIR / "AI知识体系构建").glob("*.md")
-    return sorted(files, key=lambda path: (path.name != "README.md", path.name))
+    return sorted(files)
 
 
 def generate_html(output_dir: Path = OUTPUT_DIR) -> Path:
@@ -307,7 +307,7 @@ def generate_html(output_dir: Path = OUTPUT_DIR) -> Path:
 
     sections.append('<li><strong>大模型知识体系</strong></li>')
     for f in knowledge_docs:
-        name = "总索引" if f.name == "README.md" else f.stem
+        name = f.stem
         sections.append(f'<li><a href="#{html.escape(section_id(f))}">{html.escape(name)}</a></li>')
 
     sections.append('<li><strong>面试专区</strong></li>')
