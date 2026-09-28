@@ -76,11 +76,11 @@ class ExportTests(unittest.TestCase):
             docs.mkdir()
             interview.mkdir()
             a, b = docs / '01.md', interview / '01.md'
-            source = '# 第一章\n\n[local](#第一章) [other](../interview/01.md) [web](https://example.com/x?q=1#y)\n\n![img](images/test.png)'
+            source = '# 第一章\n\n[local](#第一章) [other](../interview/01.md) [heading](../interview/01.md#第二%20章) [web](https://example.com/x?q=1#y)\n\n![img](images/test.png)'
             page = Page()
             page.feed(export.md_to_html(source, source=a, output_dir=output, included={a, b}))
             self.assertIn('docs-01--第一章', page.ids)
-            self.assertEqual(page.links, ['#docs-01--第一章', '#interview-01', 'https://example.com/x?q=1#y'])
+            self.assertEqual(page.links, ['#docs-01--第一章', '#interview-01', '#interview-01--第二-章', 'https://example.com/x?q=1#y'])
             self.assertEqual(page.images, ['../docs/images/test.png'])
 
     def test_combined_markdown_rebases_without_touching_code(self):
@@ -99,7 +99,9 @@ class ExportTests(unittest.TestCase):
 
     def test_knowledge_docs_are_included_and_cross_linked(self):
         files = export.knowledge_files()
+        topic_files = export.topic_content_files()
         self.assertTrue(files)
+        self.assertTrue(topic_files)
         self.assertEqual(files[0].name, '00-总索引.md')
         for index, source in enumerate(files):
             self.assertTrue(source.name.startswith(f'{index:02d}-'), source.name)
@@ -108,25 +110,36 @@ class ExportTests(unittest.TestCase):
             page = Page()
             page.feed(export.generate_html(output).read_text(encoding='utf-8'))
             self.assertIn('knowledge', page.ids)
+            self.assertIn('topics', page.ids)
             for source in files:
+                self.assertIn(export.section_id(source), page.ids)
+            for source in topic_files:
                 self.assertIn(export.section_id(source), page.ids)
             self.assertIn('#AI知识体系构建-00-总索引', page.links)
             self.assertIn('#AI知识体系构建-02-基础与模型原理', page.links)
+            self.assertIn('#AI专题内容-07-RAG知识体系内容', page.links)
+            self.assertIn('#AI专题内容-07-RAG知识体系内容--一rag-基础认知', page.links)
+            self.assertIn('#AI知识体系构建-07-RAG知识体系', page.links)
             self.assertIn('#docs-03-Transformer架构详解', page.links)
             combined = export.generate_combined_markdown(output).read_text(encoding='utf-8')
-            for source in files:
+            for source in files + topic_files:
                 heading = source.read_text(encoding='utf-8').splitlines()[0]
                 self.assertTrue(heading in combined, f'{source.name} missing from combined export')
             self.assertTrue('docs/AI' in combined, 'knowledge links were not rebased')
 
     def test_knowledge_math_has_no_unparsed_dollar_delimiters(self):
         formula_count = 0
-        for source in export.knowledge_files():
+        for source in export.knowledge_files() + export.topic_content_files():
             page = Page()
             page.feed(export.md_to_html(source.read_text(encoding='utf-8')))
             self.assertNotIn('$', ''.join(page.prose), f'{source.name}: unparsed math delimiter')
             formula_count += len(page.math)
         self.assertGreater(formula_count, 30)
+
+    def test_rag_topic_keeps_nested_list_structure(self):
+        source = export.DOCS_DIR / 'AI专题内容' / '07-RAG知识体系内容.md'
+        rendered = export.md_to_html(source.read_text(encoding='utf-8'))
+        self.assertIn('<li>核心定义<ul>', rendered)
 
     def test_full_project_export_has_no_broken_local_links_or_duplicate_ids(self):
         with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):

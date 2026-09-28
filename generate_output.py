@@ -184,7 +184,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             <h1>CS336 面试导向学习指南</h1>
             <div>
                 <a href="#lessons">课程文档</a>
-                <a href="#knowledge">大模型知识体系</a>
+                <a href="#knowledge">大模型知识地图</a>
+                <a href="#topics">AI 专题内容</a>
                 <a href="#interview">面试专区</a>
                 <a href="#code">代码实现</a>
                 <a href="#comics">漫画图解</a>
@@ -236,13 +237,14 @@ class _OutputLinks(Treeprocessor):
                 if url.scheme or url.netloc or url.path.startswith('/'):
                     continue
                 if attribute == 'href' and not url.path and url.fragment:
-                    element.set(attribute, f"#{prefix}--{unquote(url.fragment)}")
+                    element.set(attribute, f"#{prefix}--{slugify_unicode(unquote(url.fragment), '-')}")
                     continue
                 target = (self.source.parent / unquote(url.path)).resolve() if url.path else None
                 if attribute == 'href' and target in self.included:
                     anchor = section_id(target)
                     if url.fragment:
-                        anchor += '--' + unquote(url.fragment)
+                        # Obsidian links use heading text; HTML headings use slugified ids.
+                        anchor += '--' + slugify_unicode(unquote(url.fragment), '-')
                     element.set(attribute, '#' + anchor)
                 else:
                     element.set(attribute, relative_destination(destination, self.source, self.output_dir))
@@ -287,6 +289,11 @@ def knowledge_files() -> list[Path]:
     return sorted(files)
 
 
+def topic_content_files() -> list[Path]:
+    """Include full-length AI topic notes separately from the knowledge map."""
+    return sorted((DOCS_DIR / "AI专题内容").glob("*.md"))
+
+
 def generate_html(output_dir: Path = OUTPUT_DIR) -> Path:
     print("Generating HTML...")
     output_dir = Path(output_dir).resolve()
@@ -299,14 +306,20 @@ def generate_html(output_dir: Path = OUTPUT_DIR) -> Path:
 
     doc_files = sorted(DOCS_DIR.glob("*.md"))
     knowledge_docs = knowledge_files()
+    topic_docs = topic_content_files()
     interview_files = sorted(INTERVIEW_DIR.glob("*.md"))
-    included = {f.resolve() for f in doc_files + knowledge_docs + interview_files}
+    included = {f.resolve() for f in doc_files + knowledge_docs + topic_docs + interview_files}
     for f in doc_files:
         name = f.stem
         sections.append(f'<li><a href="#{html.escape(section_id(f))}">{html.escape(name)}</a></li>')
 
     sections.append('<li><strong>大模型知识体系</strong></li>')
     for f in knowledge_docs:
+        name = f.stem
+        sections.append(f'<li><a href="#{html.escape(section_id(f))}">{html.escape(name)}</a></li>')
+
+    sections.append('<li><strong>AI 专题内容</strong></li>')
+    for f in topic_docs:
         name = f.stem
         sections.append(f'<li><a href="#{html.escape(section_id(f))}">{html.escape(name)}</a></li>')
 
@@ -327,6 +340,13 @@ def generate_html(output_dir: Path = OUTPUT_DIR) -> Path:
 
     sections.append('<h1 id="knowledge">大模型知识体系</h1>')
     for f in knowledge_docs:
+        html_content = md_to_html(read_md_file(f), source=f, output_dir=output_dir, included=included)
+        sections.append(
+            f'<div class="content" id="{html.escape(section_id(f))}">{html_content}</div>'
+        )
+
+    sections.append('<h1 id="topics">AI 专题内容</h1>')
+    for f in topic_docs:
         html_content = md_to_html(read_md_file(f), source=f, output_dir=output_dir, included=included)
         sections.append(
             f'<div class="content" id="{html.escape(section_id(f))}">{html_content}</div>'
@@ -402,8 +422,13 @@ def generate_combined_markdown(output_dir: Path = OUTPUT_DIR) -> Path:
         parts.append(rebase_markdown(read_md_file(f), f, output_dir))
         parts.append("\n\n---\n\n")
 
-    parts.append("# 大模型知识体系\n\n")
+    parts.append("# 大模型知识地图\n\n")
     for f in knowledge_files():
+        parts.append(rebase_markdown(read_md_file(f), f, output_dir))
+        parts.append("\n\n---\n\n")
+
+    parts.append("# AI 专题内容\n\n")
+    for f in topic_content_files():
         parts.append(rebase_markdown(read_md_file(f), f, output_dir))
         parts.append("\n\n---\n\n")
 
