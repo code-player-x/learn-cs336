@@ -9,3 +9,6 @@ build/
 .venv/
 .idea/
 .codebuddy/
+
+# Obsidian 本地配置（workspace.json 每次开关文件都变，提交会产生大量噪音）
+docs/.obsidian/

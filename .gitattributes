@@ -1,0 +1,18 @@
+# 统一换行符为 LF（Obsidian 等编辑器默认写入 LF），
+# 避免与 core.autocrlf 冲突产生"看起来改了其实没改"的假改动
+* text=auto eol=lf
+
+# Windows 脚本必须用 CRLF，否则无法执行
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 二进制文件不做任何转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.zip binary
