@@ -774,16 +774,298 @@ def parallel_count_pairs(
 # 输入：脚本内置sample测试字符串，无外部入参
 # 输出：控制台打印token ids与OK；断言失败抛出AssertionError，无函数返回值
 # ============================================================
-if __name__ == "__main__":
-    # 测试样例文本，包含重复英文、中文，覆盖ASCII与UTF‑8多字节字符
-    sample = "hello hello hello 你好"
-    # 执行BPE训练，做10轮合并，得到词表vocab、合并规则merges
-    vocab, merges = train_bpe(sample, num_merges=10)
-    # 使用训练好的merges对sample文本做推理编码，得到token id序列
-    ids = bpe_encode(sample, merges)
-    # 解码id序列还原字符串；断言：解码结果必须等于原始sample，不等直接抛AssertionError
-    assert bpe_decode(ids, vocab) == sample
-    # 在控制台打印编码得到的token ids
-    print("token ids:", ids)
-    # 断言没有报错，打印OK，代表整套链路运行正常
-    print("OK")
+# if __name__ == "__main__":
+#     # 测试样例文本，包含重复英文、中文，覆盖ASCII与UTF‑8多字节字符
+#     sample = "hello hello hello 你好"
+#     # 执行BPE训练，做10轮合并，得到词表vocab、合并规则merges
+#     vocab, merges = train_bpe(sample, num_merges=10)
+#     # 使用训练好的merges对sample文本做推理编码，得到token id序列
+#     ids = bpe_encode(sample, merges)
+#     # 解码id序列还原字符串；断言：解码结果必须等于原始sample，不等直接抛AssertionError
+#     assert bpe_decode(ids, vocab) == sample
+#     # 在控制台打印编码得到的token ids
+#     print("token ids:", ids)
+#     # 断言没有报错，打印OK，代表整套链路运行正常
+#     print("OK")
+
+
+import math
+import torch
+import torch.nn as nn
+
+
+class TransformerBlock(nn.Module):
+    """
+    单塔 Decoder Block（Pre-Norm）。
+
+    数据流：
+        x -> LN -> MHA(causal) -> 残差 -> LN -> FFN -> 残差
+
+    说明：
+        1. 使用 Pre-Norm，即先 LayerNorm 再进入子层。
+        2. 注意力使用因果掩码，防止看到未来 token。
+        3. 每个子层后都有残差连接。
+    """
+
+    def __init__(
+        self,
+        d_model: int,
+        n_heads: int,
+        d_ff: int,
+        dropout: float = 0.0,
+    ) -> None:
+        """
+        初始化 Transformer Decoder Block。
+
+        参数：
+            d_model: 模型隐藏维度，即每个 token 的向量长度。
+            n_heads: 多头注意力头数。
+            d_ff: 前馈网络中间层维度。
+            dropout: dropout 概率，默认 0.0。
+        """
+        # 调用 nn.Module 初始化，注册子模块与参数
+        super().__init__()
+
+        # 保证 d_model 可以被 n_heads 整除
+        assert d_model % n_heads == 0
+
+        # 保存模型隐藏维度
+        self.d_model = d_model
+
+        # 保存注意力头数
+        self.n_heads = n_heads
+
+        # 计算每个注意力头的维度
+        self.d_head = d_model // n_heads
+
+        # 第一个 LayerNorm，用于注意力子层前的 Pre-Norm
+        self.ln1 = nn.LayerNorm(d_model)
+
+        # 第二个 LayerNorm，用于 FFN 子层前的 Pre-Norm
+        self.ln2 = nn.LayerNorm(d_model)
+
+        # 一次性生成 Q、K、V 的线性投影，输出维度为 3 * d_model
+        self.qkv = nn.Linear(d_model, 3 * d_model, bias=True)
+
+        # 多头注意力输出后的线性投影，把拼接后的多头结果映射回 d_model
+        self.out_proj = nn.Linear(d_model, d_model, bias=True)
+
+        # 前馈网络 FFN
+        self.ffn = nn.Sequential(
+            # 第一层线性变换：d_model -> d_ff
+            nn.Linear(d_model, d_ff),
+
+            # GELU 激活函数，引入非线性
+            nn.GELU(),
+
+            # 第二层线性变换：d_ff -> d_model
+            nn.Linear(d_ff, d_model),
+        )
+
+        # dropout 层，用于注意力权重、注意力输出和 FFN 输出
+        self.drop = nn.Dropout(dropout)
+
+    def _causal_mask(self, n: int, device: torch.device) -> torch.Tensor:
+        """
+        生成因果掩码（causal mask）。
+
+        作用：
+            防止当前位置看到未来位置的信息。
+
+        返回：
+            形状为 [n, n] 的布尔矩阵。
+            上三角部分（不含对角线）为 True，表示这些位置需要被 mask 掉。
+        """
+        # 创建 n x n 的全 1 矩阵，并取上三角（不含对角线）为 True
+        return torch.triu(torch.ones(n, n, device=device, dtype=torch.bool), diagonal=1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Transformer Block 前向传播。
+
+        输入：
+            x: 形状为 [batch, seq, d_model] 的张量。
+
+        输出：
+            形状为 [batch, seq, d_model] 的张量。
+
+        流程：
+            1. Pre-Norm + 多头因果自注意力 + 残差连接
+            2. Pre-Norm + FFN + 残差连接
+        """
+        # 获取 batch 大小、序列长度、隐藏维度
+        b, n, d = x.shape
+
+        # 检查输入最后一维是否等于模型维度
+        assert d == self.d_model
+
+        # ============================================================
+        # 第一部分：Pre-Norm + 多头因果自注意力 + 残差连接
+        # ============================================================
+
+        # 先做 LayerNorm，得到注意力子层的输入
+        h = self.ln1(x)
+
+        # 通过线性层生成 QKV，并在最后一维切成 3 份
+        qkv = self.qkv(h).chunk(3, dim=-1)
+
+        # 分别得到 Query、Key、Value
+        q, k, v = qkv
+
+        def split_heads(t: torch.Tensor) -> torch.Tensor:
+            """
+            将张量按注意力头拆分。
+
+            输入：
+                t: 形状为 [batch, seq, d_model] 的张量。
+
+            输出：
+                形状为 [batch, n_heads, seq, d_head] 的张量。
+
+            作用：
+                把最后一维 d_model 拆成 n_heads * d_head，
+                然后把 n_heads 维度移到前面，方便做批量矩阵乘法。
+            """
+            # 变形为 [batch, seq, n_heads, d_head]，再交换维度得到 [batch, n_heads, seq, d_head]
+            return t.view(b, n, self.n_heads, self.d_head).transpose(1, 2)
+
+        # 对 Q、K、V 都执行多头拆分
+        q, k, v = map(split_heads, (q, k, v))
+
+        # 计算注意力分数：QK^T / sqrt(d_head)
+        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_head)
+
+        # 生成因果掩码，形状为 [n, n]
+        mask = self._causal_mask(n, x.device)
+
+        # 将未来位置对应的分数置为负无穷，softmax 后概率为 0
+        scores = scores.masked_fill(mask, float("-inf"))
+
+        # 在最后一维做 softmax，得到注意力权重
+        attn = torch.softmax(scores, dim=-1)
+
+        # 对注意力权重做 dropout
+        attn = self.drop(attn)
+
+        # 用注意力权重对 Value 加权求和，得到注意力输出
+        y = torch.matmul(attn, v)
+
+        # 把头维度换回来并拼接成 [batch, seq, d_model]
+        y = y.transpose(1, 2).contiguous().view(b, n, d)
+
+        # 对多头拼接结果做输出线性投影
+        y = self.out_proj(y)
+
+        # 对投影结果做 dropout
+        y = self.drop(y)
+
+        # 残差连接：原始输入 + 注意力输出
+        x = x + y
+
+        # ============================================================
+        # 第二部分：Pre-Norm + FFN + 残差连接
+        # ============================================================
+
+        # 对残差后的结果做 LayerNorm，作为 FFN 输入
+        h2 = self.ln2(x)
+
+        # 经过 FFN，再 dropout
+        z = self.drop(self.ffn(h2))
+
+        # 残差连接：FFN 前输入 + FFN 输出
+        x = x + z
+
+        # 返回该 Transformer Block 的输出
+        return x
+
+
+class TinyDecoderLM(nn.Module):
+    """
+    一个微型 Decoder-only 语言模型。
+
+    结构：
+        Token Embedding + Position Embedding
+        -> 多个 TransformerBlock
+        -> Final LayerNorm
+        -> LM Head
+
+    用途：
+        输入 token id，输出每个位置对词表中每个 token 的预测 logits。
+    """
+
+    def __init__(
+        self,
+        vocab_size: int,
+        d_model: int,
+        n_layers: int,
+        n_heads: int,
+        d_ff: int,
+        max_pos: int = 2048,
+    ):
+        """
+        初始化 TinyDecoderLM。
+
+        参数：
+            vocab_size: 词表大小。
+            d_model: 模型隐藏维度。
+            n_layers: Transformer Block 层数。
+            n_heads: 多头注意力头数。
+            d_ff: FFN 中间层维度。
+            max_pos: 最大位置长度，默认 2048。
+        """
+        # 调用 nn.Module 初始化
+        super().__init__()
+
+        # token 嵌入层：把 token id 映射成 d_model 维向量
+        self.tok_emb = nn.Embedding(vocab_size, d_model)
+
+        # 位置嵌入层：把位置 id 映射成 d_model 维向量
+        self.pos_emb = nn.Embedding(max_pos, d_model)
+
+        # 用 ModuleList 保存多层 TransformerBlock
+        self.blocks = nn.ModuleList(
+            # 创建 n_layers 个 TransformerBlock
+            TransformerBlock(d_model, n_heads, d_ff) for _ in range(n_layers)
+        )
+
+        # 最后一层 LayerNorm
+        self.ln_f = nn.LayerNorm(d_model)
+
+        # 语言模型输出头：d_model -> vocab_size，无 bias
+        self.lm_head = nn.Linear(d_model, vocab_size, bias=False)
+
+    def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
+        """
+        前向传播。
+
+        输入：
+            token_ids: 形状为 [batch, seq] 的 token id 张量。
+
+        输出：
+            形状为 [batch, seq, vocab_size] 的 logits 张量。
+
+        流程：
+            1. 生成 token embedding 和 position embedding，并相加。
+            2. 依次通过所有 TransformerBlock。
+            3. 经过最终 LayerNorm。
+            4. 通过 LM Head 得到每个位置对词表中每个 token 的预测分数。
+        """
+        # 获取 batch 大小和序列长度
+        b, n = token_ids.shape
+
+        # 生成位置 id：[0, 1, ..., n-1]，并扩展到 [batch, seq]
+        pos = torch.arange(n, device=token_ids.device).unsqueeze(0).expand(b, n)
+
+        # token 嵌入 + 位置嵌入，得到输入表示
+        x = self.tok_emb(token_ids) + self.pos_emb(pos)
+
+        # 依次遍历每一层 TransformerBlock
+        for blk in self.blocks:
+            # 通过当前 TransformerBlock
+            x = blk(x)
+
+        # 所有 Block 结束后做最终 LayerNorm
+        x = self.ln_f(x)
+
+        # 通过 LM Head 输出 logits，形状为 [batch, seq, vocab_size]
+        return self.lm_head(x)
