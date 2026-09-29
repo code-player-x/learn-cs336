@@ -237,6 +237,18 @@ $$
 
 最后一层隐藏状态按行向量记为 $h \in \mathbb{R}^{1 \times d}$。沿用 PyTorch 的权重存储形状，**LM Head** 的 $W_{\text{lm}} \in \mathbb{R}^{V \times d}$，无偏置时 $\text{logits} = h W_{\text{lm}}^\top \in \mathbb{R}^{1 \times V}$，再 Softmax 得词表上的概率分布。训练时常对**下一 token** 位置做交叉熵。
 
+**形状主线（一次前向，便于记忆与自检）**：
+
+$$
+B\times T \;\to\; B\times T\times d \;\to\; B\times h\times T\times T \;\to\; B\times T\times d \;\to\; B\times T\times V
+$$
+
+- token id 进来是 $B\times T$；Embedding 查表后为 $B\times T\times d$。
+- 注意力内部先拆头，分数矩阵为 $B\times h\times T\times T$（这就是长序列 $O(T^2)$ 的来源），加权求和后合头回到 $B\times T\times d$。
+- 残差与 LayerNorm **不改变形状**；最后 LM Head 输出 $B\times T\times V$ 的词表分布。
+
+顺着这条主线数一遍矩阵，参数量（每层 $4d^2+2dd_{\text{ff}}$）与复杂度（$O(T^2d+Td^2)$）都能自己推出来，不必死记——详见 [2.7 参数量估算](#27-模型参数量估算公式) 与 [4.2 复杂度](#42-self-attention-的计算复杂度是多少)。
+
 ---
 
 ### 2.5 Decoder-only 特有问题：因果掩码与自回归
