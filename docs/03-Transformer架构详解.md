@@ -636,13 +636,27 @@ class TinyDecoderLM(nn.Module):
 **答**：禁止位置 $i$ attend 到 $j>i$；保证训练与自回归推理一致，避免「偷看未来」。
 
 ### Q：Embedding 参数量？
-**答**：$V \times d$；若与 LM head **权重共享**则不计两次。
+**答**：$V \times d$；若与 LM head( **Language Modeling** 的缩写，也就是“语言建模”) **权重共享**则不计两次。
 
 ### Q：FFN 隐层通常多少？为什么？
 **答**：经典 **$4d$**；容量与算力折中；现代 SwiGLU 会调整有效宽度（Lesson 05）。
 
 ### Q：Transformer 中 dropout 常见位置？
-**答**：注意力输出/概率、残差后、FFN、embedding 等依实现；`eval()` 关闭。
+**答**：Transformer 中 dropout 常见位置，按数据流大致有这几处：
+
+**Embedding 后**：token embedding 加位置编码之后，常加一次 dropout。
+
+**注意力内部**：一是 softmax 后的注意力权重上，二是加权求和后的注意力输出上。有些实现只加输出，有些两处都加。
+
+**残差相加后**：每个子层做完 $X = X + \text{Sublayer}(X)$ 后，常再 drop 一次。
+
+**FFN 内部**：中间激活之后常加，有的在 FFN 输出后再加一次。
+
+**输出层前**：部分模型在最后一层 LayerNorm 之后、LM head 之前也会加。
+
+面试里可以概括为：**主要加在 Embedding 后、注意力输出、残差后和 FFN 内部，具体依实现而定。**
+
+训练时生效，推理时必须关闭，PyTorch 里用 `model.eval()` 切换。现代 LLM 预训练时 dropout 往往用得很轻，注意力权重上的 dropout 常被去掉。
 
 ### Q：如何理解信息流？
 **答**：Embedding→各层 **Attention 混合上下文**→**FFN 逐点非线性**→残差与 Norm 稳定与传递。
@@ -650,11 +664,33 @@ class TinyDecoderLM(nn.Module):
 ### Q：LLaMA 相对原始 Transformer 改进？
 **答**：**RMSNorm**、**RoPE**、**SwiGLU**、**GQA** 等（Lesson 04–05）。
 
+LLaMA 相对原始 Transformer 的改进，主要在归一化、位置编码、激活函数和注意力结构这几块。
+
+**RMSNorm 替代 LayerNorm**：原始 Transformer 用 LayerNorm，做均值中心化再除以标准差。LLaMA 用 RMSNorm，只做缩放、不做均值中心化，即 $\text{RMSNorm}(x) = \frac{x}{\sqrt{\text{mean}(x^2) + \epsilon}} \cdot \gamma$。计算更简单，效果接近，训练更稳。
+
+**RoPE 替代绝对位置编码**：原始 Transformer 用可学习或正弦绝对位置编码，直接加到 embedding 上。LLaMA 用旋转位置编码 RoPE，把位置信息通过旋转矩阵注入到 Q、K 里，让注意力分数天然带相对位置信息，外推性更好。
+
+**SwiGLU 替代 ReLU FFN**：原始 FFN 是 $W_2 \cdot \text{ReLU}(W_1 x)$，两层线性。LLaMA 用 SwiGLU，结构是 $W_2 \cdot (\text{Swish}(W_1 x) \otimes W_3 x)$，三个线性层，通常取 $d_{\text{ff}} = \frac{8}{3} d$ 来对齐标准 FFN 的参数量。
+
+**GQA 替代多头注意力**：原始 Transformer 是标准多头注意力，每个头有独立的 K、V。LLaMA 2 70B 和 LLaMA 3 用 GQA（Grouped Query Attention），把 Query 分组，每组共享一份 K、V，减少 KV Cache 显存和推理开销，同时效果接近 MHA。
+
+**其他细节**：Pre-Norm 结构、去掉 bias、注意力权重不加 dropout 等。
+
+面试里概括为：**RMSNorm、RoPE、SwiGLU、GQA** 这四项是核心。
+
 ### Q：参数量如何算？
 **答**：共享 Embedding/LM Head 时计 $Vd$，不共享时计 $2Vd$；再加 $L$ 层的 Attention 与 FFN 参数，即 $L(4d^2+2d\cdot d_{\text{ff}})$ + 小项。标准 MHA 且 $d_{\text{ff}}=4d$ 时，Block 主项为 $12Ld^2$。
 
+![image-20260929110443588](images/image-20260929110443588.png)
+
 ### Q：FLOPs 如何算？
-**答**：Attention $O(n^2 d)$ 与投影 $O(n d^2)$ 组合；随 $n$ 增大平方项主导。
+**答**：投影 $O(n d^2)$ 与Attention $O(n^2 d)$ 组合；随 $n$ 增大平方项主导。
+
+![image-20260929112246464](images/image-20260929112246464.png)
+
+![image-20260929111357986](images/image-20260929111357986.png)
+
+
 
 ---
 
