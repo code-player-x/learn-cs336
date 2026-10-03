@@ -146,6 +146,8 @@ Chinchilla 论文的三个估计方法，讲义按以下顺序讲解：
 
 图：Stanford CS336 Spring 2026 [Lecture 9 官方 PDF 第 48 页](https://github.com/stanford-cs336/lectures/blob/main/lecture_09.pdf#page=48)；课件此图摘自 Hoffmann 等《Training Compute-Optimal Large Language Models》的 Figure 3。左图同色曲线对应固定预算，谷底用于拟合中、右图轨迹。
 
+第 48 页图中青色辅助线还有一个具体读数：若使用与 Gopher 相当的训练 FLOPs，方法 2 拟合的最优点约是 **63B 参数、1.4T token**。这不是图左侧某一个已训练点的精确实测值，而是用多档 IsoFLOPs 谷底外推的预算选择示例；读图要同时看中图的模型规模和右图的 token 规模，不能只拿其中一个数字判断“更大模型更好”。
+
 **面试速述：** Kaplan 的计算最优预测更偏向增模型，Chinchilla 的前两种分析近似让参数与 token 同步按预算平方根增长。Chinchilla 可用下包络、IsoFLOPs 谷底或联合损失面估计最优轨迹；三个方法有各自拟合误差，不能把第三方法的旧指数当更精确标准。
 
 ### 为什么两代预测相差很大

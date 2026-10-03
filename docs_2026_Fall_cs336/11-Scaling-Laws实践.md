@@ -54,6 +54,8 @@ MiniCPM 是 2024 年的高性能小模型案例，讲义关注其详细的缩放
 
 图：Stanford CS336 Spring 2026 [Lecture 11 官方 PDF 第 14 页](https://github.com/stanford-cs336/lectures/blob/main/lecture_11.pdf#page=14)，原图为 MiniCPM 论文 Figure 15。不同终点的 WSD 曲线共用 stable 段，再从各自 checkpoint 进入 decay；图上是学习率曲线，并非验证损失曲线。
 
+第 14 页原图旁的论文摘录还给出这条曲线背后的实验网格：6 种规模约从 0.04B 到 2B，每种模型在 stable 主干上取约 $10N$ 到 $60N$ token 的 6 个 checkpoint，分别做末段 decay；最终损失在 5 份留出评测数据上计算。为降低不同 tokenizer 的 token 粒度差异，作者按**字节数**而非 token 数平均损失。因而图上的共享主干只是节省采样成本的日程示意，真正用于拟合的是每个已完成 decay、采用同一评测口径的终点；与其他论文的每 token loss 比较前还要对齐单位。
+
 若每个候选 $N,D$ 都从头训练到终点并独立衰减学习率，拟合二维损失面会很贵。MiniCPM 用 WSD：warmup（升温）→ stable（高且近似恒定的学习率）→ decay（末段衰减）（第 13–15 页）。在 stable 阶段保存多个 checkpoint；针对不同目标 token 预算，从各 checkpoint 分支运行短暂 decay。讲义的图示中，末段 decay 约占相应训练过程的 10%。这让不同 $D$ 的最终损失共享前面的训练主干，减少重复计算。
 
 理解 WSD 的关键是：stable 阶段的即时损失可能高于余弦衰减日程，但末段降学习率能迅速降低损失；比较模型/数据配比时，要比较经过相应末段 decay 后的损失，而不能把任意 stable checkpoint 直接当成完整训练终点。共享主干也意味着这些样本并非独立“从零训练”，所以 WSD 只是在该实验条件下提供近似且便宜的拟合样本；换数据或日程要重新验证。
