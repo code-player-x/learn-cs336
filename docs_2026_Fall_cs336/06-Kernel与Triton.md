@@ -1,6 +1,6 @@
 # 第 06 讲：Kernel 与 Triton
 
-> CS336 Spring 2026，Lecture 6。本文依照[官方可执行讲义 `lecture_06.py`](https://github.com/stanford-cs336/lectures/blob/main/lecture_06.py)的 `main()` 调用顺序整理；课程主页见 [Stanford CS336](https://cs336.stanford.edu/)，[B 站合集 P6](https://www.bilibili.com/video/BV11LEA6eEuj/?p=6)可配合观看。已核对讲义源码，未取得可逐句核对的视频字幕，所以下面的内容以讲义为准，不标注未经验证的视频时间戳，也不把推导写成教师原话。
+> CS336 Spring 2026，Lecture 6。本文依照[官方可执行讲义 `lecture_06.py`](https://github.com/stanford-cs336/lectures/blob/main/lecture_06.py)的 `main()` 调用顺序整理；课程主页见 [Stanford CS336](https://cs336.stanford.edu/)，[B 站合集 P6](https://www.bilibili.com/video/BV11LEA6eEuj/?p=6)可配合观看。另用经校验的第三方归档录像、英文字幕和抽取画面核对关键演示；未人工逐帧观看或逐句听写，也不把补充推导写成教师原话。
 
 [课程主页列出的原版录像播放列表](https://www.youtube.com/playlist?list=PLoROMvodv4rMqXOcazWaTUHhq-yembLCV)可用于观看。
 
@@ -98,7 +98,7 @@ CUDA 调用通常异步返回；直接在 Python 侧用 `time.time()` 围住一�
 
 $$\operatorname{GeLU}(x)\approx\frac{x}{2}\left[1+\tanh\!\left(\sqrt{\frac{2}{\pi}}\,(x+0.044715x^3)\right)\right],\qquad \sqrt{2/\pi}\approx0.79788456.$$
 
-对比三种实现：用 PyTorch 基础算子直接拼公式的 `naive_gelu`；`torch.nn.functional.gelu(x, approximate="tanh")`；对前者使用 `torch.compile`。讲义先对结果做 `allclose`，再对 16384×16384 输入测量与 profile。朴素写法把乘、加、tanh 等拆成多个 kernel，产生中间张量和多次 HBM 读写；内置版本与编译版本把这些操作融合到单个 kernel，显著减少启动与数据搬运。编译版本实际生成 Triton kernel。计时前一定先触发编译，否则把编译时间混进 steady-state 推理延迟。
+对比三种实现：用 PyTorch 基础算子直接拼公式的 `naive_gelu`；`torch.nn.functional.gelu(x, approximate="tanh")`；对前者使用 `torch.compile`。讲义先对结果做 `allclose`，再对 16384×16384 输入测量与 profile。朴素写法把乘、加、tanh 等拆成多个 kernel，产生中间张量和多次 HBM 读写；内置版本与编译版本把这些操作融合到单个 kernel，显著减少启动与数据搬运。编译版本实际生成 Triton kernel。课堂约 35:00 的**该次实测**分别约为朴素版 3.7583 ms、内置版 0.6670 ms、编译版 0.9388 ms：两种融合都比朴素版快，但这次内置版还快于编译版，不能把“编译过”当作“必定最快”。不同设备、张量形状、软件版本和预热条件需重测。计时前一定先触发编译，否则把编译时间混进 steady-state 推理延迟。
 
 这里的“融合收益”与浮点运算数不是同一回事。即使两版做几乎相同的数学运算，少写回中间结果也可能大幅提速；反之，复杂的融合 kernel 若寄存器需求过高，也要再测量。
 

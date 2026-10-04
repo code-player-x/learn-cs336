@@ -1,6 +1,6 @@
 # 第 09 讲：Scaling Laws 基础
 
-> CS336 Spring 2026，Lecture 9，Tatsunori Hashimoto。本文按[官方 57 页讲义](https://github.com/stanford-cs336/lectures/blob/main/lecture_09.pdf)的页序整理；课程主页见 [Stanford CS336](https://cs336.stanford.edu/)，[B 站合集 P9](https://www.bilibili.com/video/BV11LEA6eEuj/?p=9)可配合观看。已逐页核对讲义文本和关键图表，未取得可逐句核对的视频字幕，故以下陈述以讲义为依据，不标注未经核实的视频时间戳或教师原话。
+> CS336 Spring 2026，Lecture 9，Tatsunori Hashimoto。本文按[官方 57 页讲义](https://github.com/stanford-cs336/lectures/blob/main/lecture_09.pdf)的页序整理；课程主页见 [Stanford CS336](https://cs336.stanford.edu/)，[B 站合集 P9](https://www.bilibili.com/video/BV11LEA6eEuj/?p=9)可配合观看。另以经校验的第三方归档录像、英文字幕及抽取画面核对主线；未人工逐帧观看或逐句听写，代数推导仍以讲义为依据。
 
 [课程主页列出的原版录像播放列表](https://www.youtube.com/playlist?list=PLoROMvodv4rMqXOcazWaTUHhq-yembLCV)可用于观看。
 
@@ -203,6 +203,6 @@ $$C_{\mathrm{life}}(N,D,Q)\approx C_{\mathrm{train}}(N,D)+Q\,C_{\mathrm{infer}}(
 
 - 一手课程来源：[CS336 Spring 2026 课表](https://cs336.stanford.edu/)及[Lecture 9 官方讲义](https://github.com/stanford-cs336/lectures/blob/main/lecture_09.pdf)。本文章节与图表页码按该版 57 页 PDF 核对。
 - 核心研究原文：[Kaplan 等，Scaling Laws for Neural Language Models](https://arxiv.org/abs/2001.08361)；[Hoffmann 等，Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556)；[McCandlish 等，An Empirical Model of Large-Batch Training](https://arxiv.org/abs/1812.06162)；[Muennighoff 等，Scaling Data-Constrained Language Models](https://arxiv.org/abs/2305.16264)；[Porian 等，Resolving Discrepancies](https://arxiv.org/abs/2406.19146)；[Besiroglu 等，Chinchilla Scaling: A replication attempt](https://arxiv.org/abs/2404.10102)。
-- [B 站合集 P9](https://www.bilibili.com/video/BV11LEA6eEuj/?p=9)是配套观看入口；本文没有用未经验证的视频字幕补写课堂口述内容。文中的代数推导、算力案例与实验步骤是依据讲义概念作出的复习性展开，已与讲义的原始经验结果区分。
+- [B 站合集 P9](https://www.bilibili.com/video/BV11LEA6eEuj/?p=9)是配套观看入口；标时核对使用的是经校验的第三方归档副本和英文字幕，未把字幕单独当作精确数值依据。文中的代数推导、算力案例与实验步骤是依据讲义概念作出的复习性展开，已与讲义的原始经验结果区分。
 
 **本节小结：** 此处列明讲义、原始研究和视频入口，并区分课程经验结果与本文独立推导，便于追溯公式和数值的适用范围。

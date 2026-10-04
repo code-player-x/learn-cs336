@@ -2,7 +2,7 @@
 
 > CS336 Spring 2026，Lecture 11，Tatsunori Hashimoto，2026 年 5 月 4 日。本文按官方 58 页讲义的叙述顺序整理；页码指 PDF 页码。核心问题是：小规模实验怎样可靠地指导大模型的模型/数据配比、学习率、批量大小和参数化？
 
-[课程主页列出的原版录像播放列表](https://www.youtube.com/playlist?list=PLoROMvodv4rMqXOcazWaTUHhq-yembLCV)可用于观看；本文未取得可逐句核对的字幕。
+[课程主页列出的原版录像播放列表](https://www.youtube.com/playlist?list=PLoROMvodv4rMqXOcazWaTUHhq-yembLCV)可用于观看；另以经校验的第三方归档录像、英文字幕及画面抽样核对下文标明的课堂图表，但未人工逐帧观看或逐句听写。
 
 术语：μP 是 Maximum Update Parametrization（最大更新参数化）；WSD 是 Warmup-Stable-Decay（升温—稳定—衰减学习率日程）；FLOPs 是 Floating Point Operations（浮点运算次数）。后文 MoE、SGD、RMSNorm 分别是 Mixture of Experts（混合专家）、Stochastic Gradient Descent（随机梯度下降）、Root Mean Square Normalization（均方根归一化）。
 
@@ -36,7 +36,17 @@ $$
 
 ### 2.1 先使宽度缩放可控
 
-MiniCPM 是 2024 年的高性能小模型案例，讲义关注其详细的缩放实验，而不是用它代表当下最高性能（第 6–9 页）。作者先采用 μP 风格参数化，使不同宽度下的激活与更新尺度接近，再固定模型形状比例、整体放大。讲义引用的具体实现包括：嵌入输出乘 `scale_emb=12`；每层残差增量按 `scale_depth/√层数` 缩放，其中 `scale_depth=1.4`；矩阵参数初始化和学习率依宽度比调整，基础 `init_std=0.1`、学习率 `0.01`。LM head 的 logits 也按宽度比缩放。它们是该架构的配方参数，不是所有 μP 模型的默认超参数。
+MiniCPM 是 2024 年的高性能小模型案例，讲义关注其详细的缩放实验，而不是用它代表当下最高性能（第 6–9 页）。作者先采用 μP（Maximal Update Parameterization，最大更新参数化）风格规则，使不同宽度下的激活与更新尺度接近，再固定模型形状比例、整体放大。课堂约 05:25 的配方表令宽度比 $r=d_m/d_{\mathrm{base}}$（目标模型宽度除以基准宽度），列出的 **MiniCPM 实现**是：
+
+| 项目 | 课堂给出的缩放 |
+| --- | --- |
+| 二维矩阵参数的初始化标准差 | `init_std / √r`，其中基准 `init_std=0.1` |
+| 二维矩阵参数的学习率 | 基准学习率 `0.01` 再乘 `1/r` |
+| 语言模型输出头（LM head）的 logits | 乘 `1/r` |
+| token embedding 输出 | 乘 `scale_emb=12` |
+| 每层残差增量 | 乘 `scale_depth/√层数`，其中 `scale_depth=1.4` |
+
+表中还将非二维参数的初始化值列为 `0.1`。这些方向和指数有助于复现课件示例，但属于 MiniCPM 的架构配方，**不是所有 μP 实现的通则**；更不能把这里的二维矩阵规则直接套到任意优化器。表中数字应与[第 11 讲官方讲义](https://github.com/stanford-cs336/lectures/blob/main/lecture_11.pdf)及[MiniCPM 原论文](https://arxiv.org/abs/2404.06395)配套使用。
 
 图中小模型到最终模型仍有约五倍规模差距，因此“稳定”指可用小规模搜索给出较好的外推起点，不等于无需目标规模验证。MiniCPM 的学习率扫描显示，在所比较的宽度范围内，损失最低附近的学习率迁移较平稳（第 10 页）；这支持配方的实际用途，却不是任意架构、优化器下的理论保证。
 
@@ -86,7 +96,7 @@ DeepSeek 为模型/数据配比实验使用 WSD 风格的多段日程（第 22 �
 
 ## 4. 其他公开案例提示了哪些维度
 
-讲义第 25–30 页简要扫过几种方向，提供的是方法版图，不是可直接复刻的完整配方：Qwen 2.5/3 报告学习率、batch 的缩放；Kimi K2 用稀疏度缩放研究 MoE；Hunyuan 对 MoE 活跃参数量做 IsoFLOP 分析，课件给出约 96:1 的数据/活跃参数比；LLaMA 3 的 IsoFLOP 分析显示约 39:1，并讨论训练计算与下游表现；MiniMax-01 把架构决策也纳入缩放研究。尤其是 MoE，必须区分总参数量与每 token 激活参数量，不能把“活跃参数比”与稠密模型的总参数比直接比较。
+讲义第 25–30 页简要扫过几种方向，提供的是方法版图，不是可直接复刻的完整配方：Qwen 2.5/3 报告学习率、batch 的缩放；Kimi K2 用稀疏度缩放研究 MoE；Hunyuan 对 MoE 活跃参数量做 IsoFLOP 分析，课件给出约 96:1 的数据/活跃参数比；LLaMA 3 的 IsoFLOP 分析显示约 39:1，并讨论训练计算与下游表现。MiniMax-01 的三联图把 Softmax Attention、Lightning Attention 和 Hybrid-lightning 三种架构放在不同计算预算下，分别比较验证损失、经验最优模型大小和经验最优 token 数；它说明**架构选择会改变缩放研究的对象和拟合结果**，并不证明某架构普遍更优。（课堂约 27:33）尤其是 MoE，必须区分总参数量与每 token 激活参数量，不能把“活跃参数比”与稠密模型的总参数比直接比较。
 
 讲义把主要路线概括为两类。MiniCPM 先让参数化与学习率尽量可迁移，再用共享主干的 WSD 为联合拟合提供样本；DeepSeek 直接用网格实验估计 batch/学习率的变化，再做 IsoFLOP 选模型大小。两者都依赖小规模实验，也都需要在目标规模附近检查外推误差。
 
@@ -239,7 +249,7 @@ $$
 ## 10. 来源与视频核对边界
 
 - [Stanford CS336 Spring 2026 课程页](https://cs336.stanford.edu/)：课表将第 11 讲列为 5 月 4 日 Tatsu 的 Scaling laws；[官方第 11 讲 PDF](https://github.com/stanford-cs336/lectures/blob/main/lecture_11.pdf) 为本文主来源。本文核对了本地 58 页 PDF 的逐页文字和关键图表，页码引用以该版本为准。
-- [B 站合集 P11](https://www.bilibili.com/video/BV11LEA6eEuj/?p=11) 是补充观看入口；当前无法通过可用抓取方式读取该页或逐段核对视频。因此本文没有把讲义之外的口头补充、时间戳或未核实数值写成课堂事实。
+- [B 站合集 P11](https://www.bilibili.com/video/BV11LEA6eEuj/?p=11) 是补充观看入口；关键 MiniCPM 配方和 MiniMax 图表另用经校验的第三方归档录像、英文字幕及画面抽样核对。录像未人工逐帧观看或逐句听写，未核实口述和数值仍不写成课堂事实。
 - MiniCPM、DeepSeek、StepFun 等案例中的拟合系数和图示比例按讲义所展示的相应论文图表解释。跨论文比较时应先核对原文使用的数据、模型参数定义、计算单位及验证指标。
 
-**本节小结：** 这里标明课程讲义和案例图表的来源，以及视频未逐句核验的边界；复用系数或比例时应回到原实验单位和模型定义。
+**本节小结：** 这里标明课程讲义、录像抽样和案例图表的来源，以及未逐句核验的边界；复用系数或比例时应回到原实验单位和模型定义。

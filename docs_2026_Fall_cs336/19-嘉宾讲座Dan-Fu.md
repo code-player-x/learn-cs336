@@ -1,6 +1,6 @@
 # 第 19 讲：Dan Fu 嘉宾课——推理系统、Megakernel 与循环模型
 
-> 课程：Stanford CS336，Spring 2026；官方课表日期：2026-06-03；讲者：Dan Fu。[原版录像](https://www.youtube.com/watch?v=9EEm4iMAF5s)是核对课堂内容的最终来源，[B 站合集 P18](https://www.bilibili.com/video/BV11LEA6eEuj/?p=18)仅作观看入口。官方课表未提供独立讲义。本笔记已用原版录像的英文字幕核对下文新增的系统案例与问答，并标出时间戳；字幕可能误识专有名词，视频画面未逐帧核对。技术机制另与讲者署名的[Megakernel 研究说明](https://hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles)和 [Parcae 论文](https://arxiv.org/abs/2604.12946)交叉核对；论文细节不自动等同于课堂口述。
+> 课程：Stanford CS336，Spring 2026；官方课表日期：2026-06-03；讲者：Dan Fu。[Stanford Online 原版录像](https://www.youtube.com/watch?v=9EEm4iMAF5s)是观看和定位入口，[B 站合集 P18](https://www.bilibili.com/video/BV11LEA6eEuj/?p=18)仅作中文观看入口。官方课表未提供独立讲义。本笔记用经校验的第三方归档副本、英文字幕及抽取画面核对关键课堂案例；没有人工逐帧观看或逐句听写。技术机制另与讲者署名的[Megakernel 研究说明](https://hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles)和 [Parcae 论文](https://arxiv.org/abs/2604.12946)交叉核对；论文细节不自动等同于课堂口述。
 
 ## 一、这堂课为什么从训练转到推理
 
@@ -102,6 +102,10 @@ $$
 
 研究团队以 Llama-3.2-1B、单序列、16 位精度等特定负载研究这一问题，把整次前向过程组织为一个 **Megakernel（巨型核函数）**。目标不是“所有操作随便粘成一个函数”，而是让不同阶段在 GPU 内更细粒度地重叠，减少没有用来加载权重或计算的空档。[课堂约 41 分钟](https://www.youtube.com/watch?v=9EEm4iMAF5s&t=2463s)口述 H100 上约 72% 的带宽利用率，[研究说明](https://hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles)则报告约 78%；两者测试口径或版本未核齐，不能当成同一次实验，更不能外推为任意模型、batch 或 GPU 的普适收益。
 
+![课堂 Megakernel 与 vLLM、SGLang 的小批量解码对照](assets/lecture19-megakernel-chart.jpg)
+
+*图：Dan Fu 讲座约 41:10 的课件画面，来自本地校验过的录像归档。横向分 H100/B200，比较 vLLM、SGLang、Megakernel；条件标为 Llama-1B、BF16（16 位脑浮点）、batch size 1，纵轴是 Fwd/s（每秒前向次数）。在图示条件下 Megakernel 柱形更高，但柱顶没有精确数值标签，不应目测报吞吐。讲者在 40:59–41:05 已说这些数值当时“其实好得多了”，因此此图不是 2026 年最新性能表，也不能与研究说明中的 78% 当作同一次测量。*
+
 **面试速述：** 多个短 kernel 的边界会留下启动和阶段衔接空档，同批工作还可能有尾部效应。Megakernel 试图通过更大调度域重叠加载与计算；相关性能结果依赖模型、精度和 GPU，不能照搬为通用收益。
 
 ### 4.2 巨型核函数怎样保持正确的依赖顺序
@@ -148,6 +152,10 @@ flowchart LR
 
 论文用有约束的参数化控制相应矩阵的谱范数，并加入输入归一化及按样本采样循环深度等训练措施。对初学者，核心不是背实现细节，而是理解因果链：**同一块重复使用 → 小的放大效应会累积 → 需要从架构和训练流程上约束稳定性**。不能简单地把训练好的普通 Transformer 某几层多跑几遍，就推断能得到同样效果。
 
+![课堂 Parcae 训练损失与循环状态范数对照](assets/lecture19-parcae-stability.jpg)
+
+*图：讲座约 52:00 的课件画面；学习率 LR（Learning Rate）为 $6\times10^{-4}$，横轴是训练 token 数（十亿为单位）。橙线 baseline 很快失稳；蓝线 Res Norm（Residual Normalization，残差归一化）后期仍有尖峰；红线 Parcae 在图示约 0.5B token 范围内训练损失继续下降、循环状态范数保持平稳。这只支持该实验配置的稳定性结论，不是任意学习率/模型规模下的保证。*
+
 **面试速述：** 共享块反复迭代可能放大状态扰动、产生训练尖峰；Parcae 论文用约束参数化、输入归一化和变动循环深度改善稳定性。这些是相关研究方法，不能推广为任意 Transformer 多跑几轮都有效。
 
 ### 5.3 循环次数成为第三个 scaling 轴
@@ -160,6 +168,10 @@ flowchart LR
 2. **小模型趋势不是大模型定律。**最优 $T$ 还取决于数据、训练预算、推理硬件、目标延迟和并发负载；论文报告的是特定配置的实证结果。
 
 **怎样读课堂曲线：** 在[约 55:48–59:26](https://www.youtube.com/watch?v=9EEm4iMAF5s&t=3348s)，讲者先固定独立参数规模，改变训练数据量与循环次数，观察验证损失最低点如何移动；接着比较固定 FLOP 预算下“增加数据”与“同时增加循环”的点。参数固定和计算量固定是两种不同的比较条件，不能拿训练预算不同的两个最低损失点直接宣称循环必胜。课堂给出的结论是**所测规模下**数据预算增长时，较多循环可能更优，而非所有模型都应无限加深循环。
+
+![课堂 Parcae 140M 与 370M 模型的循环次数缩放曲线](assets/lecture19-parcae-scaling.jpg)
+
+*图：讲座约 58:00 的课件画面。两栏分别为 140M 和 370M 独立参数模型；横轴 recurrence（循环次数），纵轴 validation loss（验证损失），颜色对应不同 FLOP 预算，黑星是各预算曲线的所示最低点。沿同一曲线比较循环次数是等 FLOP（iso-FLOP）视角，不等同于只固定参数量后任意增加计算；红箭头是课件对这组小规模实验的概括，不是无限增加循环必然更好。*
 
 这正好把课程最后一讲的两条线合起来：模型架构改变推理中的内存/计算比例；推理系统能否高效支持某种结构，又会改变这种架构的实际价值。
 
@@ -202,9 +214,9 @@ flowchart LR
 
 ## 八、来源与核对边界
 
-- [Stanford CS336 Spring 2026 官方课表](https://cs336.stanford.edu/)确认第 19 讲的日期和讲者；课表未列独立讲义。[Stanford Online 原版录像](https://www.youtube.com/watch?v=9EEm4iMAF5s)提供英文字幕；本文新增的生产故障、缓存感知路由、Megakernel 例子、Parcae 曲线读法和问答均按字幕时间戳定位，**仍未逐帧核对全部画面，也不能证明覆盖每段课堂内容**。
+- [Stanford CS336 Spring 2026 官方课表](https://cs336.stanford.edu/)确认第 19 讲的日期和讲者；课表未列独立讲义。[Stanford Online 原版录像](https://www.youtube.com/watch?v=9EEm4iMAF5s)供观看定位。本文用第三方归档副本的英文 VTT、全片程序解码后选出的变化/约 30 秒保底画面，以及关键原帧核对生产故障、缓存感知路由、Megakernel、Parcae 曲线和问答；**并未人工逐帧观看或逐句核对每段口述**。时间戳依据该归档副本，不证明它与原站视频逐字节一致。
 - 早期草稿参考过[字幕衍生笔记 A](https://github.com/narain1/stanford-cs336-2026-notes/blob/main/lecture-18.md)与[录像衍生笔记 B](https://yulong-ge.github.io/open-course-notes/courses/stanford-cs336-2026/guest-lecture-dan-fu/)；它们均为非官方二手材料。A 将循环研究名称记作“Per Se”，但原版字幕在[约 42 分钟](https://www.youtube.com/watch?v=9EEm4iMAF5s&t=2521s)为 Parcae，亦与[论文正式名称](https://arxiv.org/abs/2604.12946)一致。字幕中的其他专有名词仍可能存在自动转写错误。
-- [Megakernel 原始研究说明](https://hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles)和 [Parcae 原论文](https://arxiv.org/abs/2604.12946)用于核对技术机制与适用范围；研究论文的信息不等于课堂每一项均有详细讲解。上述插图来自研究说明，不是已核实的课堂课件原图；Mermaid 流程图则是复习性自绘示意。
+- [Megakernel 原始研究说明](https://hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles)和 [Parcae 原论文](https://arxiv.org/abs/2604.12946)用于核对技术机制与适用范围；研究论文的信息不等于课堂每一项均有详细讲解。`megakernel-boundaries.png` 来自研究说明，不是课堂原图；本次新增的三张 `lecture19-*.jpg` 则是已核对的课堂课件画面，Mermaid 流程图为复习性自绘示意。
 - [B 站合集 P18](https://www.bilibili.com/video/BV11LEA6eEuj/?p=18)仅作中文观看入口；该合集 P19 也标为 Dan Fu，不能把两个入口误计为两堂不同嘉宾课。若以后取得官方讲义，应再按讲义和画面核对具体图表与演示。
 
-**本节小结：** 新增课堂案例和问答可由原版录像字幕时间戳追溯；Megakernel 与 Parcae 的技术机制另由研究材料核对。官方未提供独立讲义，课堂图表也未逐帧核验，所以仍不能把笔记视为逐字稿或完整幻灯片复刻。
+**本节小结：** 关键课堂案例、图表与问答可由所标录像时间定位；Megakernel 与 Parcae 的技术机制另由研究材料核对。官方未提供独立讲义，程序全片扫描和关键帧复看仍不等于人工逐帧、逐句验收，不能把笔记视为逐字稿或完整幻灯片复刻。

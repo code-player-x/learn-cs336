@@ -6,6 +6,10 @@
 
 本讲希望把 GPU 从「会自动加速的黑盒」变成可推理的机器。路线分三段：先认识执行单元与内存层次，再用性能模型解释优化技巧，最后把这些技巧串到 FlashAttention。语言模型对训练算力的需求不断增加，传统靠缩小晶体管获得的 Dennard scaling 已不足以支撑增长；并行计算和专用矩阵硬件接过了主要任务。但计算吞吐增长快于内存吞吐，能做多少浮点操作（floating-point operations，FLOPs）与能把多少数据及时送到计算单元，是两个不同的问题。（2–7 页）
 
+![课堂计算峰值与内存及互连带宽的历史增长对照](assets/lecture05-compute-memory-growth.jpg)
+
+*图：第 05 讲约 26:15 的课件画面，横轴覆盖约 1996–2023 年，纵轴为归一化后的对数尺度。图示约 20 年间峰值硬件 FLOPs、DRAM 带宽、互连带宽分别增长 60,000×、100×、30×；它是跨设备系列的历史量级示意，**不是** 2026 年某台设备的精确 benchmark 或未来增速预测。*
+
 复习时先问三件事：工作是否足够并行？做每次计算要从哪层内存读写多少字节？计算形式能否用上矩阵乘专用单元？这三问比只看 GPU 标称峰值 FLOPs 更接近实际耗时。
 
 **面试速述：** GPU/TPU 的矩阵算力增长很快，但模型速度还取决于是否有足够并行工作、数据能否及时搬入计算单元。性能分析应同时看计算峰值和各级内存流量，不能用标称 FLOP/s 直接预测耗时。
@@ -41,7 +45,7 @@
 
 ### TPU 与矩阵专用单元
 
-讲义把 TPU 作为对照：GPU、TPU 都把轻量控制、快速矩阵乘单元和片上快存储组合起来，但组织形态不同。GPU 有较多 SM 和 warp/SIMT 执行机制；讲义示意的 TPU 核心数量较少，依靠大的矩阵计算单元完成高吞吐矩阵乘，没有 GPU 式 warp。网络互连和跨设备并行的差异留到后续并行课程讨论，不能由这一页推断所有 TPU 型号的详细架构。（13–14 页）
+讲义把 TPU 作为对照：GPU、TPU 都把轻量控制、快速矩阵乘单元和片上快存储组合起来，但组织形态不同。GPU 有较多 SM 和 warp/SIMT 执行机制；讲义示意的 TPU 核心数量较少，依靠大的矩阵计算单元完成高吞吐矩阵乘，没有 GPU 式 warp。课堂约 19:49–20:08 将 GPU 的 Tensor Core 与 TPU 的 **MXU（Matrix Multiplication Unit，矩阵乘法单元）**并列，借**脉动阵列（systolic array）**说明相邻计算单元逐步传递、复用矩阵数据的直觉。[Google Cloud TPU 架构文档](https://docs.cloud.google.com/tpu/docs/system-architecture-tpu-vm)明确把 MXU 描述为脉动阵列；这不等于已经证明各代 GPU Tensor Core 与 TPU MXU 有完全相同的底层电路。网络互连和跨设备并行的差异留到后续并行课程讨论，不能由这一页推断所有 TPU 型号的详细架构。（13–14 页）
 
 GPU 的强项是可扩展地安排大量工作；专用 Tensor Core 让适配的数据类型与矩阵形状上的矩阵乘法格外快，讲义用「相对一般浮点操作可快 10 倍以上」说明量级。这不是任意形状、任意精度、任意设备的固定加速比。FLOPs 变快而 DRAM 带宽没同比变快，正是后半讲不断讨论复用与减少访存的原因。（15–19 页）
 
@@ -172,7 +176,7 @@ FlashAttention 将分块矩阵乘、指数/归一化和输出累加融合在一�
 ## 来源、版本与视频核对边界
 
 - 课程版本依据：[Stanford CS336 Spring 2026 官方课表](https://cs336.stanford.edu/)；第 5 讲列为 4 月 13 日「GPUs, TPUs」[Tatsu]。正文以[2026 版第 5 讲官方讲义 PDF](https://github.com/stanford-cs336/lectures/blob/main/lecture_05.pdf)第 1–55 页为主，按其三部分顺序整理。算术强度口径纠正、Roofline 小例子、行主序地址式、在线 softmax 递推与数字练习为基于讲义的补充解释，不是讲义原句。
-- 视频入口：课程网站所列[官方 YouTube 录像列表](https://www.youtube.com/playlist?list=PLoROMvodv4rMqXOcazWaTUHhq-yembLCV)及[B 站合集 P5](https://www.bilibili.com/video/BV11LEA6eEuj/?p=5)。本次未取得可逐句核对的 P5 字幕或时间轴，因此不标注视频分钟，也不声称老师在视频中逐字讲了本文所有补充推导。
+- 视频入口：课程网站所列[官方 YouTube 录像列表](https://www.youtube.com/playlist?list=PLoROMvodv4rMqXOcazWaTUHhq-yembLCV)及[B 站合集 P5](https://www.bilibili.com/video/BV11LEA6eEuj/?p=5)。另用经校验的第三方归档录像、英文字幕与抽取画面核对上述硬件术语和历史图；没有人工逐帧观看或逐句听写，补充推导也不归为教师原话。
 - 讲义图表包含特定硬件或论文实验（如 A100 的 SM 数、FlashAttention 的 GFLOPs/HBM/时间）；复习应掌握因果关系，复现实测则须说明设备、数据类型、矩阵形状与实现版本。旧版课程或第三方笔记没有作为 2026 年课堂内容依据。
 
 **本节小结：** 本篇以 2026 版官方讲义为主，硬件数字和论文性能图只在对应设备、形状与实现条件下成立。

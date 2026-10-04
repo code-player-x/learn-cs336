@@ -2,6 +2,8 @@
 
 > Stanford CS336, Spring 2026，4 月 1 日，Percy Liang。官方课表标题为 “PyTorch (einops), resource accounting (FLOPs, memory, arithmetic intensity)”。本篇沿用目录中的“2026_Fall”名称，实际对应春季课程。
 
+**承接第 01 讲的预测：** 课堂开头约 00:09–00:43 报告，Marin 的 $10^{23}$ FLOPs 训练已经完成，实测 loss 与事先登记的预测相差不超过 0.05。这给“先预测、后检验”补上结果，但只是该次实验，不能据此说更远规模外推都成立。
+
 ## 本讲要解决什么问题
 
 给定计算量和显存预算，能训练多大的模型、要花多久？本讲建立一套可手算、可用代码验证的资源账本：张量占多少字节，一次运算做多少浮点操作（floating-point operations，FLOPs），图形处理器（Graphics Processing Unit，GPU）算力与显存带宽各能支撑多少吞吐，训练时参数、梯度、优化器状态和激活分别占多少空间。讲义的核心提醒是：遇到模型和系统选择，先做数量级估算。
@@ -90,6 +92,10 @@ FLOP 是一次浮点操作；FLOPs 在本讲用来表示操作总数，FLOP/s �
 
 *图：参数由内存搬到计算单元；下方 Roofline 账本中的字节数应针对所分析的内存层计算。原图由 [Stanford CS336 Spring 2026 第 02 讲讲义](https://github.com/stanford-cs336/lectures/blob/main/lecture_02.py)引用，图像文件见[官方仓库](https://github.com/stanford-cs336/lectures/blob/main/images/compute-memory.png)。*
 
+![Roofline 中算术强度、带宽上限与计算上限的关系](assets/lecture02-roofline.webp)
+
+*图：第 02 讲约 55:51–57:07 展示的 [Roofline 原图](https://jax-ml.github.io/scaling-book/assets/img/roofline-improved-1400.webp)。横轴是算术强度，纵轴是可实现 FLOP/s（均为对数示意）；斜线由带宽决定，水平线由峰值算力决定。相同 Algo 1 在低带宽 BW1 下受访存限制，在较高带宽 BW2 下可能转为计算受限；Algo 2 在两种带宽下都处于计算受限区。彩色区域是理想模型的界限，不是实际测得的 kernel 吞吐。*
+
 对 BF16 数据，讲义的几个独立运算可这样心算：
 
 | 运算 | 近似 FLOPs | 最低读写字节 | 强度与判断 |
@@ -175,6 +181,6 @@ optimizer.step()             # 只更新一次
 
 ## 来源与视频核对状态
 
-本篇以 [Stanford Spring 2026 官方课表](https://cs336.stanford.edu/)所列第 02 讲及其 [lecture_02.py 官方讲义](https://cs336.stanford.edu/lectures/?trace=lecture_02) 为内容基线；官方页面还列出 [recording version](https://cs336.stanford.edu/lectures/?trace=lecture_02_recording)，不同版本细节以所观看录像为准。观看入口还有课程网站所列[官方 YouTube 录像列表](https://www.youtube.com/playlist?list=PLoROMvodv4rMqXOcazWaTUHhq-yembLCV)及[B 站合集 P2](https://www.bilibili.com/video/BV11LEA6eEuj/?p=2)。本次无法获取该页的可用字幕或直接核对完整视频口述，因此笔记覆盖的是**官方讲义主线与代码**，不能声称逐句覆盖视频，也不标 B 站时间戳。文中关于 MFU 口径、实际显存、广播示例和累积 loss 权重的提醒属于为准确复习补充的解释。
+本篇以 [Stanford Spring 2026 官方课表](https://cs336.stanford.edu/)所列第 02 讲及其 [lecture_02.py 官方讲义](https://cs336.stanford.edu/lectures/?trace=lecture_02) 为内容基线；官方页面还列出 [recording version](https://cs336.stanford.edu/lectures/?trace=lecture_02_recording)，不同版本细节以所观看录像为准。观看入口还有课程网站所列[官方 YouTube 录像列表](https://www.youtube.com/playlist?list=PLoROMvodv4rMqXOcazWaTUHhq-yembLCV)及[B 站合集 P2](https://www.bilibili.com/video/BV11LEA6eEuj/?p=2)。另用经校验的第三方归档副本、英文字幕和抽取画面核对开头实验结果及 Roofline 等关键段落；**没有人工逐帧观看或逐句核对完整口述**，也不标 B 站时间戳。文中关于 MFU 口径、实际显存、广播示例和累积 loss 权重的提醒属于为准确复习补充的解释。
 
 **本节小结：** 本篇以官方 2026 讲义为内容基线，资源估算和实际 PyTorch 行为的补充说明用于复习核算；视频口述不在逐句核对范围内。
