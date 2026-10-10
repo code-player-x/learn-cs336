@@ -14,9 +14,16 @@
 
 ### Grid、block、thread 与存储层次
 
-GPU kernel 的 **grid** 是多个 thread block（CUDA，即 Compute Unified Device Architecture，统一计算设备架构中也称 CTA，Cooperative Thread Array，协作线程数组）的集合；block 里有多个 thread。逐元素运算适合把不同元素分给不同 thread；softmax、矩阵乘法需要线程间交换或复用数据。一个 block 被安排在同一个流式多处理器（SM, Streaming Multiprocessor）上，因而其线程能够通过该 SM 的 shared memory 协作；寄存器主要保存单个线程的临时量。可记成：grid 面向设备的全局数据，block 是共享局部数据的协作单位，thread 持有寄存器状态。
+![grid、block、thread 与 SM 存储层次：数据从 HBM 经 L2、L1/shared memory 流向寄存器](assets/lecture06-gpu-storage-hierarchy.png)
 
-高带宽显存（HBM, High Bandwidth Memory）容量大而相对慢，片上 shared memory / 一级缓存（L1 cache）、寄存器容量小而带宽高。讲义列 A100、H100、B200 的 SM 数分别为 108、132、148，HBM 标称带宽分别约 2、3.35、8 TB/s；这些是课堂比较硬件趋势的数字，不是任意运行条件下可达到的应用带宽。B200 还引入供 tensor core 使用的张量内存（TMEM, Tensor Memory）。优化 kernel 时的核心问题是：一次从 HBM 取入的数据能在片上被复用几次，以及是否有足够并行任务掩盖延迟。
+GPU kernel 的 **grid** 是多个 thread block（CUDA，即 Compute Unified Device Architecture，统一计算设备架构中也称 CTA，Cooperative Thread Array，协作线程数组）的集合；block 里有多个 thread。
+
+- 逐元素运算适合把不同元素分给不同 thread；
+- softmax、矩阵乘法需要线程间交换或复用数据。一个 block 被安排在同一个流式多处理器（SM, Streaming Multiprocessor）上，因而其线程能够通过该 SM 的 shared memory 协作；
+- 寄存器主要保存单个线程的临时量。
+- 可记成：grid 面向设备的全局数据，block 是共享局部数据的协作单位，thread 持有寄存器状态。
+
+高带宽显存（HBM, High Bandwidth Memory）容量大而相对慢，片上 shared memory / 一级缓存（L1 cache）、寄存器容量小而带宽高。讲义列 A100、H100、B200 的 SM 数分别为 108、132、148，HBM 标称带宽分别约 2、3.35、8 TB/s；这些是课堂比较硬件趋势的数字，不是任意运行条件下可达到的应用带宽。B200 还引入供 tensor core 使用的张量内存（TMEM, Tensor Memory）。**优化 kernel 时的核心问题是：一次从 HBM 取入的数据能在片上被复用几次，以及是否有足够并行任务掩盖延迟。**
 
 讲义的硬件表还把“快但小”量化到了每一层，不能只记 HBM 一个数字：（官方讲义 `review_of_gpus()`；容量与带宽为讲义列值）
 
@@ -34,15 +41,21 @@ GPU kernel 的 **grid** 是多个 thread block（CUDA，即 Compute Unified Devi
 
 ### Warp、分歧与寄存器占用
 
-一个 warp 通常有 **32 个线程**。例如 64 线程的 block 含 2 个 warp。warp 中各 lane 执行同一指令流；如果同一 warp 的线程走不同 `if` 分支，硬件要分别执行分支并屏蔽不参与的 lane，这叫控制流分歧。若条件按整个 warp 一致分组，代价通常小于同一 warp 内交错分歧。SM 可以在驻留 warp 间切换，以覆盖读写 HBM 时的等待。
+一个 warp 通常有 **32 个线程**。例如 64 线程的 block 含 2 个 warp。warp 中各 lane 执行同一指令流；如果同一 warp 的线程走不同 `if` 分支，硬件要分别执行分支并屏蔽不参与的 lane，这叫**控制流分歧**。若条件按整个 warp 一致分组，代价通常小于同一 warp 内交错分歧。SM 可以在驻留 warp 间切换，以覆盖读写 HBM 时的等待。
 
 **Warp occupancy** 是驻留 warp 数与硬件允许最大驻留 warp 数之比，它受到每线程寄存器数、每 block shared memory、线程数等限制。讲义中的实际计算代码设每 block 128 线程、每线程 160 个寄存器、每 SM 65,536 个寄存器、最多 64 个 warp，则每 block 用 $128\times160=20{,}480$ 个寄存器，受寄存器约束最多驻留 $\lfloor65536/20480\rfloor=3$ 个 block，即 12 个 warp，算出的占用率为 $12/64=18.75\%$。讲义前一句文字写“64 线程”，但后续计算变量是 128；这里按**代码实际取值**计算。硬件分配粒度和其他资源还可能进一步限制真实驻留量。占用率也不是越高越好：每线程多处理元素可能增加寄存器需求，同时减少重复访存或提高指令级并行。
+
+![Warp occupancy 计算链：由每 block 寄存器用量推出最多驻留 block 数、warp 数与占用率](assets/lecture06-warp-occupancy.png)
 
 **面试速述：** Warp 内分歧让不同分支分批执行；增加寄存器或 shared memory 占用又会压低可驻留 warp 数和隐藏延迟的能力。Occupancy 是诊断量而非优化目标，更多寄存器也可能换来更好的复用与指令级并行。
 
 ### Shared memory bank conflict 与 HBM 合并访存
 
-讲义用 32 个 bank、每 bank 4 字节宽解释 shared memory。对 32 位元素，连续 32 个地址分散到不同 bank；若 32 个 lane 访问同一列，而矩阵行跨度恰好为 32 个这样的元素，它们可能全落在同一 bank 的不同地址，造成最坏情形的 32 路冲突。访问**同一个地址**的广播是例外。矩阵乘中既要按行又要按列取数，常通过转置布局、padding 或 swizzle（重排地址映射）减少冲突；不能假定“读列必然冲突”，要看实际布局。
+**Shared Memory 是片上高速内存，它不是一整块大内存，硬件内部切分成 32 个独立小内存块，每一小块就叫 1 个 Bank**（NVIDIA 老架构 / 主流架构固定 32 个 Bank，每个 Bank 一次可以输出 4 字节）。
+
+![Shared memory bank conflict 与 HBM memory coalescing 对照示意](assets/lecture06-bank-conflict-coalescing.png)
+
+讲义用 32 个 bank、每 bank 4 字节宽解释 shared memory。对 32 位元素，连续 32 个地址分散到不同 bank；若 32 个 lane 访问同一列，而矩阵行跨度恰好为 32 个这样的元素，它们可能全落在同一 bank 的不同地址，造成最坏情形的 32 路冲突。访问**同一个地址**的广播是例外。**矩阵乘中既要按行又要按列取数，常通过转置布局、padding 或 swizzle（重排地址映射）减少冲突**；不能假定“读列必然冲突”，要看实际布局。
 
 HBM 访问关注 **memory coalescing**：一个 warp 的连续 lane 若各读一个连续的 `float32`，合起来刚好 128 字节，能高效覆盖一个 128 字节区间。若每 lane 相隔很远，通常要触及更多内存事务。事务粒度、缓存路径和地址对齐随架构与指令而变，讲义的 128 字节是理解合并访存的模型。
 
@@ -187,6 +200,10 @@ tl.store(out_ptr + row, result)
 设 $A\in\mathbb R^{M\times K}$、$B\in\mathbb R^{K\times N}$。最朴素的“一个输出算一个点”做法对每个 $(m,n)$ 重复从 HBM 读取 $A_{m,k},B_{k,n}$，计算 $C_{m,n}=\sum_kA_{m,k}B_{k,n}$。其主导读取次数为 $O(MKN)$，每次读的数据只参与少量计算，算术强度低。理想情况若整块 $A,B$ 常驻片上，则各元素只需从 HBM 读一次，但实际矩阵通常大过 shared memory。
 
 Tile 的做法是把输出 $C$ 划成 $B_M\times B_N$ 块；固定一个输出块，沿 $K$ 方向反复读取 $B_M\times B_K$ 的 $A$ 子块和 $B_K\times B_N$ 的 $B$ 子块，做局部乘加并累积。每轮约执行 $2B_MB_NB_K$ FLOPs，输入搬运约为 $(B_MB_K+B_KB_N)$ 个元素；若 $B_M=B_N=T$，随着 $T$ 增大，每个输入元素被复用更多次，算术强度按 $O(T)$ 增长。寄存器、shared memory 和 occupancy 限制了 tile 不能无限增大。
+
+![矩阵乘 tiling：A 的行块与 B 的列块乘加累积成一个 C 的输出 tile](assets/lecture06-tiling.png)
+
+图：CS336 Spring 2026 [Lecture 6 视频 P6 中的 Tiling 幻灯片](https://www.bilibili.com/video/BV11LEA6eEuj/?p=6)。外层循环遍历输出 tile，内层循环遍历块内元素，把 A 的行块与 B 的列块从 HBM 载入 shared memory 后乘加累积到部分和；算术强度随 tile size 增长。
 
 **面试速述：** 一个输出算一点的朴素矩阵乘会反复从 HBM 读取相同 A/B 元素；tile 让输入小块在片上复用，算术强度随合理的块边长提高。块太大又会耗尽片上资源并减少并行度。
 
