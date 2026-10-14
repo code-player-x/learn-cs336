@@ -4,7 +4,9 @@
 
 ## 一、已确认的课程信息
 
-[Spring 2026 官方课表](https://cs336.stanford.edu/)将第 18 讲列为“Guest lecture: Daniel Selsam”，安排在 6 月 1 日。该行的课程材料栏为空；[官方讲义仓库](https://github.com/stanford-cs336/lectures)也没有对应的 `lecture_18` 文件。课程主页提供整个学期的[原版录像播放列表](https://www.youtube.com/playlist?list=PLoROMvodv4rMqXOcazWaTUHhq-yembLCV)，但目前未定位到能够确认是**这一讲**的公开录像。用户提供的 B 站合集也未发现对应条目。
+[Spring 2026 官方课表](https://cs336.stanford.edu/)将第 18 讲列为“Guest lecture: Daniel Selsam”，安排在 6 月 1 日。该行的课程材料栏为空；
+[官方讲义仓库](https://github.com/stanford-cs336/lectures)也没有对应的 `lecture_18` 文件。
+课程主页提供整个学期的[原版录像播放列表](https://www.youtube.com/playlist?list=PLoROMvodv4rMqXOcazWaTUHhq-yembLCV)，但目前未定位到能够确认是**这一讲**的公开录像。用户提供的 B 站合集也未发现对应条目。
 
 课表没有给出本讲的具体标题、议程或讨论主题。讲者其他公开研究、第三方编写的“第 18 讲笔记”，都不能据此当作这堂课实际讲过的内容。
 
