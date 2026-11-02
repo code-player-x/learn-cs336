@@ -197,6 +197,15 @@ $$
 $$
 
 这里 $A_t$ 衡量某个生成动作相对基线的好坏。
+
+把上面的部件串成一次更新，PPO 大致走五步：
+
+1. 从提示**在线采样**，由当前策略生成完整回答；
+2. 奖励模型给整条回答**打分**；
+3. 结合价值函数估计**优势** $A_t$；
+4. 用上面的裁剪代理目标**更新策略网络**（并同步更新价值网络）；
+5. **监控**与参考策略的 KL 及奖励尺度，防止分布漂移。
+
 实际流程还要处理采样、价值函数、优势估计、KL、不同长度序列和奖励尺度，因此讲义称 PPO 路线复杂且容易受实现细节影响。
 它同时列出几种不用在线 PPO 的设想：给好坏样本加控制标记，只训练优选答案，或生成多个候选由奖励模型挑最好再做模仿；这些都是不同的训练取舍。
 
@@ -276,11 +285,31 @@ DPO 不需要训练独立奖励模型，也省去在线 rollout 和 PPO 外循�
 
 **本节小结：** 自测集中检验 SFT、中训练、PPO 和 DPO 的分工，以及奖励差、KL 与校准等容易混淆的概念。
 
-## 十、来源与核对边界
+## 十、缩写速查
+
+正文里缩写首次出现时都给出了全称，这里再汇总一份便于复习：
+
+| 缩写 | 英文全称 | 中文 |
+|---|---|---|
+| SFT | Supervised Fine-Tuning | 监督微调 |
+| RLHF | Reinforcement Learning from Human Feedback | 基于人类反馈的强化学习 |
+| RM | Reward Model | 奖励模型 |
+| PPO | Proximal Policy Optimization | 近端策略优化 |
+| TRPO | Trust Region Policy Optimization | 信赖域策略优化 |
+| DPO | Direct Preference Optimization | 直接偏好优化 |
+| BT | Bradley-Terry（model） | 布拉德利-特里成对比较模型 |
+| KL | Kullback–Leibler Divergence | KL 散度 |
+| ECE | Expected Calibration Error | 期望校准误差 |
+| SimPO | Simple Preference Optimization | 简单偏好优化 |
+| G-V gap | Generation–Verification gap | 生成-验证差距 |
+
+## 十一、来源与核对边界
 
 - [Stanford CS336 Spring 2026 课程页](https://cs336.stanford.edu/)及[第 15 讲官方 PDF 讲义](https://github.com/stanford-cs336/lectures/blob/main/lecture_15.pdf)：本文的结构、术语、案例和讲义图表结论依据。公式中 SFT 损失、BT 与 PPO 裁剪的标准记法是为帮助复习而展开；DPO 主公式和推导按讲义第 56–58 页核对。
 - [Stanford Online 第 15 讲原版录像](https://www.youtube.com/watch?v=2oH6PWPrYFo)：供观看和时间定位；实际复核使用经校验的第三方归档副本、英文字幕及抽取画面。安全 SFT、标注偏好、DPO 和“追赶已有能力／推进前沿”的口述已重点抽查；字幕可能转写不准，未人工逐帧观看或逐句核对全片。
 - [B 站合集 P15](https://www.bilibili.com/video/BV11LEA6eEuj/?p=15)：中文分集入口，未以配音版字幕作依据。
 - 讲义引用的进一步阅读：[InstructGPT](https://arxiv.org/abs/2203.02155)、[Learning to Summarize from Human Feedback](https://arxiv.org/abs/2009.01325)、[DPO](https://arxiv.org/abs/2305.18290)、[Tulu 3](https://arxiv.org/abs/2411.15124)、[Constitutional AI](https://arxiv.org/abs/2212.08073)。这些链接帮助追查原始研究，本文没有把论文的全部实验当作本讲直接讲授内容。
+
+本讲的**范围**还要说清：这里覆盖讲义第 15 讲中**基于人类偏好**的对齐路线（RM、PPO、DPO 及其长度相关变体）。讲义对 PPO 与 DPO 的比较是"依赖训练与评测设置"，并未主张某一算法普遍最优，因此不宜把"PPO 已被淘汰"或"DPO 是唯一主流"写成讲义结论。面向数学、代码等**可验证奖励**的 GRPO、RLVR 以及 DeepSeek-R1 一类推理训练，属于后续讲次（第 16 讲）的范围，不在本讲展开；本仓库另有专门文档覆盖。讲义之外 2024 年以来的算法迭代也不属于本讲的证据范围，引用时须另行核对出处。
 
 **本节小结：** 本讲以官方 PDF 的结构和图表为依据，标准公式作复习性展开；录像中的标时口述经重点核对并与课件事实分开标注，其他口述不作逐句覆盖保证。
